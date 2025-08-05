@@ -50,6 +50,13 @@ venv.bak/
 ehthumbs.db
 Thumbs.db
 
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
 # Logs
 *.log
 logs/
