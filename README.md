@@ -1,237 +1,211 @@
-# D-ID Talking - AI Video Generation Platform
+# D-ID Talking Avatar Generator
 
-Современная платформа для генерации говорящих видео с использованием AI технологий. Интегрирует ElevenLabs для синтеза речи и D-ID для создания видео с говорящими аватарами.
+A web application that generates talking avatars using D-ID API, ElevenLabs speech processing, and Cloudinary file storage.
 
-## 🚀 Возможности
+## Features
 
-- 🎬 **Генерация видео** - Создание говорящих видео из изображений и аудио
-- 🎤 **Синтез речи** - ElevenLabs API для высококачественного TTS и STS
-- 🤖 **AI аватары** - D-ID API для анимированных говорящих персонажей
-- 📱 **Современный UI** - React frontend с интуитивным интерфейсом
-- ⚡ **FastAPI Backend** - Быстрый и масштабируемый API
-- 🧪 **Комплексное тестирование** - 100% покрытие всех внешних сервисов
-- 🔄 **Асинхронная обработка** - Фоновые задачи для генерации видео
-- 📊 **Мониторинг статуса** - Отслеживание прогресса генерации
+- **Voice Processing**: Audio processing through ElevenLabs Speech-to-Speech
+- **Video Generation**: Talking avatar generation using D-ID API
+- **File Storage**: Cloudinary integration for image and audio storage
+- **Real-time Progress**: Live progress tracking for video generation
+- **Modern UI**: React-based frontend with modern design
 
-## 🏗️ Архитектура
+## Architecture
 
-```
-d_id_talking/
-├── app/                    # Backend API (FastAPI)
-│   ├── api/v1/endpoints/  # API endpoints
-│   ├── services/          # Внешние сервисы
-│   ├── models/           # Pydantic модели
-│   └── config.py         # Конфигурация
-├── frontend/             # React frontend
-│   ├── src/services/     # API клиент
-│   └── public/          # Статические файлы
-├── tests/               # Unit тесты
-├── test_files/         # Тестовые ресурсы
-└── *.py               # Тестовые скрипты
-```
+### Backend (FastAPI)
+- **API Endpoints**: `/api/v1/generate`, `/api/v1/status`, `/api/v1/voices`
+- **Services**: D-ID, ElevenLabs, Cloudinary integration
+- **File Processing**: Audio conversion and image normalization
+- **Background Tasks**: Asynchronous video generation
 
-## 🛠️ Технологии
+### Frontend (React + Vite)
+- **File Upload**: Image and audio file upload
+- **Voice Selection**: ElevenLabs voice selection
+- **Progress Tracking**: Real-time generation progress
+- **Video Display**: Generated video playback
 
-### Backend
-- **FastAPI** - Современный веб-фреймворк
-- **ElevenLabs API** - Синтез речи (TTS/STS)
-- **D-ID API** - Генерация говорящих видео
-- **Cloudinary** - Облачное хранилище файлов
-- **Pydantic** - Валидация данных
+## External APIs
 
-### Frontend
-- **React** - Пользовательский интерфейс
-- **Axios** - HTTP клиент
-- **Vite** - Сборка проекта
+### D-ID API
+- **Purpose**: Video generation with talking avatars
+- **Endpoints**: `/talks`, `/talks/{id}`
+- **Features**: Face animation, audio synchronization
 
-## 🚀 Быстрый старт
+### ElevenLabs API
+- **Purpose**: Speech-to-Speech audio processing
+- **Endpoints**: `/v1/speech-to-speech/{voice_id}`
+- **Features**: Voice cloning, audio enhancement
 
-### 1. Установка зависимостей
+### Cloudinary
+- **Purpose**: File storage and CDN
+- **Features**: Image and audio upload, public URLs
 
+## Installation
+
+### Prerequisites
+- Python 3.8+
+- Node.js 16+
+- D-ID API key
+- ElevenLabs API key
+- Cloudinary account
+
+### Backend Setup
 ```bash
-# Backend
+# Install Python dependencies
 pip install -r requirements.txt
 
-# Frontend
-cd frontend
-npm install
-```
-
-### 2. Настройка окружения
-
-Скопируйте пример конфигурации:
-
-```bash
+# Set environment variables
 cp env.example .env
-```
+# Edit .env with your API keys
 
-Настройте переменные окружения в `.env`:
-
-```env
-# ElevenLabs API
-ELEVENLABS_API_KEY=your-elevenlabs-api-key
-ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
-
-# D-ID API
-D_ID_API_KEY=your-d-id-api-key
-
-# Cloudinary
-CLOUDINARY_URL=cloudinary://username:password@cloud_name
-
-# Backend
-BACKEND_HOST=0.0.0.0
-BACKEND_PORT=3001
-```
-
-### 3. Запуск приложения
-
-#### Backend
-```bash
+# Run backend server
 python -m uvicorn app.main:app --host 0.0.0.0 --port 3001
 ```
 
-#### Frontend
+### Frontend Setup
 ```bash
+# Install Node.js dependencies
 cd frontend
+npm install
+
+# Run development server
 npm run dev
 ```
 
-### 4. Доступ к приложению
+## Environment Variables
 
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:3001
-- **API Docs**: http://localhost:3001/docs
-- **Health Check**: http://localhost:3001/api/v1/health
+```env
+# D-ID API
+D_ID_API_KEY=your_d_id_api_key
+D_ID_API_URL=https://api.d-id.com
 
-## 📋 API Endpoints
-
-### Health Check
-- `GET /api/v1/health` - Проверка состояния сервиса
-
-### Voices (ElevenLabs)
-- `GET /api/v1/voices` - Список доступных голосов
-- `GET /api/v1/voices/{voice_id}` - Информация о голосе
-- `GET /api/v1/voices/{voice_id}/validate` - Валидация голоса
-
-### Video Generation
-- `POST /api/v1/generate` - Создание задачи генерации видео
-- `GET /api/v1/status/{task_id}` - Статус задачи
-
-## 🧪 Тестирование
-
-### Быстрая проверка
-```bash
-python3 test_quick_check.py
-```
-
-### Комплексное тестирование
-```bash
-python3 test_external_services_comprehensive.py
-```
-
-### Индивидуальные тесты
-```bash
-# ElevenLabs
-python3 test_elevenlabs_comprehensive.py
-
-# D-ID
-python3 test_d_id_comprehensive.py
-
-# Backend API
-python3 test_backend_api_comprehensive.py
-```
-
-## 📊 Результаты тестирования
-
-Все тесты проходят успешно (100%):
-- ✅ **ElevenLabs API** - TTS, STS, Voices
-- ✅ **D-ID API** - Video generation, Status polling
-- ✅ **Backend API** - All endpoints, Error handling
-- ✅ **Cloudinary** - File storage (опционально)
-
-## 🔧 Конфигурация
-
-### Основные настройки
-
-```python
-# ElevenLabs
-ELEVENLABS_API_KEY = "your-api-key"
-ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1"
-ELEVENLABS_DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
-
-# D-ID
-D_ID_API_KEY = "your-api-key"
-D_ID_BASE_URL = "https://api.d-id.com"
+# ElevenLabs API
+ELEVENLABS_API_KEY=your_elevenlabs_api_key
+ELEVENLABS_API_URL=https://api.elevenlabs.io
 
 # Cloudinary
-CLOUDINARY_URL = "cloudinary://username:password@cloud_name"
+CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
 ```
 
-## 📁 Структура проекта
+## Usage
 
+1. **Upload Image**: Select a photo for the avatar
+2. **Record Audio**: Record or upload audio file
+3. **Select Voice**: Choose from available ElevenLabs voices
+4. **Generate Video**: Start the generation process
+5. **View Result**: Watch the generated talking avatar
+
+## API Endpoints
+
+### POST /api/v1/generate
+Generate a talking avatar video.
+
+**Request:**
+- `image_file`: Image file (multipart/form-data)
+- `audio_file`: Audio file (multipart/form-data)
+- `voice_id`: ElevenLabs voice ID
+
+**Response:**
+```json
+{
+  "task_id": "uuid",
+  "status": "processing",
+  "progress": 0
+}
+```
+
+### GET /api/v1/status/{task_id}
+Get generation status and result.
+
+**Response:**
+```json
+{
+  "task_id": "uuid",
+  "status": "completed",
+  "progress": 100,
+  "video_url": "https://...",
+  "error_message": null
+}
+```
+
+### GET /api/v1/voices
+Get available ElevenLabs voices.
+
+**Response:**
+```json
+[
+  {
+    "voice_id": "21m00Tcm4TlvDq8ikWAM",
+    "name": "Rachel",
+    "category": "premade"
+  }
+]
+```
+
+## File Processing
+
+### Image Normalization
+- Removes spaces and special characters
+- Handles URL encoding
+- Prevents double extensions
+- Supports JPG, JPEG, PNG formats
+
+### Audio Processing
+- Converts to MP3 format
+- Processes through ElevenLabs Speech-to-Speech
+- Maintains original quality
+- Supports various input formats
+
+## Development
+
+### Testing
+```bash
+# Run backend tests
+python -m pytest tests/
+
+# Test external APIs
+python test_full_flow.py
+```
+
+### Code Structure
 ```
 d_id_talking/
-├── app/                           # Backend приложение
-│   ├── api/v1/endpoints/         # API endpoints
-│   │   ├── generation.py         # Генерация видео
-│   │   ├── health.py            # Health check
-│   │   └── users.py             # Пользователи
-│   ├── services/                 # Внешние сервисы
-│   │   ├── elevenlabs_service.py # ElevenLabs API
-│   │   ├── d_id_service.py      # D-ID API
-│   │   └── storage_service.py   # Cloudinary
-│   ├── models/                   # Pydantic модели
-│   └── config.py                # Конфигурация
-├── frontend/                     # React frontend
-│   ├── src/
-│   │   ├── services/api.js      # API клиент
-│   │   └── App.jsx             # Главный компонент
-│   └── package.json
-├── tests/                       # Unit тесты
-├── test_files/                  # Тестовые ресурсы
-│   ├── test_audio.mp3          # Тестовое аудио
-│   └── test_image.jpg          # Тестовое изображение
-├── test_*.py                   # Тестовые скрипты
-├── requirements.txt             # Python зависимости
-└── README.md                   # Документация
+├── app/
+│   ├── api/v1/endpoints/    # API endpoints
+│   ├── services/            # External API services
+│   ├── models/              # Data models
+│   └── config.py           # Configuration
+├── frontend/               # React application
+├── tests/                  # Test files
+└── uploads/               # Temporary file storage
 ```
 
-## 🚀 Развертывание
+## Troubleshooting
 
-### Development
-```bash
-# Backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 3001
+### Common Issues
+1. **D-ID API Errors**: Check API key and rate limits
+2. **ElevenLabs Errors**: Verify voice ID and API key
+3. **Cloudinary Errors**: Check upload credentials
+4. **File Upload Issues**: Ensure proper file formats
 
-# Frontend
-cd frontend && npm run dev
-```
+### Debug Mode
+Enable detailed logging by setting `DEBUG=true` in environment variables.
 
-### Production
-```bash
-# Backend
-gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:3001
+## License
 
-# Frontend
-cd frontend && npm run build
-```
+MIT License - see LICENSE file for details.
 
-## 📝 Документация
+## Contributing
 
-- [API Documentation](API_DOCUMENTATION.md) - Подробная документация API
-- [External API Report](EXTERNAL_API_REQUESTS_REPORT.md) - Отчет по внешним API
-- [Testing Instructions](TESTING_INSTRUCTIONS.md) - Инструкции по тестированию
-- [System Architecture](SYSTEM_ARCHITECTURE_DETAILED.md) - Архитектура системы
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
 
-## 🤝 Вклад в проект
+## Support
 
-1. Форкните репозиторий
-2. Создайте feature branch
-3. Внесите изменения
-4. Добавьте тесты
-5. Запустите тестовую suite
-6. Создайте pull request
-
-## 📄 Лицензия
-
-Этот проект лицензирован под MIT License. 
+For issues and questions:
+- Check the troubleshooting section
+- Review API documentation
+- Open an issue on GitHub 

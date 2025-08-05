@@ -57,9 +57,17 @@ function App() {
       const response = await apiService.getVoices()
       // API returns array directly, not object with voices field
       const voicesArray = Array.isArray(response) ? response : (response.voices || [])
-      setVoices(voicesArray)
-      if (voicesArray.length > 0) {
-        setSelectedVoice(voicesArray[0].voice_id)
+      
+      // Sort voices alphabetically by name
+      const sortedVoices = voicesArray.sort((a, b) => {
+        const nameA = (a.name || '').toLowerCase()
+        const nameB = (b.name || '').toLowerCase()
+        return nameA.localeCompare(nameB)
+      })
+      
+      setVoices(sortedVoices)
+      if (sortedVoices.length > 0) {
+        setSelectedVoice(sortedVoices[0].voice_id)
       }
     } catch (err) {
       console.error('Failed to load voices:', err)
@@ -85,17 +93,59 @@ function App() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      mediaRecorderRef.current = new MediaRecorder(stream)
+      
+      // Try different audio formats for better compatibility
+      let mimeType = 'audio/webm;codecs=opus'
+      if (!MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        if (MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm'
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4'
+        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+          mimeType = 'audio/ogg'
+        } else {
+          mimeType = 'audio/wav'
+        }
+      }
+      
+      console.log('Using MIME type:', mimeType)
+      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType })
       
       const chunks = []
       mediaRecorderRef.current.ondataavailable = (event) => {
-        chunks.push(event.data)
+        if (event.data.size > 0) {
+          chunks.push(event.data)
+        }
       }
       
       mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/webm' })
+        const blob = new Blob(chunks, { type: mimeType })
+        console.log('Audio blob created:', blob.size, 'bytes, type:', blob.type)
+        
+        // Check audio quality and size
+        console.log('Original audio size:', blob.size, 'bytes')
+        
+        if (blob.size < 1000) {
+          console.warn('Audio file too small, might be empty or corrupted')
+        }
+        
+        // Keep original format for playback
         setAudioBlob(blob)
-        setAudioUrl(URL.createObjectURL(blob))
+        const url = URL.createObjectURL(blob)
+        console.log('Audio URL created:', url)
+        setAudioUrl(url)
+        
+        // Log audio details for debugging
+        console.log('Audio details:', {
+          size: blob.size,
+          type: blob.type,
+          duration: recordingTime
+        })
+        
+        // Create a copy for server with different MIME type
+        const serverBlob = new Blob([blob], { type: 'audio/mpeg' })
+        console.log('Server audio blob created:', serverBlob.size, 'bytes, type:', serverBlob.type)
+        
         stream.getTracks().forEach(track => track.stop())
       }
       
@@ -117,6 +167,13 @@ function App() {
   // Stop recording
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
+      // Ensure minimum recording time
+      if (recordingTime < 2) {
+        console.warn('Recording too short, minimum 2 seconds required')
+        setError('Please record at least 2 seconds of audio')
+        return
+      }
+      
       mediaRecorderRef.current.stop()
       setIsRecording(false)
       if (recordingIntervalRef.current) {
@@ -132,18 +189,34 @@ function App() {
       return
     }
 
+    // Debug information
+    console.log('Image file:', imageFile)
+    console.log('Audio blob:', audioBlob)
+    console.log('Audio blob size:', audioBlob?.size)
+    console.log('Audio blob type:', audioBlob?.type)
+    console.log('Selected voice:', selectedVoice)
+
     setGenerating(true)
     setError(null)
     setTaskStatus(null)
     setVideoUrl(null)
 
     try {
+      // Generate video with audio processing through ElevenLabs
+      console.log('Generating video with audio processing...')
       const response = await apiService.generateVideo(imageFile, audioBlob, selectedVoice)
+      console.log('Generation response:', response)
       setTaskId(response.task_id)
       
       // Start polling for status
       startStatusPolling(response.task_id)
     } catch (err) {
+      console.error('Generation Error Details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        config: err.config
+      })
       setError(err.message || 'Failed to start video generation')
       console.error('Generation Error:', err)
     } finally {
@@ -304,10 +377,30 @@ function App() {
         {audioUrl && (
           <div className="audio-preview">
             <p>✅ Audio recorded ({Math.round(audioBlob.size / 1024)} KB)</p>
-            <audio controls>
-              <source src={audioUrl} type="audio/webm" />
+            <audio 
+              controls 
+              onError={(e) => console.error('Audio playback error:', e)}
+              onLoadStart={() => console.log('Audio loading started')}
+              onCanPlay={() => console.log('Audio can play')}
+              onLoadedMetadata={() => console.log('Audio metadata loaded')}
+            >
+              <source src={audioUrl} type={audioBlob?.type || 'audio/webm'} />
+              <source src={audioUrl} type="audio/webm;codecs=opus" />
+              <source src={audioUrl} type="audio/mp4" />
+              <source src={audioUrl} type="audio/ogg" />
               Your browser does not support the audio element.
             </audio>
+            <button 
+              onClick={() => {
+                const audio = document.querySelector('audio')
+                if (audio) {
+                  audio.play().catch(err => console.error('Play error:', err))
+                }
+              }}
+              className="play-button"
+            >
+              ▶️ Play Audio
+            </button>
           </div>
         )}
       </section>

@@ -139,18 +139,22 @@ class DIdService:
     
     def _get_headers(self) -> Dict[str, str]:
         """Get headers for D-ID API requests"""
+        logger.info(f"🔥 СОЗДАНИЕ D-ID HEADERS...")
         self._validate_configuration()
-        return {
+        headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
             "Authorization": f"Basic {self.api_key}"
         }
+        logger.info(f"✅ D-ID HEADERS СОЗДАНЫ: {headers}")
+        return headers
     
     def _make_request(
         self, 
         method: str, 
         endpoint: str, 
         data: Optional[Dict] = None, 
+        files: Optional[Dict] = None,
         timeout: int = 60
     ) -> Dict[str, Any]:
         """Make HTTP request to D-ID API"""
@@ -158,30 +162,73 @@ class DIdService:
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         headers = self._get_headers()
         
+        # Детальное логирование запроса
+        print(f"🚀 D-ID API REQUEST:")
+        print(f"  URL: {url}")
+        print(f"  Method: {method}")
+        print(f"  Headers: {headers}")
+        if data:
+            print(f"  Data: {data}")
+        
+        logger.info(f"🚀 D-ID API REQUEST:")
+        logger.info(f"  URL: {url}")
+        logger.info(f"  Method: {method}")
+        logger.info(f"  Headers: {headers}")
+        if data:
+            logger.info(f"  Data: {data}")
+        
         try:
             if method.upper() == "GET":
                 response = requests.get(url, headers=headers, timeout=timeout)
             elif method.upper() == "POST":
-                response = requests.post(url, headers=headers, json=data, timeout=timeout)
+                if files:
+                    # Для загрузки файлов используем multipart/form-data
+                    # Убираем Content-Type из заголовков - requests сам установит правильный
+                    headers_without_content_type = {k: v for k, v in headers.items() if k.lower() != 'content-type'}
+                    response = requests.post(url, headers=headers_without_content_type, data=data, files=files, timeout=timeout)
+                else:
+                    # Для JSON данных
+                    response = requests.post(url, headers=headers, json=data, timeout=timeout)
             else:
                 raise DIdServiceError(f"Unsupported HTTP method: {method}")
             
+            # Логируем ответ
+            print(f"📥 D-ID API RESPONSE:")
+            print(f"  Status Code: {response.status_code}")
+            print(f"  Response Headers: {dict(response.headers)}")
+            print(f"  Response Text: {response.text}")
+            
+            logger.info(f"📥 D-ID API RESPONSE:")
+            logger.info(f"  Status Code: {response.status_code}")
+            logger.info(f"  Response Headers: {dict(response.headers)}")
+            logger.info(f"  Response Text: {response.text}")
+            
             # D-ID API может возвращать 201 для успешного создания
             if response.status_code in [200, 201]:
-                return response.json()
+                result = response.json()
+                logger.info(f"✅ D-ID API SUCCESS: {result}")
+                return result
             else:
                 response.raise_for_status()
             
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code if e.response else 0
             error_text = e.response.text if e.response else str(e)
-            logger.error(f"D-ID API error: {status_code} - {error_text}")
+            print(f"❌ D-ID API HTTP ERROR:")
+            print(f"  Status Code: {status_code}")
+            print(f"  Error Text: {error_text}")
+            print(f"  Full Error: {e}")
+            
+            logger.error(f"❌ D-ID API HTTP ERROR:")
+            logger.error(f"  Status Code: {status_code}")
+            logger.error(f"  Error Text: {error_text}")
+            logger.error(f"  Full Error: {e}")
             raise DIdAPIError(status_code, error_text)
         except requests.exceptions.RequestException as e:
-            logger.error(f"Network error during D-ID API call: {str(e)}")
+            logger.error(f"❌ D-ID API NETWORK ERROR: {str(e)}")
             raise DIdServiceError(f"Network error: {str(e)}")
         except Exception as e:
-            logger.error(f"Unexpected error during D-ID API call: {str(e)}")
+            logger.error(f"❌ D-ID API UNEXPECTED ERROR: {str(e)}")
             raise DIdServiceError(f"Unexpected error: {str(e)}")
     
     def test_authentication(self) -> Dict[str, Any]:
@@ -269,10 +316,21 @@ class DIdService:
         """
         Создать talk с аудио скриптом
         """
+        print(f"🔥 ВЫЗОВ create_talk_with_audio:")
+        print(f"  Image URL: {image_url}")
+        print(f"  Audio URL: {audio_url}")
+        
+        logger.info(f"🔥 ВЫЗОВ create_talk_with_audio:")
+        logger.info(f"  Image URL: {image_url}")
+        logger.info(f"  Audio URL: {audio_url}")
+        
         script = {
             "type": "audio",
             "audio_url": audio_url
         }
+        
+        print(f"🔥 Созданный script объект: {script}")
+        logger.info(f"🔥 Созданный script объект: {script}")
         
         return self._create_talk_internal(image_url, script, driver_url, webhook, expressions)
 
@@ -283,7 +341,73 @@ class DIdService:
         :param audio_url: URL аудиофайла
         :return: talk_id (str)
         """
+        logger.info(f"🔥 ВЫЗОВ create_talk:")
+        logger.info(f"  Image URL: {image_url}")
+        logger.info(f"  Audio URL: {audio_url}")
         return self.create_talk_with_audio(image_url, audio_url)
+    
+    def create_talk_with_files(self, image_path: str, audio_path: str) -> str:
+        """
+        Создать talk на D-ID с ПРЯМОЙ загрузкой файлов
+        
+        Args:
+            image_path: Путь к файлу изображения
+            audio_path: Путь к файлу аудио
+            
+        Returns:
+            talk_id (str)
+        """
+        print(f"🔥 ВЫЗОВ create_talk_with_files:")
+        print(f"  Image path: {image_path}")
+        print(f"  Audio path: {audio_path}")
+        
+        logger.info(f"🔥 ВЫЗОВ create_talk_with_files:")
+        logger.info(f"  Image path: {image_path}")
+        logger.info(f"  Audio path: {audio_path}")
+        
+        try:
+            # Читаем файлы
+            from app.services.storage_service import StorageService
+            storage = StorageService()
+            
+            image_data = storage.get_file_data(image_path)
+            audio_data = storage.get_file_data(audio_path)
+            
+            print(f"🔥 ФАЙЛЫ ПРОЧИТАНЫ:")
+            print(f"  Image size: {len(image_data)} bytes")
+            print(f"  Audio size: {len(audio_data)} bytes")
+            
+            # Создаем multipart/form-data
+            files = {
+                'image': ('image.jpg', image_data, 'image/jpeg'),
+                'audio': ('audio.mp3', audio_data, 'audio/mpeg')
+            }
+            
+            # Используем правильный формат для D-ID API
+            data = {
+                'script': '{"type": "audio", "audio_url": "audio.mp3"}',
+                'config': '{"stitch": true, "result_format": "mp4"}'
+            }
+            
+            print(f"🔥 ОТПРАВКА ФАЙЛОВ В D-ID API:")
+            print(f"  Files: {list(files.keys())}")
+            print(f"  Data: {data}")
+            
+            # Отправляем запрос
+            result = self._make_request("POST", "/talks", data=data, files=files)
+            
+            talk_id = result.get("id")
+            if not talk_id:
+                raise DIdServiceError("D-ID did not return talk_id")
+            
+            print(f"✅ D-ID talk создан успешно! ID: {talk_id}")
+            logger.info(f"✅ D-ID talk создан успешно! ID: {talk_id}")
+            return talk_id
+            
+        except Exception as e:
+            print(f"❌ ОШИБКА СОЗДАНИЯ TALK С ФАЙЛАМИ: {e}")
+            logger.error(f"❌ ОШИБКА СОЗДАНИЯ TALK С ФАЙЛАМИ: {e}")
+            raise
 
     def _create_talk_internal(
         self,
@@ -301,7 +425,18 @@ class DIdService:
             "script": script,
             "config": {
                 "stitch": True,
-                "result_format": "mp4"
+                "align_driver": True,
+                "sharpen": True,
+                "normalization_factor": 1,
+                "result_format": "mp4",
+                "fluent": False,
+                "pad_audio": 0,
+                "reduce_noise": False,
+                "auto_match": True,
+                "show_watermark": False,
+                "motion_factor": 1,
+                "optimize_audio": False,
+                "align_expand_factor": 0.3
             }
         }
         
@@ -329,8 +464,40 @@ class DIdService:
             }
         
         try:
-            logger.info(f"Создание D-ID talk... Image: {image_url}, Script type: {script['type']}")
-            logger.info(f"D-ID payload: {payload}")
+            logger.info(f"Создание D-ID talk...")
+            logger.info(f"  Image URL: {image_url}")
+            logger.info(f"  Script type: {script['type']}")
+            logger.info(f"  Audio URL: {script.get('audio_url', 'N/A')}")
+            
+            # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ОБЪЕКТА
+            print(f"🔍 ПОЛНЫЙ ОБЪЕКТ D-ID PAYLOAD:")
+            print(f"  {payload}")
+            print(f"  Тип payload: {type(payload)}")
+            print(f"  Ключи payload: {list(payload.keys())}")
+            print(f"  Script объект: {script}")
+            print(f"  Config объект: {payload.get('config', 'N/A')}")
+            
+            logger.info(f"🔍 ПОЛНЫЙ ОБЪЕКТ D-ID PAYLOAD:")
+            logger.info(f"  {payload}")
+            logger.info(f"  Тип payload: {type(payload)}")
+            logger.info(f"  Ключи payload: {list(payload.keys())}")
+            logger.info(f"  Script объект: {script}")
+            logger.info(f"  Config объект: {payload.get('config', 'N/A')}")
+            
+            # Проверяем доступность URL
+            import requests
+            try:
+                image_test = requests.head(image_url, timeout=10)
+                logger.info(f"  Image URL доступен: {image_test.status_code}")
+            except Exception as e:
+                logger.warning(f"  Image URL недоступен: {e}")
+            
+            try:
+                audio_test = requests.head(script.get('audio_url', ''), timeout=10)
+                logger.info(f"  Audio URL доступен: {audio_test.status_code}")
+            except Exception as e:
+                logger.warning(f"  Audio URL недоступен: {e}")
+            
             result = self._make_request("POST", "/talks", data=payload)
             logger.info(f"D-ID response: {result}")
             talk_id = result.get("id")
@@ -343,6 +510,7 @@ class DIdService:
         except DIdAPIError as e:
             if e.status_code in [400, 500]:
                 logger.warning(f"D-ID API returned {e.status_code}. Trying alternative format...")
+                logger.error(f"D-ID API Error Details: {e.message}")
                 return self._create_talk_alternative(image_url, script)
             else:
                 raise
@@ -360,7 +528,18 @@ class DIdService:
             "script": script,
             "config": {
                 "stitch": True,
-                "result_format": "mp4"
+                "align_driver": True,
+                "sharpen": True,
+                "normalization_factor": 1,
+                "result_format": "mp4",
+                "fluent": False,
+                "pad_audio": 0,
+                "reduce_noise": False,
+                "auto_match": True,
+                "show_watermark": False,
+                "motion_factor": 1,
+                "optimize_audio": False,
+                "align_expand_factor": 0.3
             }
         }
         

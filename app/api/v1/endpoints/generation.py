@@ -5,6 +5,8 @@ API endpoints для генерации видео
 import os
 import uuid
 import logging
+import subprocess
+import tempfile
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
@@ -22,6 +24,72 @@ router = APIRouter()
 tasks_storage: Dict[str, Dict[str, Any]] = {}
 
 
+def convert_audio_to_mp3(input_path: str, output_path: str) -> bool:
+    """
+    Конвертирует аудио файл в MP3 формат с помощью ffmpeg
+    """
+    try:
+        # Проверяем, что ffmpeg доступен
+        result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error("ffmpeg не найден в системе")
+            return False
+        
+        # Конвертируем аудио в MP3
+        cmd = [
+            'ffmpeg', '-i', input_path,
+            '-acodec', 'libmp3lame',
+            '-ab', '128k',
+            '-ar', '44100',
+            '-y',  # Перезаписывать выходной файл
+            output_path
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            logger.info(f"Аудио успешно сконвертировано: {input_path} -> {output_path}")
+            return True
+        else:
+            logger.error(f"Ошибка конвертации аудио: {result.stderr}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Ошибка при конвертации аудио: {e}")
+        return False
+
+
+def get_audio_format(file_path: str) -> str:
+    """
+    Определяет формат аудио файла
+    """
+    try:
+        cmd = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', file_path]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            import json
+            data = json.loads(result.stdout)
+            format_name = data.get('format', {}).get('format_name', '').split(',')[0]
+            return format_name
+        else:
+            # Если ffprobe не работает, определяем по расширению
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext == '.mp3':
+                return 'mp3'
+            elif ext == '.wav':
+                return 'wav'
+            elif ext == '.webm':
+                return 'webm'
+            elif ext == '.ogg':
+                return 'ogg'
+            else:
+                return 'unknown'
+    except Exception as e:
+        logger.error(f"Ошибка определения формата аудио: {e}")
+        return 'unknown'
+
+
 @router.post("/generate")
 async def generate_video(
     image_file: UploadFile = File(...),
@@ -33,6 +101,14 @@ async def generate_video(
     Создание задачи генерации видео
     """
     try:
+        # 🔥 ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ВХОДНЫХ ДАННЫХ
+        print("🔥 ВХОДНЫЕ ДАННЫЕ ОТ ФРОНТЕНДА:")
+        print(f"   📸 Image filename: {image_file.filename}")
+        print(f"   📸 Image content_type: {image_file.content_type}")
+        print(f"   🎵 Audio filename: {audio_file.filename}")
+        print(f"   🎵 Audio content_type: {audio_file.content_type}")
+        print(f"   🎤 Voice ID: {voice_id}")
+        
         # Валидация файлов
         if not image_file.filename or not audio_file.filename:
             raise HTTPException(status_code=400, detail="Необходимо загрузить изображение и аудио файлы")
@@ -46,13 +122,46 @@ async def generate_video(
         
         # Сохраняем файлы локально
         image_path = os.path.join(task_folder, image_file.filename)
-        audio_path = os.path.join(task_folder, audio_file.filename)
+        original_audio_path = os.path.join(task_folder, audio_file.filename)
         
         with open(image_path, "wb") as f:
             f.write(await image_file.read())
         
-        with open(audio_path, "wb") as f:
+        with open(original_audio_path, "wb") as f:
             f.write(await audio_file.read())
+        
+        # 🔥 ПРОВЕРЯЕМ РАЗМЕРЫ ФАЙЛОВ
+        image_size = os.path.getsize(image_path)
+        audio_size = os.path.getsize(original_audio_path)
+        print(f"🔥 РАЗМЕРЫ ФАЙЛОВ:")
+        print(f"   📸 Изображение: {image_size} байт")
+        print(f"   🎵 Аудио: {audio_size} байт")
+        
+        # Проверяем минимальный размер аудио
+        if audio_size < 1000:  # Меньше 1KB
+            print(f"⚠️  ВНИМАНИЕ: Аудио файл очень маленький ({audio_size} байт)!")
+        elif audio_size < 10000:  # Меньше 10KB
+            print(f"⚠️  ВНИМАНИЕ: Аудио файл довольно маленький ({audio_size} байт)")
+        else:
+            print(f"✅ Аудио файл нормального размера ({audio_size} байт)")
+        
+        # Конвертируем аудио в MP3 для совместимости с ElevenLabs
+        audio_format = get_audio_format(original_audio_path)
+        logger.info(f"Определен формат аудио: {audio_format}")
+        
+        if audio_format != 'mp3':
+            logger.info(f"Конвертируем аудио из {audio_format} в MP3...")
+            converted_audio_path = os.path.join(task_folder, "converted_audio.mp3")
+            
+            if convert_audio_to_mp3(original_audio_path, converted_audio_path):
+                audio_path = converted_audio_path
+                logger.info(f"Аудио сконвертировано: {converted_audio_path}")
+            else:
+                logger.warning(f"Не удалось сконвертировать аудио, используем оригинал")
+                audio_path = original_audio_path
+        else:
+            audio_path = original_audio_path
+            logger.info("Аудио уже в MP3 формате")
         
         # Инициализируем задачу
         tasks_storage[task_id] = {
@@ -69,7 +178,14 @@ async def generate_video(
         logger.info(f"Получены файлы: {image_file.filename} ({os.path.getsize(image_path)} байт) и {audio_file.filename} ({os.path.getsize(audio_path)} байт)")
         logger.info(f"🎯 Создана новая задача обработки через ElevenLabs: {task_id}")
         logger.info(f"   📸 Изображение: {image_file.filename}")
-        logger.info(f"   🎵 Аудио: {audio_file.filename}")
+        logger.info(f"   🎵 Аудио: {os.path.basename(audio_path)} ({os.path.getsize(audio_path)} байт)")
+        if audio_path != original_audio_path:
+            logger.info(f"   🔄 Аудио сконвертировано в MP3 для совместимости с ElevenLabs")
+        
+        # Добавляем принудительный вывод в консоль
+        print(f"🎯 Создана новая задача обработки через ElevenLabs: {task_id}")
+        print(f"   📸 Изображение: {image_file.filename}")
+        print(f"   🎵 Аудио: {os.path.basename(audio_path)} ({os.path.getsize(audio_path)} байт)")
         
         # Запускаем фоновую обработку
         if background_tasks:
@@ -96,28 +212,72 @@ async def process_video_task(task_id: str):
             logger.error(f"Задача {task_id} не найдена")
             return
         
-        logger.info(f"[{task_id}] Запускаю обработку через ElevenLabs Speech to Speech...")
+        # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ЗАДАЧИ
+        print(f"[{task_id}] 🔥 НАЧАЛО ОБРАБОТКИ ЗАДАЧИ:")
+        print(f"[{task_id}]   Task ID: {task_id}")
+        print(f"[{task_id}]   Image path: {task.get('image_path', 'N/A')}")
+        print(f"[{task_id}]   Audio path: {task.get('audio_path', 'N/A')}")
+        print(f"[{task_id}]   Voice ID: {task.get('voice_id', 'N/A')}")
+        print(f"[{task_id}]   Status: {task.get('status', 'N/A')}")
+        
+        print(f"[{task_id}] Запускаю обработку через ElevenLabs Speech to Speech...")
         
         # Шаг 1: Загрузка файлов в облачное хранилище
-        logger.info(f"[{task_id}] Шаг 1: Загрузка файлов в облачное хранилище...")
+        print(f"[{task_id}] Шаг 1: Загрузка файлов в облачное хранилище...")
         task["progress"] = 10
         
         try:
+            print(f"[{task_id}] 🔥 СОЗДАНИЕ STORAGE SERVICE...")
+            logger.info(f"[{task_id}] 🔥 СОЗДАНИЕ STORAGE SERVICE...")
             storage_service = StorageService()
+            print(f"[{task_id}] ✅ STORAGE SERVICE СОЗДАН")
+            logger.info(f"[{task_id}] ✅ STORAGE SERVICE СОЗДАН")
             
             # Загружаем изображение
+            print(f"[{task_id}] 🔥 ОТКРЫВАЕМ ИЗОБРАЖЕНИЕ: {task['image_path']}")
+            logger.info(f"[{task_id}] 🔥 ОТКРЫВАЕМ ИЗОБРАЖЕНИЕ: {task['image_path']}")
             with open(task["image_path"], "rb") as f:
                 image_data = f.read()
+            print(f"[{task_id}] ✅ ИЗОБРАЖЕНИЕ ПРОЧИТАНО: {len(image_data)} байт")
+            logger.info(f"[{task_id}] ✅ ИЗОБРАЖЕНИЕ ПРОЧИТАНО: {len(image_data)} байт")
+            
+            print(f"[{task_id}] 🔥 ЗАГРУЖАЕМ ИЗОБРАЖЕНИЕ В CLOUDINARY...")
+            logger.info(f"[{task_id}] 🔥 ЗАГРУЖАЕМ ИЗОБРАЖЕНИЕ В CLOUDINARY...")
             image_result = storage_service.upload_image(image_data, os.path.basename(task["image_path"]))
-            logger.info(f"[{task_id}] Изображение загружено в облако: {image_result.public_url}")
+            print(f"[{task_id}] ✅ ИЗОБРАЖЕНИЕ ЗАГРУЖЕНО: {image_result.public_url}")
+            logger.info(f"[{task_id}] ✅ ИЗОБРАЖЕНИЕ ЗАГРУЖЕНО: {image_result.public_url}")
             
             # Загружаем аудио
+            print(f"[{task_id}] 🔥 ОТКРЫВАЕМ АУДИО: {task['audio_path']}")
+            logger.info(f"[{task_id}] 🔥 ОТКРЫВАЕМ АУДИО: {task['audio_path']}")
             with open(task["audio_path"], "rb") as f:
                 audio_data = f.read()
-            audio_result = storage_service.upload_audio(audio_data, os.path.basename(task["audio_path"]))
-            logger.info(f"[{task_id}] Аудио загружено в облако: {audio_result.public_url}")
+            print(f"[{task_id}] ✅ АУДИО ПРОЧИТАНО: {len(audio_data)} байт")
+            logger.info(f"[{task_id}] ✅ АУДИО ПРОЧИТАНО: {len(audio_data)} байт")
             
+            print(f"[{task_id}] 🔥 ЗАГРУЖАЕМ АУДИО В CLOUDINARY...")
+            logger.info(f"[{task_id}] 🔥 ЗАГРУЖАЕМ АУДИО В CLOUDINARY...")
+            audio_result = storage_service.upload_audio(audio_data, os.path.basename(task["audio_path"]))
+            print(f"[{task_id}] ✅ АУДИО ЗАГРУЖЕНО: {audio_result.public_url}")
+            logger.info(f"[{task_id}] ✅ АУДИО ЗАГРУЖЕНО: {audio_result.public_url}")
+            
+            # Проверяем, что URL доступен
+            print(f"[{task_id}] 🔥 ПРОВЕРЯЕМ ДОСТУПНОСТЬ URL АУДИО...")
+            logger.info(f"[{task_id}] 🔥 ПРОВЕРЯЕМ ДОСТУПНОСТЬ URL АУДИО...")
+            import requests
+            try:
+                test_response = requests.head(audio_result.public_url, timeout=10)
+                print(f"[{task_id}] ✅ URL АУДИО ДОСТУПЕН: {test_response.status_code}")
+                logger.info(f"[{task_id}] ✅ URL АУДИО ДОСТУПЕН: {test_response.status_code}")
+            except Exception as e:
+                print(f"[{task_id}] ⚠️ URL АУДИО НЕДОСТУПЕН: {e}")
+                logger.warning(f"[{task_id}] ⚠️ URL АУДИО НЕДОСТУПЕН: {e}")
+            
+            print(f"[{task_id}] 🔥 УСТАНАВЛИВАЕМ PROGRESS = 20")
+            logger.info(f"[{task_id}] 🔥 УСТАНАВЛИВАЕМ PROGRESS = 20")
             task["progress"] = 20
+            print(f"[{task_id}] ✅ PROGRESS УСТАНОВЛЕН")
+            logger.info(f"[{task_id}] ✅ PROGRESS УСТАНОВЛЕН")
             
         except StorageServiceError as e:
             logger.error(f"[{task_id}] Ошибка загрузки файлов в облако: {e}")
@@ -126,28 +286,57 @@ async def process_video_task(task_id: str):
             return
         
         # Шаг 2: Обработка аудио через ElevenLabs
-        logger.info(f"[{task_id}] Шаг 2: Обработка аудио через ElevenLabs...")
+        print(f"[{task_id}] 🔥 ШАГ 2: ОБРАБОТКА АУДИО ЧЕРЕЗ ELEVENLABS...")
+        logger.info(f"[{task_id}] 🔥 ШАГ 2: ОБРАБОТКА АУДИО ЧЕРЕЗ ELEVENLABS...")
+        print(f"[{task_id}] 🔥 УСТАНАВЛИВАЕМ PROGRESS = 30")
+        logger.info(f"[{task_id}] 🔥 УСТАНАВЛИВАЕМ PROGRESS = 30")
         task["progress"] = 30
+        print(f"[{task_id}] ✅ PROGRESS УСТАНОВЛЕН")
+        logger.info(f"[{task_id}] ✅ PROGRESS УСТАНОВЛЕН")
         
         try:
+            print(f"[{task_id}] 🔥 СОЗДАНИЕ ELEVENLABS SERVICE...")
+            logger.info(f"[{task_id}] 🔥 СОЗДАНИЕ ELEVENLABS SERVICE...")
             elevenlabs_service = ElevenLabsService()
+            print(f"[{task_id}] ✅ ELEVENLABS SERVICE СОЗДАН")
+            logger.info(f"[{task_id}] ✅ ELEVENLABS SERVICE СОЗДАН")
             
             # Обрабатываем аудио через ElevenLabs
+            print(f"[{task_id}] 🔥 СОЗДАЕМ ПУТЬ ДЛЯ ОБРАБОТАННОГО АУДИО...")
+            logger.info(f"[{task_id}] 🔥 СОЗДАЕМ ПУТЬ ДЛЯ ОБРАБОТАННОГО АУДИО...")
             processed_audio_path = os.path.join(os.path.dirname(task["audio_path"]), "processed_audio.mp3")
+            print(f"[{task_id}] ✅ ПУТЬ СОЗДАН: {processed_audio_path}")
+            logger.info(f"[{task_id}] ✅ ПУТЬ СОЗДАН: {processed_audio_path}")
             
             # Используем загруженное аудио из облака
+            print(f"[{task_id}] 🔥 ВЫЗЫВАЕМ ELEVENLABS SPEECH TO SPEECH...")
+            logger.info(f"[{task_id}] 🔥 ВЫЗЫВАЕМ ELEVENLABS SPEECH TO SPEECH...")
+            print(f"[{task_id}]   Audio URL: {audio_result.public_url}")
+            logger.info(f"[{task_id}]   Audio URL: {audio_result.public_url}")
+            print(f"[{task_id}]   Voice ID: {task['voice_id']}")
+            logger.info(f"[{task_id}]   Voice ID: {task['voice_id']}")
             processed_audio_data = elevenlabs_service.speech_to_speech_with_url(
                 audio_result.public_url, 
                 task["voice_id"]
             )
+            print(f"[{task_id}] ✅ ELEVENLABS ОБРАБОТКА ЗАВЕРШЕНА: {len(processed_audio_data)} байт")
+            logger.info(f"[{task_id}] ✅ ELEVENLABS ОБРАБОТКА ЗАВЕРШЕНА: {len(processed_audio_data)} байт")
             
             # Сохраняем обработанное аудио
+            print(f"[{task_id}] 🔥 СОХРАНЯЕМ ОБРАБОТАННОЕ АУДИО...")
+            logger.info(f"[{task_id}] 🔥 СОХРАНЯЕМ ОБРАБОТАННОЕ АУДИО...")
             with open(processed_audio_path, "wb") as f:
                 f.write(processed_audio_data)
+            print(f"[{task_id}] ✅ ОБРАБОТАННОЕ АУДИО СОХРАНЕНО: {processed_audio_path}")
+            logger.info(f"[{task_id}] ✅ ОБРАБОТАННОЕ АУДИО СОХРАНЕНО: {processed_audio_path}")
             
+            print(f"[{task_id}] 🔥 УСТАНАВЛИВАЕМ PROGRESS = 50")
+            logger.info(f"[{task_id}] 🔥 УСТАНАВЛИВАЕМ PROGRESS = 50")
             task["progress"] = 50
-            logger.info(f"[{task_id}] Обработка через ElevenLabs завершена успешно!")
-            logger.info(f"[{task_id}] Обработанный аудио сохранен: {processed_audio_path}")
+            print(f"[{task_id}] ✅ PROGRESS УСТАНОВЛЕН")
+            logger.info(f"[{task_id}] ✅ PROGRESS УСТАНОВЛЕН")
+            print(f"[{task_id}] ✅ ОБРАБОТКА ЧЕРЕЗ ELEVENLABS ЗАВЕРШЕНА УСПЕШНО!")
+            logger.info(f"[{task_id}] ✅ ОБРАБОТКА ЧЕРЕЗ ELEVENLABS ЗАВЕРШЕНА УСПЕШНО!")
             
         except ElevenLabsServiceError as e:
             logger.error(f"[{task_id}] Ошибка сервиса ElevenLabs: {e}")
@@ -156,22 +345,36 @@ async def process_video_task(task_id: str):
             return
         
         # Шаг 3: Создание видео через D-ID
-        logger.info(f"[{task_id}] Шаг 3: Создание видео через D-ID...")
+        logger.info(f"[{task_id}] 🔥 ШАГ 3: СОЗДАНИЕ ВИДЕО ЧЕРЕЗ D-ID...")
+        logger.info(f"[{task_id}] 🔥 УСТАНАВЛИВАЕМ PROGRESS = 60")
         task["progress"] = 60
+        logger.info(f"[{task_id}] ✅ PROGRESS УСТАНОВЛЕН")
         
         try:
+            logger.info(f"[{task_id}] 🔥 СОЗДАНИЕ D-ID SERVICE...")
             d_id_service = DIdService()
+            logger.info(f"[{task_id}] ✅ D-ID SERVICE СОЗДАН")
             
             # Загружаем обработанное аудио в облако
+            logger.info(f"[{task_id}] 🔥 ОТКРЫВАЕМ ОБРАБОТАННОЕ АУДИО: {processed_audio_path}")
             with open(processed_audio_path, "rb") as f:
                 processed_audio_data = f.read()
+            logger.info(f"[{task_id}] ✅ ОБРАБОТАННОЕ АУДИО ПРОЧИТАНО: {len(processed_audio_data)} байт")
+            
+            logger.info(f"[{task_id}] 🔥 ЗАГРУЖАЕМ ОБРАБОТАННОЕ АУДИО В CLOUDINARY...")
             processed_audio_result = storage_service.upload_audio(processed_audio_data, "processed_audio.mp3")
-            logger.info(f"[{task_id}] Обработанное аудио загружено в облако: {processed_audio_result.public_url}")
+            logger.info(f"[{task_id}] ✅ ОБРАБОТАННОЕ АУДИО ЗАГРУЖЕНО: {processed_audio_result.public_url}")
             
             # Создаем видео через D-ID с публичными URL
+            logger.info(f"[{task_id}] 🔥 ВЫЗОВ D-ID API:")
+            logger.info(f"[{task_id}]   Image URL: {image_result.public_url}")
+            logger.info(f"[{task_id}]   Audio URL: {processed_audio_result.public_url}")
+            logger.info(f"[{task_id}] 🔥 ВЫЗЫВАЕМ D-ID CREATE_TALK...")
             talk_id = d_id_service.create_talk(image_result.public_url, processed_audio_result.public_url)
+            logger.info(f"[{task_id}] ✅ D-ID CREATE_TALK ВЫЗВАН")
             task["talk_id"] = talk_id
-            logger.info(f"[{task_id}] Talk создан в D-ID: {talk_id}")
+            logger.info(f"[{task_id}] ✅ TALK_ID УСТАНОВЛЕН: {talk_id}")
+            logger.info(f"[{task_id}] ✅ TALK СОЗДАН В D-ID: {talk_id}")
             
             task["progress"] = 70
             

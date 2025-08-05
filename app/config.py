@@ -43,12 +43,20 @@ class Config:
     @classmethod
     def get_elevenlabs_headers(cls) -> dict:
         """Получение заголовков для ElevenLabs API"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"🔥 ПОЛУЧЕНИЕ ELEVENLABS HEADERS...")
         if not cls.is_elevenlabs_configured():
+            logger.error(f"❌ ELEVENLABS API KEY НЕ НАСТРОЕН")
             raise ValueError("ElevenLabs API key не настроен")
-        return {
+        
+        headers = {
             "xi-api-key": cls.ELEVENLABS_API_KEY,
             "Content-Type": "application/json"
         }
+        logger.info(f"✅ ELEVENLABS HEADERS СОЗДАНЫ: {headers}")
+        return headers
     
     @classmethod
     def is_d_id_configured(cls) -> bool:

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -65,13 +66,65 @@ class StorageService:
     
     def _configure_cloudinary(self) -> None:
         """Настройка Cloudinary"""
+        logger.info(f"🔥 НАСТРОЙКА CLOUDINARY...")
         try:
             cloudinary.config(
                 cloudinary_url=os.getenv('CLOUDINARY_URL')
             )
-            logger.info("Cloudinary настроен успешно")
+            logger.info("✅ CLOUDINARY НАСТРОЕН УСПЕШНО")
         except Exception as e:
+            logger.error(f"❌ ОШИБКА НАСТРОЙКИ CLOUDINARY: {e}")
             raise StorageConfigurationError(f"Ошибка настройки Cloudinary: {e}")
+    
+    def normalize_filename(self, filename: str, file_type: str = "image") -> str:
+        """
+        Normalizes filename for Cloudinary:
+        - removes spaces and special characters (including URL encoding)
+        - keeps only one extension
+        - prevents double extensions
+        """
+        # Remove path if present
+        base = os.path.basename(filename)
+        
+        # Decode URL encoding (%20 -> space, %3A -> :, etc.)
+        import urllib.parse
+        base = urllib.parse.unquote(base)
+        
+        # Find the last file extension BEFORE cleaning
+        last_dot_index = base.rfind('.')
+        if last_dot_index != -1:
+            original_name = base[:last_dot_index]
+            ext = base[last_dot_index:].lower()
+        else:
+            original_name = base
+            ext = ''
+        
+        # Clean only the filename (not extension)
+        # Remove all except letters, numbers, _ and .
+        name = re.sub(r'[^A-Za-z0-9_.]', '_', original_name)
+        
+        # Remove double dots and underscores in name
+        name = re.sub(r'[._]+', '_', name)
+        
+        # Process extensions based on file type
+        if file_type == "image":
+            if ext not in ['.jpg', '.jpeg', '.png']:
+                ext = '.jpg'
+        else:  # audio
+            # Keep original extension for audio
+            if not ext:
+                ext = '.mp3'
+        
+        # Remove all dots from name
+        name = name.replace('.', '_')
+        
+        # Remove extra underscores
+        name = re.sub(r'_+', '_', name)
+        name = name.strip('_')
+        
+        normalized = f"{name}{ext}"
+        logger.info(f"  Normalized filename: {normalized}")
+        return normalized
     
     def upload_image(self, file_data: bytes, filename: str, folder: str = "d_id_talking/images") -> UploadResult:
         """
@@ -86,7 +139,13 @@ class StorageService:
             UploadResult с информацией о загруженном файле
         """
         try:
-            logger.info(f"Загрузка изображения: {filename} в папку {folder}")
+            filename = self.normalize_filename(filename, "image")
+            logger.info(f"🔥 ЗАГРУЗКА ИЗОБРАЖЕНИЯ В CLOUDINARY:")
+            logger.info(f"  Original filename: {filename}")
+            logger.info(f"  Normalized filename: {filename}")
+            logger.info(f"  Folder: {folder}")
+            logger.info(f"  Data size: {len(file_data)} bytes")
+            logger.info(f"  Data type: {type(file_data)}")
             
             # Загружаем файл в Cloudinary
             result = cloudinary.uploader.upload(
@@ -125,7 +184,13 @@ class StorageService:
             UploadResult с информацией о загруженном файле
         """
         try:
-            logger.info(f"Загрузка аудио файла: {filename} в папку {folder}")
+            filename = self.normalize_filename(filename, "audio")
+            logger.info(f"🔥 ЗАГРУЗКА АУДИО В CLOUDINARY:")
+            logger.info(f"  Original filename: {filename}")
+            logger.info(f"  Normalized filename: {filename}")
+            logger.info(f"  Folder: {folder}")
+            logger.info(f"  Data size: {len(file_data)} bytes")
+            logger.info(f"  Data type: {type(file_data)}")
             
             # Загружаем файл в Cloudinary
             result = cloudinary.uploader.upload(
@@ -261,4 +326,28 @@ class StorageService:
             return True
         except Exception as e:
             logger.error(f"Ошибка подключения к Cloudinary: {e}")
-            return False 
+            return False
+    
+    def get_file_data(self, file_path: str) -> bytes:
+        """
+        Получить данные файла для прямой загрузки в D-ID API
+        
+        Args:
+            file_path: Путь к файлу
+            
+        Returns:
+            bytes: Данные файла
+        """
+        try:
+            logger.info(f"🔥 ЧТЕНИЕ ФАЙЛА ДЛЯ D-ID API:")
+            logger.info(f"  File path: {file_path}")
+            
+            with open(file_path, 'rb') as f:
+                file_data = f.read()
+            
+            logger.info(f"✅ ФАЙЛ ПРОЧИТАН: {len(file_data)} байт")
+            return file_data
+            
+        except Exception as e:
+            logger.error(f"❌ ОШИБКА ЧТЕНИЯ ФАЙЛА: {e}")
+            raise StorageUploadError(f"Ошибка чтения файла: {e}") 

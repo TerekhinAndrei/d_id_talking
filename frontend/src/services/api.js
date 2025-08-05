@@ -3,7 +3,7 @@ import axios from 'axios';
 // Create axios instance with default configuration
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
-  timeout: parseInt(import.meta.env.VITE_API_TIMEOUT) || 10000,
+  timeout: parseInt(import.meta.env.VITE_API_TIMEOUT) || 30000, // Increased timeout to 30 seconds
   headers: {
     'Content-Type': 'application/json',
   },
@@ -68,19 +68,55 @@ export const apiService = {
 
   // Video Generation
   async generateVideo(imageFile, audioFile, voiceId = null) {
+    console.log('API Service - generateVideo called with:', {
+      imageFile: imageFile?.name,
+      imageFileSize: imageFile?.size,
+      audioFile: audioFile?.size,
+      audioFileType: audioFile?.type,
+      voiceId
+    });
+
     const formData = new FormData();
     formData.append('image_file', imageFile);
-    formData.append('audio_file', audioFile);
+    
+    // Convert Blob to File with proper name and type
+    if (audioFile instanceof Blob) {
+      let audioFileName;
+      let audioFileObj;
+      
+      // Use original format but with proper extension
+      if (audioFile.type === 'audio/webm' || audioFile.type === 'audio/webm;codecs=opus') {
+        audioFileName = `audio_${Date.now()}.webm`;
+        audioFileObj = new File([audioFile], audioFileName, { type: audioFile.type });
+        console.log('WebM audio file:', audioFileName, audioFileObj.size, 'bytes');
+      } else {
+        audioFileName = `audio_${Date.now()}.${audioFile.type.split('/')[1] || 'webm'}`;
+        audioFileObj = new File([audioFile], audioFileName, { type: audioFile.type });
+        console.log('Audio file:', audioFileName, audioFileObj.size, 'bytes');
+      }
+      
+      formData.append('audio_file', audioFileObj);
+    } else {
+      formData.append('audio_file', audioFile);
+    }
     
     if (voiceId) {
       formData.append('voice_id', voiceId);
     }
 
+    // Debug FormData contents
+    console.log('FormData entries:');
+    for (let [key, value] of formData.entries()) {
+      console.log(`${key}:`, value instanceof File ? `${value.name} (${value.size} bytes, type: ${value.type})` : value);
+    }
+
+    console.log('Sending request to /api/v1/generate...');
     const response = await api.post('/api/v1/generate', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
+    console.log('Response received:', response.data);
     return response.data;
   },
 
@@ -88,6 +124,8 @@ export const apiService = {
     const response = await api.get(`/api/v1/status/${taskId}`);
     return response.data;
   },
+
+
 
   // Users (legacy methods)
   async getUsers() {

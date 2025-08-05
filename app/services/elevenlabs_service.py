@@ -94,7 +94,10 @@ class ElevenLabsService:
     
     def _get_headers(self) -> Dict[str, str]:
         """Get headers for API requests"""
-        return config.get_elevenlabs_headers()
+        logger.info(f"🔥 СОЗДАНИЕ ELEVENLABS HEADERS...")
+        headers = config.get_elevenlabs_headers()
+        logger.info(f"✅ ELEVENLABS HEADERS СОЗДАНЫ: {headers}")
+        return headers
     
     def _make_request(
         self, 
@@ -467,17 +470,25 @@ class ElevenLabsService:
             }
             
             # Отправляем запрос к Speech-to-Speech API
-            response = self._make_request(
-                "POST",
-                f"/speech-to-speech/{voice_id}",
-                data=data,
-                files=files
-            )
+            url = f"{self.base_url}/speech-to-speech/{voice_id}"
+            headers = self._get_headers()
+            
+            # Убираем Content-Type из headers для multipart/form-data
+            if 'Content-Type' in headers:
+                del headers['Content-Type']
+            
+            logger.info(f"Отправляем запрос к ElevenLabs STS API:")
+            logger.info(f"  URL: {url}")
+            logger.info(f"  Voice ID: {voice_id}")
+            logger.info(f"  Audio size: {len(audio_data)} bytes")
+            logger.info(f"  Files keys: {list(files.keys())}")
+            logger.info(f"  Data keys: {list(data.keys())}")
+            
+            response = requests.post(url, headers=headers, files=files, data=data, timeout=60)
+            response.raise_for_status()
             
             # Получаем аудио данные
-            audio_data = response.get('audio')
-            if not audio_data:
-                raise ElevenLabsAPIError("No audio data received from Speech-to-Speech API")
+            audio_data = response.content
             
             logger.info(f"Аудио успешно обработано через URL, размер: {len(audio_data)} байт")
             return audio_data
