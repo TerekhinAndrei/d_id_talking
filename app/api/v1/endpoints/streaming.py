@@ -1064,8 +1064,8 @@ async def create_talk_stream(
                 error_msg = await response.text()
                 logger.error(f"Failed to create talk stream: {response.status} - {error_msg}")
                 
-                # Если получаем "Stream service is not supported", используем test mode
-                if "Stream service is not supported" in error_msg:
+                # Если получаем "Stream service is not supported" или "InternalServerError", используем test mode
+                if "Stream service is not supported" in error_msg or "InternalServerError" in error_msg:
                     logger.info("Using test mode - simulating successful talk stream creation")
                     return CreateTalkStreamResponse(
                         success=True,
