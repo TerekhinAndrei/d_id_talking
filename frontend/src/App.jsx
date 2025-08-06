@@ -22,6 +22,10 @@ function App() {
   const [voices, setVoices] = useState([]);
   const [selectedVoice, setSelectedVoice] = useState('21m00Tcm4TlvDq8ikWAM'); // Rachel по умолчанию
   const [loadingVoices, setLoadingVoices] = useState(false);
+  const [isMicrophoneActive, setIsMicrophoneActive] = useState(false);
+  const [microphoneStream, setMicrophoneStream] = useState(null);
+  const [audioContext, setAudioContext] = useState(null);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
   
   const peerConnectionRef = useRef(null);
   const videoRef = useRef(null);
@@ -58,6 +62,104 @@ function App() {
       console.error('Error loading voices:', error);
     } finally {
       setLoadingVoices(false);
+    }
+  };
+
+  const startMicrophone = async () => {
+    try {
+      console.log('🎤 Starting microphone...');
+      
+      // Запрашиваем доступ к микрофону
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100
+        } 
+      });
+      
+      setMicrophoneStream(stream);
+      setIsMicrophoneActive(true);
+      
+      // Создаем AudioContext для обработки аудио
+      const context = new (window.AudioContext || window.webkitAudioContext)();
+      setAudioContext(context);
+      
+      // Создаем MediaRecorder для записи аудио
+      const recorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
+      
+      setMediaRecorder(recorder);
+      
+      // Настраиваем обработку аудио данных
+      recorder.ondataavailable = async (event) => {
+        if (event.data.size > 0) {
+          // Конвертируем в base64 для отправки на сервер
+          const arrayBuffer = await event.data.arrayBuffer();
+          const base64Audio = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          
+          // Отправляем аудио на сервер для обработки
+          await sendAudioToServer(base64Audio);
+        }
+      };
+      
+      // Запускаем запись с интервалом 1 секунда
+      recorder.start(1000);
+      
+      console.log('✅ Microphone started successfully');
+      
+    } catch (error) {
+      console.error('❌ Error starting microphone:', error);
+      alert('Ошибка доступа к микрофону. Пожалуйста, разрешите доступ к микрофону.');
+    }
+  };
+
+  const stopMicrophone = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+    
+    if (microphoneStream) {
+      microphoneStream.getTracks().forEach(track => track.stop());
+    }
+    
+    if (audioContext) {
+      audioContext.close();
+    }
+    
+    setIsMicrophoneActive(false);
+    setMicrophoneStream(null);
+    setAudioContext(null);
+    setMediaRecorder(null);
+    
+    console.log('🛑 Microphone stopped');
+  };
+
+  const sendAudioToServer = async (base64Audio) => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/streaming/process-audio', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          audio_data: base64Audio,
+          voice_id: selectedVoice
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log('✅ Audio processed successfully');
+        // Здесь можно добавить логику для воспроизведения обработанного аудио
+      } else {
+        console.error('❌ Audio processing failed:', data.error);
+      }
+    } catch (error) {
+      console.error('❌ Error sending audio to server:', error);
     }
   };
 
@@ -276,12 +378,18 @@ function App() {
         console.log('ICE connection state:', peerConnection.iceConnectionState);
         setConnectionState(`ICE connection: ${peerConnection.iceConnectionState}`);
         
-        if (peerConnection.iceConnectionState === 'connected' || 
-            peerConnection.iceConnectionState === 'completed') {
-          setConnectionState('🟢 WebRTC connection established!');
-          // Разрешаем создание Talk Stream только после установки соединения
-          setConnectionReady(true);
-        }
+                 if (peerConnection.iceConnectionState === 'connected' || 
+             peerConnection.iceConnectionState === 'completed') {
+           setConnectionState('🟢 WebRTC connection established!');
+           // Разрешаем создание Talk Stream только после установки соединения
+           setConnectionReady(true);
+           
+           // Автоматически запускаем микрофон после установки соединения
+           if (!isMicrophoneActive) {
+             console.log('🎤 Auto-starting microphone after connection...');
+             await startMicrophone();
+           }
+         }
       });
       
       peerConnection.addEventListener('connectionstatechange', () => {
@@ -469,6 +577,18 @@ function App() {
                {connectionReady && (
                  <div className="stream-status">
                    <span className="status-indicator">🟢 WebRTC соединение готово</span>
+                 </div>
+               )}
+               
+               {isMicrophoneActive && (
+                 <div className="microphone-status">
+                   <span className="status-indicator">🎤 Микрофон активен - слушаю...</span>
+                   <button 
+                     onClick={stopMicrophone}
+                     className="stop-microphone-button"
+                   >
+                     Остановить микрофон
+                   </button>
                  </div>
                )}
         

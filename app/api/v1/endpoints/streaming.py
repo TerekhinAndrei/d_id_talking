@@ -212,6 +212,18 @@ class GetVoicesResponse(BaseModel):
     voices: Optional[list] = None
     error: Optional[str] = None
 
+class ProcessAudioRequest(BaseModel):
+    """Request model for processing audio"""
+    audio_data: str  # Base64 encoded audio data
+    voice_id: str
+
+class ProcessAudioResponse(BaseModel):
+    """Response model for audio processing"""
+    success: bool
+    processed_audio: Optional[str] = None  # Base64 encoded processed audio
+    message: Optional[str] = None
+    error: Optional[str] = None
+
 # Dependency injection
 def get_streaming_service() -> DIdStreamingService:
     """Get streaming service instance"""
@@ -727,6 +739,58 @@ async def get_elevenlabs_voices(
         return GetVoicesResponse(
             success=False,
             error=f"Failed to get voices: {str(e)}"
+        )
+
+@router.post("/process-audio", response_model=ProcessAudioResponse)
+async def process_audio(
+    request: ProcessAudioRequest,
+    elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)
+):
+    """
+    Process audio through ElevenLabs Speech-to-Speech API
+    
+    Converts user's speech to avatar's voice using ElevenLabs.
+    """
+    try:
+        logger.info(f"Processing audio with voice: {request.voice_id}")
+        
+        # Декодируем base64 аудио
+        import base64
+        audio_bytes = base64.b64decode(request.audio_data)
+        
+        # Создаем запрос для ElevenLabs
+        from app.services.elevenlabs_service import SpeechToSpeechRequest, VoiceSettings
+        
+        speech_request = SpeechToSpeechRequest(
+            audio_data=audio_bytes,
+            voice_id=request.voice_id,
+            voice_settings=VoiceSettings(
+                stability=0.5,
+                similarity_boost=0.75,
+                style=0.0,
+                use_speaker_boost=True
+            )
+        )
+        
+        # Обрабатываем аудио через ElevenLabs
+        processed_audio = elevenlabs_service.speech_to_speech(speech_request)
+        
+        # Кодируем обработанное аудио в base64
+        processed_audio_base64 = base64.b64encode(processed_audio).decode('utf-8')
+        
+        logger.info(f"Audio processed successfully with voice: {request.voice_id}")
+        
+        return ProcessAudioResponse(
+            success=True,
+            processed_audio=processed_audio_base64,
+            message="Audio processed successfully"
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to process audio: {e}")
+        return ProcessAudioResponse(
+            success=False,
+            error=f"Failed to process audio: {str(e)}"
         )
 
 @router.get("/health", response_model=Dict[str, Any])

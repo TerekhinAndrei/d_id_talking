@@ -181,6 +181,38 @@
   animation: pulse 2s infinite;
 }
 
+.microphone-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 15px 0;
+  gap: 10px;
+}
+
+.microphone-status .status-indicator {
+  background: rgba(255, 152, 0, 0.2);
+  color: #FF9800;
+  border: 2px solid #FF9800;
+  animation: pulse 2s infinite;
+}
+
+.stop-microphone-button {
+  background: #f44336;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: bold;
+  transition: all 0.3s ease;
+}
+
+.stop-microphone-button:hover {
+  background: #d32f2f;
+  transform: scale(1.05);
+}
+
 .connection-status {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 10px;
