@@ -157,6 +157,10 @@ function App() {
         // Здесь можно добавить логику для воспроизведения обработанного аудио
       } else {
         console.error('❌ Audio processing failed:', data.error);
+        // Не показываем ошибку пользователю, если это временная проблема с API
+        if (!data.error.includes('ElevenLabs API error')) {
+          console.warn('Audio processing temporarily unavailable');
+        }
       }
     } catch (error) {
       console.error('❌ Error sending audio to server:', error);
@@ -354,7 +358,10 @@ function App() {
               setConnectionState('🎬 Видео поток активен!');
             }).catch(error => {
               console.error('Error playing video:', error);
-              setConnectionState('❌ Ошибка воспроизведения видео');
+              // Игнорируем AbortError - это нормально при переключении потоков
+              if (error.name !== 'AbortError') {
+                setConnectionState('❌ Ошибка воспроизведения видео');
+              }
             });
           }
         }
