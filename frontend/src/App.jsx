@@ -46,7 +46,7 @@ function App() {
   const loadVoices = async () => {
     setLoadingVoices(true);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/streaming/voices');
+      const response = await fetch('http://localhost:8000/api/v1/streaming/elevenlabs-voices');
       const data = await response.json();
       
       if (data.success && data.voices) {

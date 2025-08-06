@@ -695,7 +695,7 @@ async def get_webrtc_status(
             detail=f"Internal server error: {str(e)}"
         )
 
-@router.get("/voices", response_model=GetVoicesResponse)
+@router.get("/elevenlabs-voices", response_model=GetVoicesResponse)
 async def get_elevenlabs_voices(
     elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)
 ):
@@ -705,43 +705,25 @@ async def get_elevenlabs_voices(
     Returns a list of available voices from ElevenLabs API.
     """
     try:
-        # Временно используем моковые данные для демонстрации
-        mock_voices = [
-            {
-                "voice_id": "21m00Tcm4TlvDq8ikWAM",
-                "name": "Rachel",
-                "category": "premade",
-                "description": "Professional female voice"
-            },
-            {
-                "voice_id": "AZnzlk1XvdvUeBnXmlld",
-                "name": "Domi",
-                "category": "premade", 
-                "description": "Professional female voice"
-            },
-            {
-                "voice_id": "EXAVITQu4vr4xnSDxMaL",
-                "name": "Bella",
-                "category": "premade",
-                "description": "Professional female voice"
-            },
-            {
-                "voice_id": "ErXwobaYiN019PkySvjV",
-                "name": "Antoni",
-                "category": "premade",
-                "description": "Professional male voice"
-            },
-            {
-                "voice_id": "VR6AewLTigWG4xSOukaG",
-                "name": "Arnold",
-                "category": "premade",
-                "description": "Professional male voice"
-            }
-        ]
+        logger.info("Getting voices from ElevenLabs API...")
+        voices = elevenlabs_service.get_voices()
+        logger.info(f"Retrieved {len(voices)} voices from ElevenLabs")
+        
+        # Преобразуем голоса в формат для фронтенда
+        voice_list = []
+        for voice in voices:
+            voice_list.append({
+                "voice_id": voice.voice_id,
+                "name": voice.name,
+                "category": voice.category,
+                "description": voice.description
+            })
+        
+        logger.info(f"Transformed {len(voice_list)} voices for frontend")
         
         return GetVoicesResponse(
             success=True,
-            voices=mock_voices
+            voices=voice_list
         )
         
     except Exception as e:
