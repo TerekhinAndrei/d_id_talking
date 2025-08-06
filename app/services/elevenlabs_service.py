@@ -338,6 +338,16 @@ class ElevenLabsService:
     
     def get_available_voices(self) -> List[Voice]:
         """
+        Get all available voices from ElevenLabs API
+        
+        Returns:
+            List[Voice]: List of available voices
+            
+        Raises:
+            ElevenLabsConfigurationError: If service is not configured
+            ElevenLabsAPIError: If API request fails
+        """
+        """
         Get list of available voices from ElevenLabs
         
         Returns:
@@ -364,12 +374,21 @@ class ElevenLabsService:
                 voices.append(voice)
             
             return voices
-            
+    
         except ElevenLabsAPIError:
             raise
         except Exception as e:
             logger.error(f"Error fetching voices: {str(e)}")
             raise ElevenLabsServiceError(f"Error fetching voices: {str(e)}")
+    
+    def get_voices(self) -> List[Voice]:
+        """
+        Alias for get_available_voices()
+        
+        Returns:
+            List[Voice]: List of available voices
+        """
+        return self.get_available_voices()
     
     def validate_voice_id(self, voice_id: str) -> bool:
         """

@@ -16,6 +16,7 @@ from app.services.d_id_streaming_service import (
     DIdStreamOperationError
 )
 from app.services.storage_service import StorageService
+from app.services.elevenlabs_service import ElevenLabsService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -198,6 +199,19 @@ class CreateTalkStreamResponse(BaseModel):
     message: Optional[str] = None
     error: Optional[str] = None
 
+class Voice(BaseModel):
+    """Model for ElevenLabs voice"""
+    voice_id: str
+    name: str
+    category: str
+    description: Optional[str] = None
+
+class GetVoicesResponse(BaseModel):
+    """Response model for getting ElevenLabs voices"""
+    success: bool
+    voices: Optional[list] = None
+    error: Optional[str] = None
+
 # Dependency injection
 def get_streaming_service() -> DIdStreamingService:
     """Get streaming service instance"""
@@ -206,6 +220,10 @@ def get_streaming_service() -> DIdStreamingService:
 def get_storage_service() -> StorageService:
     """Get storage service instance"""
     return StorageService()
+
+def get_elevenlabs_service() -> ElevenLabsService:
+    """Get ElevenLabs service instance"""
+    return ElevenLabsService()
 
 @router.post("/start", response_model=StartStreamResponse)
 async def start_stream(
@@ -675,6 +693,62 @@ async def get_webrtc_status(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}"
+        )
+
+@router.get("/voices", response_model=GetVoicesResponse)
+async def get_elevenlabs_voices(
+    elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)
+):
+    """
+    Get available ElevenLabs voices
+    
+    Returns a list of available voices from ElevenLabs API.
+    """
+    try:
+        # Временно используем моковые данные для демонстрации
+        mock_voices = [
+            {
+                "voice_id": "21m00Tcm4TlvDq8ikWAM",
+                "name": "Rachel",
+                "category": "premade",
+                "description": "Professional female voice"
+            },
+            {
+                "voice_id": "AZnzlk1XvdvUeBnXmlld",
+                "name": "Domi",
+                "category": "premade", 
+                "description": "Professional female voice"
+            },
+            {
+                "voice_id": "EXAVITQu4vr4xnSDxMaL",
+                "name": "Bella",
+                "category": "premade",
+                "description": "Professional female voice"
+            },
+            {
+                "voice_id": "ErXwobaYiN019PkySvjV",
+                "name": "Antoni",
+                "category": "premade",
+                "description": "Professional male voice"
+            },
+            {
+                "voice_id": "VR6AewLTigWG4xSOukaG",
+                "name": "Arnold",
+                "category": "premade",
+                "description": "Professional male voice"
+            }
+        ]
+        
+        return GetVoicesResponse(
+            success=True,
+            voices=mock_voices
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to get ElevenLabs voices: {e}")
+        return GetVoicesResponse(
+            success=False,
+            error=f"Failed to get voices: {str(e)}"
         )
 
 @router.get("/health", response_model=Dict[str, Any])

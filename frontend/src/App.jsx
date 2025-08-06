@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 
 function App() {
@@ -19,9 +19,17 @@ function App() {
   const [videoStream, setVideoStream] = useState(null);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [connectionReady, setConnectionReady] = useState(false);
+  const [voices, setVoices] = useState([]);
+  const [selectedVoice, setSelectedVoice] = useState('21m00Tcm4TlvDq8ikWAM'); // Rachel по умолчанию
+  const [loadingVoices, setLoadingVoices] = useState(false);
   
   const peerConnectionRef = useRef(null);
   const videoRef = useRef(null);
+
+  // Загружаем голоса при монтировании компонента
+  useEffect(() => {
+    loadVoices();
+  }, []);
 
   const handleImageUpload = (event) => {
     const file = event.target.files[0];
@@ -32,6 +40,24 @@ function App() {
         setImageUrl(e.target.result);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const loadVoices = async () => {
+    setLoadingVoices(true);
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/streaming/voices');
+      const data = await response.json();
+      
+      if (data.success && data.voices) {
+        setVoices(data.voices);
+      } else {
+        console.error('Failed to load voices:', data.error);
+      }
+    } catch (error) {
+      console.error('Error loading voices:', error);
+    } finally {
+      setLoadingVoices(false);
     }
   };
 
@@ -160,7 +186,7 @@ function App() {
             type: "text",
             provider: { 
               type: "elevenlabs",
-              voice_id: "21m00Tcm4TlvDq8ikWAM" // Rachel voice
+              voice_id: selectedVoice
             },
             ssml: "false",
             input: talkText
@@ -373,6 +399,28 @@ function App() {
         
         <div className="talk-section">
           <h3>Создать разговор:</h3>
+          
+          <div className="voice-selection">
+            <label>
+              Выберите голос:
+              <select 
+                value={selectedVoice} 
+                onChange={(e) => setSelectedVoice(e.target.value)}
+                disabled={loadingVoices}
+              >
+                {loadingVoices ? (
+                  <option>Загрузка голосов...</option>
+                ) : (
+                  voices.map(voice => (
+                    <option key={voice.voice_id} value={voice.voice_id}>
+                      {voice.name} - {voice.description}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+          </div>
+          
           <div className="talk-input">
             <label>
               Текст для аватара:

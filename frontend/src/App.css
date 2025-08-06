@@ -244,6 +244,27 @@
   font-weight: bold;
 }
 
+.voice-selection {
+  margin-bottom: 20px;
+}
+
+.voice-selection label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+  color: #333;
+}
+
+.voice-selection select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+  color: #333;
+}
+
 .talk-input textarea {
   width: 100%;
   min-height: 80px;
