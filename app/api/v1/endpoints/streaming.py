@@ -705,9 +705,7 @@ async def get_elevenlabs_voices(
     Returns a list of available voices from ElevenLabs API.
     """
     try:
-        logger.info("Getting voices from ElevenLabs API...")
         voices = elevenlabs_service.get_voices()
-        logger.info(f"Retrieved {len(voices)} voices from ElevenLabs")
         
         # Преобразуем голоса в формат для фронтенда
         voice_list = []
@@ -718,8 +716,6 @@ async def get_elevenlabs_voices(
                 "category": voice.category,
                 "description": voice.description
             })
-        
-        logger.info(f"Transformed {len(voice_list)} voices for frontend")
         
         return GetVoicesResponse(
             success=True,
@@ -1068,12 +1064,8 @@ async def create_talk_stream(
                 error_msg = await response.text()
                 logger.error(f"Failed to create talk stream: {response.status} - {error_msg}")
                 
-                # Если получаем ошибку, возвращаем реальную ошибку
-                logger.error(f"Failed to create talk stream: {response.status} - {error_msg}")
-                
-                # Если получаем InternalServerError или Stream service not supported, используем test mode
-                if ("InternalServerError" in error_msg or response.status == 500 or 
-                    "Stream service is not supported" in error_msg):
+                # Если получаем "Stream service is not supported", используем test mode
+                if "Stream service is not supported" in error_msg:
                     logger.info("Using test mode - simulating successful talk stream creation")
                     return CreateTalkStreamResponse(
                         success=True,
