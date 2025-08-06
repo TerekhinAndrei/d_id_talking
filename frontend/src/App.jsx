@@ -387,7 +387,9 @@ function App() {
            // Автоматически запускаем микрофон после установки соединения
            if (!isMicrophoneActive) {
              console.log('🎤 Auto-starting microphone after connection...');
-             await startMicrophone();
+             startMicrophone().catch(error => {
+               console.error('Error starting microphone:', error);
+             });
            }
          }
       });
