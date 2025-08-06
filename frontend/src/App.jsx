@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import { apiService } from './services/api'
+import WebRTCStream from './components/WebRTCStream'
+import WebRTCStreaming from './components/WebRTCStreaming'
 
 function App() {
   // State for API connection
@@ -28,12 +30,17 @@ function App() {
   const [taskStatus, setTaskStatus] = useState(null)
   const [generating, setGenerating] = useState(false)
   const [pollingInterval, setPollingInterval] = useState(null)
-  const [videoUrl, setVideoUrl] = useState(null)
+  const [videoUrl, setVideoUrl] = useState('/files/Waiting.mp4')
+  const [isGeneratedVideo, setIsGeneratedVideo] = useState(false)
+
+  // State for view mode
+  const [viewMode, setViewMode] = useState('standard') // 'standard' or 'webrtc'
 
   // Refs
   const imageInputRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const recordingIntervalRef = useRef(null)
+  const videoRef = useRef(null)
 
   // Test API connection
   const testApiConnection = async () => {
@@ -189,21 +196,13 @@ function App() {
       return
     }
 
-    // Debug information
-    console.log('Image file:', imageFile)
-    console.log('Audio blob:', audioBlob)
-    console.log('Audio blob size:', audioBlob?.size)
-    console.log('Audio blob type:', audioBlob?.type)
-    console.log('Selected voice:', selectedVoice)
-
     setGenerating(true)
     setError(null)
     setTaskStatus(null)
-    setVideoUrl(null)
+    setVideoUrl('/files/Waiting.mp4') // Reset to default waiting video
+    setIsGeneratedVideo(false)
 
     try {
-      // Generate video with audio processing through ElevenLabs
-      console.log('Generating video with audio processing...')
       const response = await apiService.generateVideo(imageFile, audioBlob, selectedVoice)
       console.log('Generation response:', response)
       setTaskId(response.task_id)
@@ -211,14 +210,8 @@ function App() {
       // Start polling for status
       startStatusPolling(response.task_id)
     } catch (err) {
-      console.error('Generation Error Details:', {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-        config: err.config
-      })
-      setError(err.message || 'Failed to start video generation')
       console.error('Generation Error:', err)
+      setError(err.message || 'Failed to start video generation')
     } finally {
       setGenerating(false)
     }
@@ -231,9 +224,10 @@ function App() {
         const status = await apiService.getTaskStatus(taskId)
         setTaskStatus(status)
         
-        // If video is ready, set the URL
+        // If video is ready, update the video URL
         if (status.video_url) {
           setVideoUrl(status.video_url)
+          setIsGeneratedVideo(true)
         }
         
         // Stop polling if task is completed or failed
@@ -258,6 +252,54 @@ function App() {
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
+  // Open video in system player
+  const openInSystemPlayer = (videoUrl) => {
+    if (videoUrl) {
+      console.log('🎬 Opening video in system player:', videoUrl)
+      
+      // Method 1: Direct download and open
+      const link = document.createElement('a')
+      link.href = videoUrl
+      link.download = 'generated-video.mp4'
+      link.target = '_blank'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      // Method 2: Open in new window
+      const videoWindow = window.open('', '_blank', 'width=800,height=600,scrollbars=no,resizable=yes')
+      if (videoWindow) {
+        videoWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Generated Video</title>
+              <style>
+                body { margin: 0; padding: 0; background: black; display: flex; justify-content: center; align-items: center; height: 100vh; }
+                video { max-width: 100%; max-height: 100%; }
+              </style>
+            </head>
+            <body>
+              <video controls autoplay>
+                <source src="${videoUrl}" type="video/mp4">
+                Your browser does not support the video element.
+              </video>
+            </body>
+          </html>
+        `)
+        videoWindow.document.close()
+      }
+    }
+  }
+
+  // Handle user interaction to enable sound
+  const handleVideoClick = () => {
+    if (isGeneratedVideo && videoRef.current) {
+      videoRef.current.muted = false
+      console.log('🔊 Sound enabled by user click')
+    }
+  }
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -276,192 +318,283 @@ function App() {
     loadVoices()
   }, [])
 
+  // Start base video on mount
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.play().catch(err => {
+        console.error('Failed to play base video:', err)
+      })
+    }
+  }, [])
+
+  // Update video source when isGeneratedVideo changes
+  useEffect(() => {
+    if (videoRef.current && isGeneratedVideo) {
+      videoRef.current.src = videoUrl
+      videoRef.current.load() // Force reload to apply new source
+      
+      // Start muted for autoplay, then enable sound
+      videoRef.current.muted = true
+      videoRef.current.play().then(() => {
+        console.log('✅ Video started playing (muted)')
+        // Enable sound after a short delay
+        setTimeout(() => {
+          if (videoRef.current) {
+            videoRef.current.muted = false
+            console.log('🔊 Sound enabled')
+          }
+        }, 500)
+      }).catch(err => {
+        console.error('Failed to play generated video:', err)
+      })
+    }
+  }, [videoUrl, isGeneratedVideo])
+
   return (
     <div className="app">
       <header className="app-header">
         <h1>🎬 AI Talking Avatar</h1>
         <p>Create animated videos with your voice and image</p>
+        
+        {/* View Mode Toggle */}
+        <div className="view-mode-toggle">
+          <button
+            className={`mode-button ${viewMode === 'standard' ? 'active' : ''}`}
+            onClick={() => setViewMode('standard')}
+          >
+            📹 Standard Generation
+          </button>
+          <button
+            className={`mode-button ${viewMode === 'webrtc' ? 'active' : ''}`}
+            onClick={() => setViewMode('webrtc')}
+          >
+            🔴 Live Streaming
+          </button>
+        </div>
       </header>
 
-      {/* API Status Section */}
-      <section className="api-status">
-        <h2>🔗 API Connection Status</h2>
-        <div className="status-info">
-          <p><strong>Backend URL:</strong> {import.meta.env.VITE_API_BASE_URL}</p>
-          {loading && <p>Testing connection...</p>}
-          {error && <p className="error">Error: {error}</p>}
-          {healthStatus && (
-            <div className="success">
-              <p>✅ API Connected Successfully!</p>
+      {viewMode === 'webrtc' ? (
+        <WebRTCStreaming />
+      ) : (
+        <div className="main-container">
+        {/* Left Panel - Controls */}
+        <div className="left-panel">
+          {/* API Status Section - Simplified */}
+          <section className="api-status">
+            <div className="status-indicator">
+              <div className={`status-dot ${healthStatus ? 'connected' : 'disconnected'}`}></div>
+              <span className="status-text">
+                {loading ? 'Testing...' : 
+                 healthStatus ? 'Connected Successfully' : 
+                 error ? 'Connection Failed' : 'Not Connected'}
+              </span>
             </div>
-          )}
-        </div>
-        <button onClick={testApiConnection} disabled={loading}>
-          {loading ? 'Testing...' : 'Test API Connection'}
-        </button>
-      </section>
+            <button onClick={testApiConnection} disabled={loading} className="test-button">
+              {loading ? 'Testing...' : 'Test Connection'}
+            </button>
+          </section>
 
-      {/* Voice Selection */}
-      <section className="voice-selection">
-        <h2>🎭 Voice Selection</h2>
-        {loadingVoices ? (
-          <p>Loading voices...</p>
-        ) : (
-          <div className="voice-selector">
-            <label htmlFor="voice-select">Choose a voice:</label>
-            <select
-              id="voice-select"
-              value={selectedVoice}
-              onChange={(e) => setSelectedVoice(e.target.value)}
-              disabled={voices.length === 0}
-            >
-              {voices.map((voice) => (
-                <option key={voice.voice_id} value={voice.voice_id}>
-                  {voice.name} ({voice.category})
-                </option>
-              ))}
-            </select>
-            {voices.length === 0 && <p className="error">No voices available</p>}
-          </div>
-        )}
-      </section>
-
-      {/* Image Upload */}
-      <section className="image-upload">
-        <h2>🖼️ Upload Image</h2>
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleImageSelect}
-          style={{ display: 'none' }}
-        />
-        <button 
-          onClick={() => imageInputRef.current?.click()}
-          className="upload-button"
-        >
-          Select Image
-        </button>
-        {imageFile && (
-          <div className="file-info">
-            <p>✅ {imageFile.name} ({Math.round(imageFile.size / 1024)} KB)</p>
-            {imagePreview && (
-              <img src={imagePreview} alt="Preview" className="image-preview" />
+          {/* Voice Selection */}
+          <section className="voice-selection">
+            <h2>🎭 Voice Selection</h2>
+            {loadingVoices ? (
+              <p>Loading voices...</p>
+            ) : (
+              <div className="voice-selector">
+                <label htmlFor="voice-select">Choose a voice:</label>
+                <select
+                  id="voice-select"
+                  value={selectedVoice}
+                  onChange={(e) => setSelectedVoice(e.target.value)}
+                  disabled={voices.length === 0}
+                >
+                  {voices.map((voice) => (
+                    <option key={voice.voice_id} value={voice.voice_id}>
+                      {voice.name} ({voice.category})
+                    </option>
+                  ))}
+                </select>
+                {voices.length === 0 && <p className="error">No voices available</p>}
+              </div>
             )}
-          </div>
-        )}
-      </section>
+          </section>
 
-      {/* Audio Recording */}
-      <section className="audio-recording">
-        <h2>🎤 Record Audio</h2>
-        <div className="recording-controls">
-          {!isRecording ? (
+          {/* Image Upload */}
+          <section className="image-upload">
+            <h2>🖼️ Upload Image</h2>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              style={{ display: 'none' }}
+            />
             <button 
-              onClick={startRecording}
-              className="record-button"
-              disabled={!imageFile}
+              onClick={() => imageInputRef.current?.click()}
+              className="upload-button"
             >
-              🎤 Start Recording
+              Select Image
             </button>
-          ) : (
-            <button 
-              onClick={stopRecording}
-              className="stop-button"
-            >
-              ⏹️ Stop Recording ({formatTime(recordingTime)})
-            </button>
-          )}
-        </div>
-        
-        {audioUrl && (
-          <div className="audio-preview">
-            <p>✅ Audio recorded ({Math.round(audioBlob.size / 1024)} KB)</p>
-            <audio 
-              controls 
-              onError={(e) => console.error('Audio playback error:', e)}
-              onLoadStart={() => console.log('Audio loading started')}
-              onCanPlay={() => console.log('Audio can play')}
-              onLoadedMetadata={() => console.log('Audio metadata loaded')}
-            >
-              <source src={audioUrl} type={audioBlob?.type || 'audio/webm'} />
-              <source src={audioUrl} type="audio/webm;codecs=opus" />
-              <source src={audioUrl} type="audio/mp4" />
-              <source src={audioUrl} type="audio/ogg" />
-              Your browser does not support the audio element.
-            </audio>
-            <button 
-              onClick={() => {
-                const audio = document.querySelector('audio')
-                if (audio) {
-                  audio.play().catch(err => console.error('Play error:', err))
-                }
-              }}
-              className="play-button"
-            >
-              ▶️ Play Audio
-            </button>
-          </div>
-        )}
-      </section>
-
-      {/* Generate Button */}
-      <section className="generate-section">
-        <button
-          onClick={generateVideo}
-          disabled={!imageFile || !audioBlob || generating}
-          className="generate-button"
-        >
-          {generating ? '🔄 Generating...' : '🚀 Generate Video'}
-        </button>
-      </section>
-
-      {/* Task Status */}
-      {taskId && (
-        <section className="task-status">
-          <h2>📊 Generation Status</h2>
-          <div className="task-info">
-            <p><strong>Task ID:</strong> {taskId}</p>
-            {taskStatus && (
-              <div className="status-details">
-                <p><strong>Status:</strong> {taskStatus.status}</p>
-                {taskStatus.progress !== undefined && (
-                  <div className="progress-bar">
-                    <div 
-                      className="progress-fill" 
-                      style={{ width: `${taskStatus.progress}%` }}
-                    ></div>
-                    <span>{taskStatus.progress}%</span>
-                  </div>
-                )}
-                {taskStatus.talk_id && (
-                  <p><strong>D-ID Talk ID:</strong> {taskStatus.talk_id}</p>
-                )}
-                {taskStatus.error_message && (
-                  <p className="error"><strong>Error:</strong> {taskStatus.error_message}</p>
+            {imageFile && (
+              <div className="file-info">
+                <p>✅ {imageFile.name} ({Math.round(imageFile.size / 1024)} KB)</p>
+                {imagePreview && (
+                  <img src={imagePreview} alt="Preview" className="image-preview" />
                 )}
               </div>
             )}
-          </div>
-        </section>
-      )}
+          </section>
 
-      {/* Video Result */}
-      {videoUrl && (
-        <section className="video-result">
-          <h2>🎬 Generated Video</h2>
-          <div className="video-container">
-            <video controls autoPlay className="result-video">
-              <source src={videoUrl} type="video/mp4" />
-              Your browser does not support the video element.
-            </video>
-            <div className="video-actions">
-              <a href={videoUrl} download="generated-video.mp4" className="download-button">
-                📥 Download Video
-              </a>
+          {/* Audio Recording */}
+          <section className="audio-recording">
+            <h2>🎤 Record Audio</h2>
+            <div className="recording-controls">
+              {!isRecording ? (
+                <button 
+                  onClick={startRecording}
+                  className="record-button"
+                  disabled={!imageFile}
+                >
+                  🎤 Start Recording
+                </button>
+              ) : (
+                <button 
+                  onClick={stopRecording}
+                  className="stop-button"
+                >
+                  ⏹️ Stop Recording ({formatTime(recordingTime)})
+                </button>
+              )}
             </div>
-          </div>
-        </section>
+            
+            {audioUrl && (
+              <div className="audio-preview">
+                <p>✅ Audio recorded ({Math.round(audioBlob.size / 1024)} KB)</p>
+                <audio 
+                  controls 
+                  onError={(e) => console.error('Audio playback error:', e)}
+                  onLoadStart={() => console.log('Audio loading started')}
+                  onCanPlay={() => console.log('Audio can play')}
+                  onLoadedMetadata={() => console.log('Audio metadata loaded')}
+                >
+                  <source src={audioUrl} type={audioBlob?.type || 'audio/webm'} />
+                  <source src={audioUrl} type="audio/webm;codecs=opus" />
+                  <source src={audioUrl} type="audio/mp4" />
+                  <source src={audioUrl} type="audio/ogg" />
+                  Your browser does not support the audio element.
+                </audio>
+                <button 
+                  onClick={() => {
+                    const audio = document.querySelector('audio')
+                    if (audio) {
+                      audio.play().catch(err => console.error('Play error:', err))
+                    }
+                  }}
+                  className="play-button"
+                >
+                  ▶️ Play Audio
+                </button>
+              </div>
+            )}
+          </section>
+
+          {/* Generate Button */}
+          <section className="generate-section">
+            <button
+              onClick={generateVideo}
+              disabled={!imageFile || !audioBlob || generating}
+              className="generate-button"
+            >
+              {generating ? '🔄 Generating...' : '🚀 Generate Video'}
+            </button>
+            
+            {/* Open in system player button */}
+            {isGeneratedVideo && videoUrl && (
+              <button
+                onClick={() => openInSystemPlayer(videoUrl)}
+                style={{ 
+                  marginTop: '10px', 
+                  background: '#FF6B35', 
+                  color: 'white', 
+                  border: 'none', 
+                  padding: '8px 16px', 
+                  borderRadius: '4px',
+                  fontSize: '0.8rem'
+                }}
+              >
+                🖥️ Open in System Player
+              </button>
+            )}
+          </section>
+
+          {/* Task Status */}
+          {taskId && (
+            <section className="task-status">
+              <h2>📊 Generation Status</h2>
+              <div className="task-info">
+                <p><strong>Task ID:</strong> {taskId}</p>
+                {taskStatus && (
+                  <div className="status-details">
+                    <p><strong>Status:</strong> {taskStatus.status}</p>
+                    {taskStatus.progress !== undefined && (
+                      <div className="progress-bar">
+                        <div 
+                          className="progress-fill" 
+                          style={{ width: `${taskStatus.progress}%` }}
+                        ></div>
+                        <span>{taskStatus.progress}%</span>
+                      </div>
+                    )}
+                    {taskStatus.talk_id && (
+                      <p><strong>D-ID Talk ID:</strong> {taskStatus.talk_id}</p>
+                    )}
+                    {taskStatus.error_message && (
+                      <p className="error"><strong>Error:</strong> {taskStatus.error_message}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+        </div>
+
+        {/* Right Panel - Video */}
+        <div className="right-panel">
+          <section className="video-section">
+            <h3>Video Preview</h3>
+            <div className="video-container">
+              <video 
+                ref={videoRef}
+                autoPlay
+                muted
+                playsInline
+                loop={!isGeneratedVideo}
+                className="result-video"
+                onEnded={() => {
+                  if (isGeneratedVideo) {
+                    // Return to waiting video after generated video ends
+                    setVideoUrl('/files/Waiting.mp4')
+                    setIsGeneratedVideo(false)
+                  }
+                }}
+                onPlay={() => {
+                  // Enable sound when video starts playing
+                  if (isGeneratedVideo && videoRef.current) {
+                    setTimeout(() => {
+                      videoRef.current.muted = false
+                      console.log('🔊 Sound enabled on play')
+                    }, 100)
+                  }
+                }}
+                onClick={handleVideoClick}
+              >
+                <source src={videoUrl} type="video/mp4" />
+                Your browser does not support the video element.
+              </video>
+            </div>
+          </section>
+        </div>
+      </div>
       )}
     </div>
   )
