@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any, List, Union
 from dataclasses import dataclass
 from enum import Enum
 
-from app.config import config
+from app.core.config import settings as config
 
 logger = logging.getLogger(__name__)
 
@@ -195,12 +195,18 @@ class DIdService:
             # Логируем ответ
             print(f"📥 D-ID API RESPONSE:")
             print(f"  Status Code: {response.status_code}")
-            print(f"  Response Headers: {dict(response.headers)}")
+            try:
+                print(f"  Response Headers: {dict(response.headers)}")
+            except (TypeError, AttributeError):
+                print(f"  Response Headers: {response.headers}")
             print(f"  Response Text: {response.text}")
             
             logger.info(f"📥 D-ID API RESPONSE:")
             logger.info(f"  Status Code: {response.status_code}")
-            logger.info(f"  Response Headers: {dict(response.headers)}")
+            try:
+                logger.info(f"  Response Headers: {dict(response.headers)}")
+            except (TypeError, AttributeError):
+                logger.info(f"  Response Headers: {response.headers}")
             logger.info(f"  Response Text: {response.text}")
             
             # D-ID API может возвращать 201 для успешного создания

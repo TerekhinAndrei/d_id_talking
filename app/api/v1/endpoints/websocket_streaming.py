@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional
 import logging
 import json
 import asyncio
+import uuid
 
 from app.services.d_id_websocket_service import DIdWebSocketService
 
@@ -51,9 +52,10 @@ async def websocket_stream_endpoint(websocket: WebSocket):
     
     service = DIdWebSocketService()
     connection_status = "disconnected"
+    session_id = None
     
     try:
-        # Connect to D-ID WebSocket
+        # Connect to D-ID WebSocket (or test mode)
         await service.connect(
             on_message=lambda data: asyncio.create_task(websocket.send_text(json.dumps(data))),
             on_connection_change=lambda status: asyncio.create_task(
@@ -65,7 +67,7 @@ async def websocket_stream_endpoint(websocket: WebSocket):
         await websocket.send_text(json.dumps({
             "type": "connection_status", 
             "status": "connected",
-            "message": "WebSocket connected to D-ID"
+            "message": "WebSocket connected to D-ID" + (" (test mode)" if service.test_mode else "")
         }))
         
         # Listen for client messages
@@ -74,7 +76,27 @@ async def websocket_stream_endpoint(websocket: WebSocket):
                 data = await websocket.receive_text()
                 message = json.loads(data)
                 
-                await handle_client_message(service, message, websocket)
+                # Handle D-ID API responses
+                if message.get("messageType") == "init-stream":
+                    # D-ID sent us session_id and stream_id
+                    session_id = message.get("session_id")
+                    stream_id = message.get("id")
+                    
+                    await websocket.send_text(json.dumps({
+                        "type": "stream_initialized",
+                        "session_id": session_id,
+                        "stream_id": stream_id,
+                        "status": "ready",
+                        "message": "Stream initialized by D-ID" + (" (test mode)" if service.test_mode else "")
+                    }))
+                    
+                    # Update service with session_id
+                    service.session_id = session_id
+                    service.stream_id = stream_id
+                    
+                elif message.get("type") in ["init_stream", "text_to_speech", "speech_to_speech", "delete_stream"]:
+                    # Handle client messages
+                    await handle_client_message(service, message, websocket, session_id)
                 
             except WebSocketDisconnect:
                 logger.info("WebSocket client disconnected")
@@ -102,23 +124,19 @@ async def websocket_stream_endpoint(websocket: WebSocket):
             await service.disconnect()
         await websocket.close()
 
-async def handle_client_message(service: DIdWebSocketService, message: Dict[str, Any], websocket: WebSocket):
+async def handle_client_message(service: DIdWebSocketService, message: Dict[str, Any], websocket: WebSocket, session_id: Optional[str]):
     """Handle incoming WebSocket messages from client"""
     message_type = message.get("type")
     
     try:
-        if message_type == "init-stream":
-            await handle_init_stream(service, message, websocket)
-        elif message_type == "sdp":
-            await handle_sdp(service, message, websocket)
-        elif message_type == "ice":
-            await handle_ice(service, message, websocket)
-        elif message_type == "stream-text":
-            await handle_stream_text(service, message, websocket)
-        elif message_type == "stream-audio":
-            await handle_stream_audio(service, message, websocket)
-        elif message_type == "delete-stream":
-            await handle_delete_stream(service, message, websocket)
+        if message_type == "init_stream":
+            session_id = await handle_init_stream(service, message, websocket)
+        elif message_type == "text_to_speech":
+            await handle_text_to_speech(service, message, websocket, session_id)
+        elif message_type == "speech_to_speech":
+            await handle_speech_to_speech(service, message, websocket, session_id)
+        elif message_type == "delete_stream":
+            await handle_delete_stream(service, message, websocket, session_id)
         else:
             await websocket.send_text(json.dumps({
                 "type": "error",
@@ -132,104 +150,60 @@ async def handle_client_message(service: DIdWebSocketService, message: Dict[str,
             "message": f"Failed to handle {message_type}: {str(e)}"
         }))
 
-async def handle_init_stream(service: DIdWebSocketService, message: Dict[str, Any], websocket: WebSocket):
-    """Handle init-stream message"""
-    payload = message.get("payload", {})
-    source_url = payload.get("source_url")
-    presenter_type = payload.get("presenter_type", "talk")
+async def handle_init_stream(service: DIdWebSocketService, message: Dict[str, Any], websocket: WebSocket) -> str:
+    """Handle init_stream message - session_id comes from D-ID API"""
+    source_url = message.get("source_url")
+    presenter_type = message.get("presenter_type", "talk")
     
     if not source_url:
         await websocket.send_text(json.dumps({
             "type": "error",
             "message": "source_url is required"
         }))
-        return
+        return None
     
     try:
+        # Initialize stream - session_id will come from D-ID API response
         await service.init_stream(source_url, presenter_type)
+        
         await websocket.send_text(json.dumps({
-            "type": "init-stream-sent",
-            "message": "Stream initialization sent"
+            "type": "init_stream_sent",
+            "message": "Stream initialization sent to D-ID"
         }))
+        
+        return None  # session_id will be set when we receive response from D-ID
+        
     except Exception as e:
         await websocket.send_text(json.dumps({
             "type": "error",
             "message": f"Failed to initialize stream: {str(e)}"
         }))
+        return None
 
-async def handle_sdp(service: DIdWebSocketService, message: Dict[str, Any], websocket: WebSocket):
-    """Handle SDP message"""
-    payload = message.get("payload", {})
-    answer = payload.get("answer")
-    session_id = payload.get("session_id")
-    presenter_type = payload.get("presenter_type", "talk")
-    
-    if not all([answer, session_id]):
-        await websocket.send_text(json.dumps({
-            "type": "error",
-            "message": "answer and session_id are required"
-        }))
-        return
-    
-    try:
-        await service.send_sdp_answer(answer, session_id, presenter_type)
-        await websocket.send_text(json.dumps({
-            "type": "sdp-sent",
-            "message": "SDP answer sent"
-        }))
-    except Exception as e:
-        await websocket.send_text(json.dumps({
-            "type": "error",
-            "message": f"Failed to send SDP: {str(e)}"
-        }))
-
-async def handle_ice(service: DIdWebSocketService, message: Dict[str, Any], websocket: WebSocket):
-    """Handle ICE candidate message"""
-    payload = message.get("payload", {})
-    candidate = payload.get("candidate")
-    sdp_mid = payload.get("sdpMid")
-    sdp_m_line_index = payload.get("sdpMLineIndex")
-    session_id = payload.get("session_id")
-    
-    if not all([candidate, sdp_mid, sdp_m_line_index, session_id]):
-        await websocket.send_text(json.dumps({
-            "type": "error",
-            "message": "candidate, sdpMid, sdpMLineIndex, and session_id are required"
-        }))
-        return
-    
-    try:
-        await service.send_ice_candidate(candidate, sdp_mid, sdp_m_line_index, session_id)
-        await websocket.send_text(json.dumps({
-            "type": "ice-sent",
-            "message": "ICE candidate sent"
-        }))
-    except Exception as e:
-        await websocket.send_text(json.dumps({
-            "type": "error",
-            "message": f"Failed to send ICE candidate: {str(e)}"
-        }))
-
-async def handle_stream_text(service: DIdWebSocketService, message: Dict[str, Any], websocket: WebSocket):
-    """Handle stream-text message"""
-    payload = message.get("payload", {})
-    script = payload.get("script", {})
-    text = script.get("input", "")
-    voice_id = script.get("provider", {}).get("voice_id", "en-US-JennyNeural")
-    index = payload.get("index", 0)
+async def handle_text_to_speech(service: DIdWebSocketService, message: Dict[str, Any], websocket: WebSocket, session_id: Optional[str]):
+    """Handle text_to_speech message"""
+    text = message.get("text", "")
+    voice_id = message.get("voice_id", "en-US-JennyNeural")
     
     if not text:
         await websocket.send_text(json.dumps({
             "type": "error",
-            "message": "text input is required"
+            "message": "text is required"
+        }))
+        return
+    
+    if not session_id:
+        await websocket.send_text(json.dumps({
+            "type": "error",
+            "message": "Stream not initialized. Send init_stream first."
         }))
         return
     
     try:
-        await service.send_stream_text(text, voice_id, index)
+        await service.send_stream_text(text, voice_id, session_id)
         await websocket.send_text(json.dumps({
-            "type": "text-sent",
-            "message": "Text chunk sent"
+            "type": "text_sent",
+            "message": "Text sent for processing"
         }))
     except Exception as e:
         await websocket.send_text(json.dumps({
@@ -237,27 +211,33 @@ async def handle_stream_text(service: DIdWebSocketService, message: Dict[str, An
             "message": f"Failed to send text: {str(e)}"
         }))
 
-async def handle_stream_audio(service: DIdWebSocketService, message: Dict[str, Any], websocket: WebSocket):
-    """Handle stream-audio message"""
-    payload = message.get("payload", {})
-    script = payload.get("script", {})
-    audio_data = script.get("input", [])
-    index = payload.get("index", 0)
+async def handle_speech_to_speech(service: DIdWebSocketService, message: Dict[str, Any], websocket: WebSocket, session_id: Optional[str]):
+    """Handle speech_to_speech message"""
+    audio_data = message.get("audio_data", "")
+    voice_id = message.get("voice_id", "en-US-JennyNeural")
     
     if not audio_data:
         await websocket.send_text(json.dumps({
             "type": "error",
-            "message": "audio data is required"
+            "message": "audio_data is required"
+        }))
+        return
+    
+    if not session_id:
+        await websocket.send_text(json.dumps({
+            "type": "error",
+            "message": "Stream not initialized. Send init_stream first."
         }))
         return
     
     try:
-        # Convert array back to bytes
-        audio_bytes = bytes(audio_data)
-        await service.send_stream_audio(audio_bytes, index)
+        # Convert base64 audio data to bytes
+        import base64
+        audio_bytes = base64.b64decode(audio_data)
+        await service.send_stream_audio(audio_bytes, session_id)
         await websocket.send_text(json.dumps({
-            "type": "audio-sent",
-            "message": "Audio chunk sent"
+            "type": "audio_sent",
+            "message": "Audio sent for processing"
         }))
     except Exception as e:
         await websocket.send_text(json.dumps({
@@ -265,13 +245,13 @@ async def handle_stream_audio(service: DIdWebSocketService, message: Dict[str, A
             "message": f"Failed to send audio: {str(e)}"
         }))
 
-async def handle_delete_stream(service: DIdWebSocketService, message: Dict[str, Any], websocket: WebSocket):
-    """Handle delete-stream message"""
+async def handle_delete_stream(service: DIdWebSocketService, message: Dict[str, Any], websocket: WebSocket, session_id: Optional[str]):
+    """Handle delete_stream message"""
     try:
         await service.delete_stream()
         await websocket.send_text(json.dumps({
-            "type": "stream-deleted",
-            "message": "Stream deleted"
+            "type": "stream_deleted",
+            "message": "Stream deleted successfully"
         }))
     except Exception as e:
         await websocket.send_text(json.dumps({
@@ -291,10 +271,12 @@ async def init_websocket_stream(
     The actual streaming happens through the WebSocket connection.
     """
     try:
-        # Note: This is a placeholder. The actual WebSocket connection
-        # should be established through the /ws/stream endpoint
+        # Generate session_id
+        session_id = str(uuid.uuid4())
+        
         return WebSocketStreamResponse(
             success=True,
+            session_id=session_id,
             message="WebSocket streaming initialized. Connect to /ws/stream for real-time streaming."
         )
     except Exception as e:

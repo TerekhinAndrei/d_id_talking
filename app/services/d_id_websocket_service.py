@@ -9,7 +9,7 @@ import logging
 import base64
 from typing import Dict, Any, Optional, Callable
 import websockets
-from app.config import config
+from app.core.config import settings as config
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,12 @@ class DIdWebSocketService:
         self.is_connected = False
         self.on_message_callback = None
         self.on_connection_change = None
+        self.test_mode = not self.api_key
+        
+        if self.test_mode:
+            logger.warning("D-ID API key не настроен. Включаем тестовый режим.")
+            # В тестовом режиме не подключаемся к реальному D-ID API
+            return
         
         if not self.api_key:
             raise ValueError("D-ID API key not configured")
@@ -43,8 +49,22 @@ class DIdWebSocketService:
             on_connection_change: Callback for connection state changes
         """
         try:
+            logger.info(f"🔧 Подключение к D-ID WebSocket. Тестовый режим: {self.test_mode}")
+            
             self.on_message_callback = on_message
             self.on_connection_change = on_connection_change
+            
+            if self.test_mode:
+                # В тестовом режиме просто симулируем подключение
+                logger.info("✅ Тестовый режим: симулируем подключение к D-ID WebSocket")
+                self.is_connected = True
+                
+                if self.on_connection_change:
+                    logger.info("📤 Отправляем callback 'connected'")
+                    await self.on_connection_change("connected")
+                
+                logger.info("✅ WebSocket подключен (тестовый режим)")
+                return
             
             # Create WebSocket URL with authorization
             ws_url = f"{self.websocket_url}?authorization=Basic {self.api_key}"
@@ -55,18 +75,18 @@ class DIdWebSocketService:
             self.is_connected = True
             
             if self.on_connection_change:
-                self.on_connection_change("connected")
+                await self.on_connection_change("connected")
             
             logger.info("WebSocket connected successfully")
             
-            # Start listening for messages
+            # Start listening for messages only in real mode
             await self._listen_for_messages()
             
         except Exception as e:
-            logger.error(f"Failed to connect to WebSocket: {e}")
+            logger.error(f"❌ Failed to connect to WebSocket: {e}")
             self.is_connected = False
             if self.on_connection_change:
-                self.on_connection_change("failed")
+                await self.on_connection_change("failed")
             raise
     
     async def _listen_for_messages(self):
@@ -169,81 +189,126 @@ class DIdWebSocketService:
     
     async def init_stream(self, source_url: str, presenter_type: str = "talk"):
         """
-        Initialize streaming session
+        Initialize a new stream
         
         Args:
-            source_url: URL of the avatar image
-            presenter_type: Type of presenter (talk or clip)
+            source_url: URL of the source image
+            presenter_type: Type of presenter (talk, demo)
         """
+        if not self.is_connected:
+            raise RuntimeError("WebSocket not connected")
+        
+        if self.test_mode:
+            # В тестовом режиме симулируем ответ от D-ID
+            import uuid
+            self.session_id = f"test-session-{uuid.uuid4().hex[:8]}"
+            self.stream_id = f"test-stream-{uuid.uuid4().hex[:8]}"
+            
+            logger.info(f"Тестовый режим: инициализация стрима - Session: {self.session_id}, Stream: {self.stream_id}")
+            
+            # Симулируем ответ от D-ID API
+            if self.on_message_callback:
+                await self.on_message_callback({
+                    "messageType": "init-stream",
+                    "id": self.stream_id,
+                    "session_id": self.session_id,
+                    "offer": "test-offer",
+                    "ice_servers": []
+                })
+            
+            return
+        
         message = {
-            "type": "init-stream",
-            "payload": {
-                "source_url": source_url,
-                "presenter_type": presenter_type
-            }
+            "type": "init_stream",
+            "source_url": source_url,
+            "presenter_type": presenter_type
         }
         
+        logger.info(f"Initializing stream for: {source_url}")
         await self.send_message(message)
-        logger.info(f"Stream initialization requested for: {source_url}")
-    
+
     async def send_sdp_answer(self, answer: str, session_id: str, presenter_type: str = "talk"):
         """
-        Send SDP answer to establish WebRTC connection
+        Send SDP answer
         
         Args:
-            answer: SDP answer from RTCPeerConnection
-            session_id: Session ID from init-stream
+            answer: SDP answer
+            session_id: Session ID
             presenter_type: Type of presenter
         """
+        if not self.is_connected:
+            raise RuntimeError("WebSocket not connected")
+        
         message = {
             "type": "sdp",
-            "payload": {
-                "answer": answer,
-                "session_id": session_id,
-                "presenter_type": presenter_type
-            }
+            "answer": answer,
+            "session_id": session_id,
+            "presenter_type": presenter_type
         }
         
         await self.send_message(message)
-        logger.info("SDP answer sent")
-    
+
     async def send_ice_candidate(self, candidate: str, sdp_mid: str, sdp_m_line_index: int, session_id: str):
         """
         Send ICE candidate
         
         Args:
-            candidate: ICE candidate string
+            candidate: ICE candidate
             sdp_mid: SDP media ID
             sdp_m_line_index: SDP media line index
             session_id: Session ID
         """
+        if not self.is_connected:
+            raise RuntimeError("WebSocket not connected")
+        
         message = {
             "type": "ice",
-            "payload": {
-                "session_id": session_id,
-                "candidate": candidate,
-                "sdpMid": sdp_mid,
-                "sdpMLineIndex": sdp_m_line_index
-            }
+            "candidate": candidate,
+            "sdpMid": sdp_mid,
+            "sdpMLineIndex": sdp_m_line_index,
+            "session_id": session_id
         }
         
         await self.send_message(message)
-        logger.debug("ICE candidate sent")
-    
-    async def send_stream_text(self, text: str, voice_id: str = "en-US-JennyNeural", index: int = 0):
+
+    async def send_stream_text(self, text: str, voice_id: str = "en-US-JennyNeural", session_id: Optional[str] = None):
         """
-        Send text chunk for streaming
+        Send text for streaming
         
         Args:
             text: Text to stream
             voice_id: Voice ID for TTS
-            index: Chunk index for ordering
+            session_id: Session ID (uses current session if not provided)
         """
-        if not self.stream_id or not self.session_id:
-            raise ValueError("Stream not initialized")
+        if not self.is_connected:
+            raise RuntimeError("WebSocket not connected")
+        
+        if not session_id:
+            session_id = self.session_id
+        
+        if not session_id:
+            raise RuntimeError("No session_id available. Initialize stream first.")
+        
+        if self.test_mode:
+            # В тестовом режиме симулируем обработку текста
+            logger.info(f"Тестовый режим: обработка текста '{text[:50]}...' с голосом {voice_id}")
+            
+            # Симулируем задержку обработки
+            import asyncio
+            await asyncio.sleep(1)
+            
+            # Симулируем ответ с аудио данными
+            if self.on_message_callback:
+                await self.on_message_callback({
+                    "type": "audio_data",
+                    "data": "dGVzdC1hdWRpby1kYXRh",  # base64 encoded "test-audio-data"
+                    "timestamp": "2024-01-15T10:30:00Z"
+                })
+            
+            return
         
         message = {
-            "type": "stream-text",
+            "type": "stream_text",
             "payload": {
                 "script": {
                     "type": "text",
@@ -251,61 +316,66 @@ class DIdWebSocketService:
                     "provider": {
                         "type": "microsoft",
                         "voice_id": voice_id
-                    },
-                    "ssml": True
+                    }
                 },
-                "config": {
-                    "stitch": True
-                },
-                "background": {
-                    "color": "#FFFFFF"
-                },
-                "index": index,
-                "session_id": self.session_id,
-                "stream_id": self.stream_id,
-                "presenter_type": "talk"
+                "session_id": session_id
             }
         }
         
+        logger.info(f"Sending text stream with session_id: {session_id}")
         await self.send_message(message)
-        logger.debug(f"Text chunk sent: {text[:50]}...")
-    
-    async def send_stream_audio(self, audio_data: bytes, index: int = 0):
+
+    async def send_stream_audio(self, audio_data: bytes, session_id: Optional[str] = None):
         """
-        Send audio chunk for streaming
+        Send audio for streaming
         
         Args:
-            audio_data: Audio data in bytes
-            index: Chunk index for ordering
+            audio_data: Audio data as bytes
+            session_id: Session ID (uses current session if not provided)
         """
-        if not self.stream_id or not self.session_id:
-            raise ValueError("Stream not initialized")
+        if not self.is_connected:
+            raise RuntimeError("WebSocket not connected")
         
-        # Convert bytes to array for JSON serialization
-        audio_array = list(audio_data)
+        if not session_id:
+            session_id = self.session_id
+        
+        if not session_id:
+            raise RuntimeError("No session_id available. Initialize stream first.")
+        
+        if self.test_mode:
+            # В тестовом режиме симулируем обработку аудио
+            logger.info(f"Тестовый режим: обработка аудио ({len(audio_data)} байт)")
+            
+            # Симулируем задержку обработки
+            import asyncio
+            await asyncio.sleep(1)
+            
+            # Симулируем ответ с обработанными аудио данными
+            if self.on_message_callback:
+                await self.on_message_callback({
+                    "type": "audio_data",
+                    "data": "dGVzdC1wcm9jZXNzZWQtYXVkaW8tZGF0YQ==",  # base64 encoded "test-processed-audio-data"
+                    "timestamp": "2024-01-15T10:30:00Z"
+                })
+            
+            return
+        
+        # Convert audio data to base64
+        audio_base64 = base64.b64encode(audio_data).decode('utf-8')
         
         message = {
-            "type": "stream-audio",
+            "type": "stream_audio",
             "payload": {
                 "script": {
                     "type": "audio",
-                    "input": audio_array
+                    "input": audio_base64
                 },
-                "config": {
-                    "stitch": True
-                },
-                "background": {
-                    "color": "#FFFFFF"
-                },
-                "index": index,
-                "session_id": self.session_id,
-                "stream_id": self.stream_id,
-                "presenter_type": "talk"
+                "session_id": session_id
             }
         }
         
+        logger.info(f"Sending audio stream with session_id: {session_id}")
         await self.send_message(message)
-        logger.debug(f"Audio chunk sent: {len(audio_data)} bytes")
     
     async def delete_stream(self):
         """Delete the current stream"""

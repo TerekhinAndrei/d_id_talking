@@ -5,7 +5,7 @@ from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from enum import Enum
 
-from app.config import config
+from app.core.config import settings as config
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ class ElevenLabsService:
     
     def _validate_configuration(self) -> None:
         """Validate that the service is properly configured"""
-        if not self.api_key:
+        if not config.is_elevenlabs_configured():
             raise ElevenLabsConfigurationError("ElevenLabs API key not configured")
     
     def _get_headers(self) -> Dict[str, str]:

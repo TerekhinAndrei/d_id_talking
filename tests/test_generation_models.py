@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.generation import (
     GenerationTask, GenerationResponse, GenerationStatusResponse,
     GenerationErrorResponse, GenerationStatus
@@ -22,7 +22,7 @@ class TestGenerationModels:
     
     def test_generation_status_response_valid(self):
         """Test creating a valid GenerationStatusResponse model"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         status_data = {
             "task_id": "test-task-123",
             "status": GenerationStatus.COMPLETED,
@@ -41,7 +41,7 @@ class TestGenerationModels:
     
     def test_generation_status_response_failed(self):
         """Test creating a GenerationStatusResponse model for failed task"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         status_data = {
             "task_id": "test-task-123",
             "status": GenerationStatus.FAILED,
@@ -73,7 +73,7 @@ class TestGenerationModels:
     
     def test_generation_task_complete(self):
         """Test creating a complete GenerationTask model"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         task_data = {
             "task_id": "test-task-123",
             "status": GenerationStatus.PROCESSING,

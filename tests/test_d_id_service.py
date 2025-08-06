@@ -58,7 +58,10 @@ class TestDIdService:
         """Test _make_request with successful GET response"""
         self.service.api_key = "test_key"
         mock_response = Mock()
+        mock_response.status_code = 200
         mock_response.json.return_value = {"test": "data"}
+        mock_response.headers = {}
+        mock_response.text = "test response"
         mock_get.return_value = mock_response
         
         result = self.service._make_request("GET", "/test")
@@ -71,7 +74,10 @@ class TestDIdService:
         """Test _make_request with successful POST response"""
         self.service.api_key = "test_key"
         mock_response = Mock()
+        mock_response.status_code = 200
         mock_response.json.return_value = {"test": "data"}
+        mock_response.headers = {}
+        mock_response.text = "test response"
         mock_post.return_value = mock_response
         
         result = self.service._make_request("POST", "/test", data={"key": "value"})
@@ -186,17 +192,16 @@ class TestDIdService:
         result = self.service.create_talk("https://example.com/image.jpg", "https://example.com/audio.mp3")
     
         assert result == "test_id"
-        mock_make_request.assert_called_once_with("POST", "/talks", data={
-            "source_url": "https://example.com/image.jpg",
-            "script": {
-                "type": "audio",
-                "audio_url": "https://example.com/audio.mp3"
-            },
-            "config": {
-                "stitch": True,
-                "result_format": "mp4"
-            }
-        })
+        # Проверяем только основные поля, так как config может содержать дополнительные параметры
+        call_args = mock_make_request.call_args
+        assert call_args[0][0] == "POST"
+        assert call_args[0][1] == "/talks"
+        data = call_args[1]['data']
+        assert data['source_url'] == "https://example.com/image.jpg"
+        assert data['script']['type'] == "audio"
+        assert data['script']['audio_url'] == "https://example.com/audio.mp3"
+        assert data['config']['stitch'] is True
+        assert data['config']['result_format'] == "mp4"
     
     def test_is_configured_true(self):
         """Test is_configured with API key"""

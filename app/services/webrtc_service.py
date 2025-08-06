@@ -3,7 +3,7 @@ import json
 import logging
 from typing import Dict, Optional, Any
 import aiohttp
-from app.config import config
+from app.core.config import settings as config
 
 logger = logging.getLogger(__name__)
 

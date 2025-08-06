@@ -34,12 +34,19 @@ class Settings(BaseSettings):
     
     # ElevenLabs API Settings
     ELEVENLABS_API_KEY: Optional[str] = None
-    ELEVENLABS_VOICE_ID: str = "21m00Tcm4TlvDq8ikWAM"
+    ELEVENLABS_BASE_URL: str = "https://api.elevenlabs.io/v1"
+    ELEVENLABS_DEFAULT_VOICE_ID: str = "21m00Tcm4TlvDq8ikWAM"
     
     # D-ID API Settings
     D_ID_API_KEY: Optional[str] = None
     D_ID_BASE_URL: str = "https://api.d-id.com"
     D_ID_DEFAULT_PRESENTER_ID: str = "bank://lively/driver-05"
+    
+    # Cloudinary Configuration
+    CLOUDINARY_URL: Optional[str] = None
+    
+    # Client URL
+    CLIENT_URL: str = "http://localhost:3000"
     
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
@@ -66,6 +73,56 @@ class Settings(BaseSettings):
         elif isinstance(v, (list, str)):
             return v
         raise ValueError(v)
+    
+    def is_elevenlabs_configured(self) -> bool:
+        """Проверка конфигурации ElevenLabs"""
+        return self.ELEVENLABS_API_KEY is not None and self.ELEVENLABS_API_KEY.strip() != ""
+    
+    def get_elevenlabs_headers(self) -> dict:
+        """Получение заголовков для ElevenLabs API"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"🔥 ПОЛУЧЕНИЕ ELEVENLABS HEADERS...")
+        if not self.is_elevenlabs_configured():
+            logger.error(f"❌ ELEVENLABS API KEY НЕ НАСТРОЕН")
+            raise ValueError("ElevenLabs API key не настроен")
+        
+        headers = {
+            "xi-api-key": self.ELEVENLABS_API_KEY,
+            "Content-Type": "application/json"
+        }
+        logger.info(f"✅ ELEVENLABS HEADERS СОЗДАНЫ: {headers}")
+        return headers
+    
+    def is_d_id_configured(self) -> bool:
+        """Проверка конфигурации D-ID"""
+        return self.D_ID_API_KEY is not None and self.D_ID_API_KEY.strip() != ""
+    
+    def get_d_id_headers(self) -> dict:
+        """Получение заголовков для D-ID API"""
+        if not self.is_d_id_configured():
+            raise ValueError("D-ID API key не настроен")
+        
+        # D-ID API ключ уже в правильном формате
+        return {
+            "Authorization": f"Basic {self.D_ID_API_KEY}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+    
+    def is_cloudinary_configured(self) -> bool:
+        """Проверка конфигурации Cloudinary"""
+        return self.CLOUDINARY_URL is not None and self.CLOUDINARY_URL.strip() != ""
+    
+    def get_cloudinary_config(self) -> dict:
+        """Получение конфигурации Cloudinary"""
+        if not self.is_cloudinary_configured():
+            raise ValueError("Cloudinary URL не настроен")
+        
+        return {
+            "cloudinary_url": self.CLOUDINARY_URL
+        }
     
     model_config = ConfigDict(
         env_file = ".env",

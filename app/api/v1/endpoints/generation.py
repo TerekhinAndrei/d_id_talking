@@ -15,7 +15,7 @@ from app.services.elevenlabs_service import ElevenLabsService, ElevenLabsService
 from app.services.d_id_service import DIdService, DIdServiceError
 from app.services.storage_service import StorageService, StorageServiceError
 from app.models.generation import TaskStatusResponse
-from app.config import config
+from app.core.config import settings as config
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

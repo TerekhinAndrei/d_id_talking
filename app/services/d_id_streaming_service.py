@@ -9,7 +9,7 @@ import logging
 from typing import Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 import aiohttp
-from app.config import config
+from app.core.config import settings as config
 
 logger = logging.getLogger(__name__)
 
@@ -584,6 +584,50 @@ class DIdStreamingService:
             logger.error(f"Health check failed: {e}")
             return False 
 
+    async def get_sdp_offer(self, session_id: str) -> StreamResponse:
+        """
+        Get SDP offer from D-ID API using session_id.
+        
+        Args:
+            session_id: The session ID from create_webrtc_session
+            
+        Returns:
+            StreamResponse with SDP offer data
+            
+        Raises:
+            DIdConnectionError: If SDP retrieval fails
+            DIdAuthenticationError: If authentication fails
+        """
+        try:
+            logger.info(f"Getting SDP offer for session: {session_id}")
+            
+            session = self._create_session_if_needed()
+            async with session.get(
+                f"{self.base_url}/talks/streams/{session_id}/sdp",
+                headers=self.headers
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    logger.info(f"SDP offer retrieved successfully for session: {session_id}")
+                    
+                    return StreamResponse(
+                        success=True,
+                        data=data,
+                        status_code=response.status,
+                        message="SDP offer retrieved successfully"
+                    )
+                else:
+                    error_msg = self._parse_error_response(response.status, await response.text())
+                    logger.error(f"Failed to get SDP offer: {response.status} - {error_msg}")
+                    raise DIdConnectionError(f"SDP retrieval failed: {error_msg}")
+                    
+        except aiohttp.ClientError as e:
+            logger.error(f"Network error during SDP retrieval: {e}")
+            raise DIdConnectionError(f"Network error: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected error during SDP retrieval: {e}")
+            raise DIdStreamingError(f"Unexpected error: {str(e)}")
+
     async def create_webrtc_session(self, image_url: str, voice_id: str = "21m00Tcm4TlvDq8ikWAM") -> StreamSession:
         """
         Create a new WebRTC streaming session with D-ID.
@@ -602,6 +646,7 @@ class DIdStreamingService:
         try:
             # Prepare the request payload according to D-ID documentation
             payload = {
+                "stream_warmup": "false",
                 "source_url": image_url
             }
             

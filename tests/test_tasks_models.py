@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.tasks import (
     TaskCreate, TaskUpdate, Task, TaskResponse, TaskListResponse,
     TaskStatus, TaskPriority, TaskType
@@ -74,7 +74,7 @@ class TestTaskModels:
     
     def test_task_complete_model(self):
         """Test creating a complete Task model"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         task_data = {
             "id": "task123",
             "title": "Complete Task",
@@ -105,8 +105,8 @@ class TestTaskModels:
             "task_type": TaskType.PROCESSING,
             "priority": TaskPriority.MEDIUM,
             "status": TaskStatus.COMPLETED,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
             "progress": 100.0
         }
         
@@ -129,8 +129,8 @@ class TestTaskModels:
                 "task_type": TaskType.PROCESSING,
                 "priority": TaskPriority.MEDIUM,
                 "status": TaskStatus.COMPLETED,
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
                 "progress": 100.0
             },
             {
@@ -139,8 +139,8 @@ class TestTaskModels:
                 "task_type": TaskType.ANALYSIS,
                 "priority": TaskPriority.HIGH,
                 "status": TaskStatus.IN_PROGRESS,
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
                 "progress": 50.0
             }
         ]

@@ -1,603 +1,490 @@
-import { useState, useEffect, useRef } from 'react'
-import './App.css'
-import { apiService } from './services/api'
-import WebRTCStream from './components/WebRTCStream'
-import WebRTCStreaming from './components/WebRTCStreaming'
+import React, { useState, useRef } from 'react';
+import './App.css';
 
 function App() {
-  // State for API connection
-  const [healthStatus, setHealthStatus] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+  const [result, setResult] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [imageUrl, setImageUrl] = useState('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face');
+  const [uploadedImage, setUploadedImage] = useState(null);
+  const [streamData, setStreamData] = useState(null);
+  const [sdpData, setSdpData] = useState(null);
+  const [sdpLoading, setSdpLoading] = useState(false);
+  const [startingStream, setStartingStream] = useState(false);
+  const [streamStarted, setStreamStarted] = useState(false);
+  const [connectionState, setConnectionState] = useState('');
+  const [iceCandidates, setIceCandidates] = useState([]);
+  const [talkText, setTalkText] = useState('Привет! Это тестовое сообщение для аватара.');
+  const [creatingTalk, setCreatingTalk] = useState(false);
+  const [talkCreated, setTalkCreated] = useState(false);
+  const [videoStream, setVideoStream] = useState(null);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [connectionReady, setConnectionReady] = useState(false);
+  
+  const peerConnectionRef = useRef(null);
+  const videoRef = useRef(null);
 
-  // State for voices
-  const [voices, setVoices] = useState([])
-  const [selectedVoice, setSelectedVoice] = useState('')
-  const [loadingVoices, setLoadingVoices] = useState(false)
-
-  // State for microphone recording
-  const [isRecording, setIsRecording] = useState(false)
-  const [audioBlob, setAudioBlob] = useState(null)
-  const [audioUrl, setAudioUrl] = useState(null)
-  const [recordingTime, setRecordingTime] = useState(0)
-
-  // State for image upload
-  const [imageFile, setImageFile] = useState(null)
-  const [imagePreview, setImagePreview] = useState(null)
-
-  // State for video generation
-  const [taskId, setTaskId] = useState(null)
-  const [taskStatus, setTaskStatus] = useState(null)
-  const [generating, setGenerating] = useState(false)
-  const [pollingInterval, setPollingInterval] = useState(null)
-  const [videoUrl, setVideoUrl] = useState('/files/Waiting.mp4')
-  const [isGeneratedVideo, setIsGeneratedVideo] = useState(false)
-
-  // State for view mode
-  const [viewMode, setViewMode] = useState('standard') // 'standard' or 'webrtc'
-
-  // Refs
-  const imageInputRef = useRef(null)
-  const mediaRecorderRef = useRef(null)
-  const recordingIntervalRef = useRef(null)
-  const videoRef = useRef(null)
-
-  // Test API connection
-  const testApiConnection = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const health = await apiService.getHealth()
-      setHealthStatus(health)
-    } catch (err) {
-      setError(err.message || 'Failed to connect to API')
-      console.error('API Error:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Load voices from API
-  const loadVoices = async () => {
-    setLoadingVoices(true)
-    try {
-      const response = await apiService.getVoices()
-      // API returns array directly, not object with voices field
-      const voicesArray = Array.isArray(response) ? response : (response.voices || [])
-      
-      // Sort voices alphabetically by name
-      const sortedVoices = voicesArray.sort((a, b) => {
-        const nameA = (a.name || '').toLowerCase()
-        const nameB = (b.name || '').toLowerCase()
-        return nameA.localeCompare(nameB)
-      })
-      
-      setVoices(sortedVoices)
-      if (sortedVoices.length > 0) {
-        setSelectedVoice(sortedVoices[0].voice_id)
-      }
-    } catch (err) {
-      console.error('Failed to load voices:', err)
-      setError('Failed to load voices')
-    } finally {
-      setLoadingVoices(false)
-    }
-  }
-
-  // Handle image selection
-  const handleImageSelect = (event) => {
-    const file = event.target.files[0]
+  const handleImageUpload = (event) => {
+    const file = event.target.files[0];
     if (file) {
-      setImageFile(file)
-      // Create preview
-      const reader = new FileReader()
-      reader.onload = (e) => setImagePreview(e.target.result)
-      reader.readAsDataURL(file)
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setUploadedImage(e.target.result);
+        setImageUrl(e.target.result);
+      };
+      reader.readAsDataURL(file);
     }
-  }
+  };
 
-  // Start recording from microphone
-  const startRecording = async () => {
+  const createStream = async () => {
+    setLoading(true);
+    setResult('');
+    setStreamData(null);
+    setSdpData(null);
+    setStreamStarted(false);
+    setConnectionState('');
+    setIceCandidates([]);
+    setTalkCreated(false);
+    setVideoStream(null);
+    setIsVideoPlaying(false);
+    
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const requestBody = {
+        source_url: imageUrl
+      };
       
-      // Try different audio formats for better compatibility
-      let mimeType = 'audio/webm;codecs=opus'
-      if (!MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-        if (MediaRecorder.isTypeSupported('audio/webm')) {
-          mimeType = 'audio/webm'
-        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          mimeType = 'audio/mp4'
-        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
-          mimeType = 'audio/ogg'
-        } else {
-          mimeType = 'audio/wav'
-        }
+      if (uploadedImage && imageUrl === uploadedImage) {
+        requestBody.image_data = uploadedImage;
       }
       
-      console.log('Using MIME type:', mimeType)
-      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType })
+      const response = await fetch('http://localhost:8000/api/v1/streaming/create-stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
       
-      const chunks = []
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunks.push(event.data)
-        }
+      const data = await response.json();
+      setResult(JSON.stringify(data, null, 2));
+      
+      if (data.success) {
+        setStreamData(data);
       }
-      
-      mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(chunks, { type: mimeType })
-        console.log('Audio blob created:', blob.size, 'bytes, type:', blob.type)
-        
-        // Check audio quality and size
-        console.log('Original audio size:', blob.size, 'bytes')
-        
-        if (blob.size < 1000) {
-          console.warn('Audio file too small, might be empty or corrupted')
-        }
-        
-        // Keep original format for playback
-        setAudioBlob(blob)
-        const url = URL.createObjectURL(blob)
-        console.log('Audio URL created:', url)
-        setAudioUrl(url)
-        
-        // Log audio details for debugging
-        console.log('Audio details:', {
-          size: blob.size,
-          type: blob.type,
-          duration: recordingTime
-        })
-        
-        // Create a copy for server with different MIME type
-        const serverBlob = new Blob([blob], { type: 'audio/mpeg' })
-        console.log('Server audio blob created:', serverBlob.size, 'bytes, type:', serverBlob.type)
-        
-        stream.getTracks().forEach(track => track.stop())
-      }
-      
-      mediaRecorderRef.current.start()
-      setIsRecording(true)
-      setRecordingTime(0)
-      
-      // Start timer
-      recordingIntervalRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1)
-      }, 1000)
-      
-    } catch (err) {
-      console.error('Failed to start recording:', err)
-      setError('Failed to access microphone')
-    }
-  }
-
-  // Stop recording
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      // Ensure minimum recording time
-      if (recordingTime < 2) {
-        console.warn('Recording too short, minimum 2 seconds required')
-        setError('Please record at least 2 seconds of audio')
-        return
-      }
-      
-      mediaRecorderRef.current.stop()
-      setIsRecording(false)
-      if (recordingIntervalRef.current) {
-        clearInterval(recordingIntervalRef.current)
-      }
-    }
-  }
-
-  // Generate video
-  const generateVideo = async () => {
-    if (!imageFile || !audioBlob) {
-      setError('Please select an image and record audio')
-      return
-    }
-
-    setGenerating(true)
-    setError(null)
-    setTaskStatus(null)
-    setVideoUrl('/files/Waiting.mp4') // Reset to default waiting video
-    setIsGeneratedVideo(false)
-
-    try {
-      const response = await apiService.generateVideo(imageFile, audioBlob, selectedVoice)
-      console.log('Generation response:', response)
-      setTaskId(response.task_id)
-      
-      // Start polling for status
-      startStatusPolling(response.task_id)
-    } catch (err) {
-      console.error('Generation Error:', err)
-      setError(err.message || 'Failed to start video generation')
+    } catch (error) {
+      setResult(`Ошибка: ${error.message}`);
     } finally {
-      setGenerating(false)
+      setLoading(false);
     }
-  }
+  };
 
-  // Poll task status
-  const startStatusPolling = (taskId) => {
-    const interval = setInterval(async () => {
-      try {
-        const status = await apiService.getTaskStatus(taskId)
-        setTaskStatus(status)
+  const getSdpData = async () => {
+    if (!streamData || !streamData.sdp_offer || !streamData.ice_servers) {
+      setResult('Ошибка: Нет SDP данных для создания WebRTC соединения');
+      return;
+    }
+
+    setSdpLoading(true);
+    setSdpData(null);
+    
+    try {
+      // Используем SDP данные из Create Stream
+      const sdpData = {
+        success: true,
+        sdp_offer: streamData.sdp_offer,
+        ice_servers: streamData.ice_servers
+      };
+      
+      setSdpData(sdpData);
+      
+      // Сразу запускаем WebRTC соединение
+      await startWebRTCConnection(sdpData);
+      
+    } catch (error) {
+      console.error('Error processing SDP data:', error);
+      setResult(`Ошибка обработки SDP данных: ${error.message}`);
+    } finally {
+      setSdpLoading(false);
+    }
+  };
+
+  const submitIceCandidate = async (candidate, sdpMid, sdpMLineIndex) => {
+    if (!streamData || !streamData.stream_id) {
+      console.error('No stream_id available for ICE candidate submission');
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/streaming/submit-ice-candidate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          stream_id: streamData.stream_id,
+          session_id: streamData.session_id,
+          candidate: candidate,
+          sdpMid: sdpMid,
+          sdpMLineIndex: sdpMLineIndex
+        })
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        console.log('ICE candidate submitted successfully');
+      } else {
+        console.error('Failed to submit ICE candidate:', data.error);
+      }
+    } catch (error) {
+      console.error('Error submitting ICE candidate:', error);
+    }
+  };
+
+  const createTalkStream = async () => {
+    if (!streamData || !streamData.stream_id) {
+      setResult('Ошибка: Нет stream_id для создания talk stream');
+      return;
+    }
+
+    setCreatingTalk(true);
+    
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/streaming/create-talk-stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          stream_id: streamData.stream_id,
+          session_id: streamData.session_id,
+          script: {
+            type: "text",
+            provider: { 
+              type: "elevenlabs",
+              voice_id: "21m00Tcm4TlvDq8ikWAM" // Rachel voice
+            },
+            ssml: "false",
+            input: talkText
+          },
+          config: {
+            fluent: "false",
+            pad_audio: "0.0"
+          },
+          audio_optimization: "2"
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setTalkCreated(true);
+        setResult(JSON.stringify({
+          stream_creation: streamData,
+          sdp_data: sdpData,
+          stream_started: { success: true, message: "Stream started" },
+          talk_stream: data
+        }, null, 2));
+      } else {
+        setResult(`Ошибка создания talk stream: ${data.error}`);
+      }
+      
+    } catch (error) {
+      setResult(`Ошибка создания talk stream: ${error.message}`);
+    } finally {
+      setCreatingTalk(false);
+    }
+  };
+
+  const startWebRTCConnection = async (sdpData) => {
+    if (!streamData || !sdpData || !sdpData.success) {
+      setResult('Ошибка: Нет данных для запуска WebRTC соединения');
+      return;
+    }
+
+    setStartingStream(true);
+    
+    try {
+      const peerConnection = new RTCPeerConnection({
+        iceServers: sdpData.ice_servers || []
+      });
+      
+      peerConnectionRef.current = peerConnection;
+      
+      // Обработчик для получения медиа потоков
+      peerConnection.ontrack = (event) => {
+        console.log('🎥 Track received:', event.track);
+        console.log('📹 Streams:', event.streams);
         
-        // If video is ready, update the video URL
-        if (status.video_url) {
-          setVideoUrl(status.video_url)
-          setIsGeneratedVideo(true)
-        }
-        
-        // Stop polling if task is completed or failed
-        if (status.status === 'completed' || status.status === 'failed') {
-          clearInterval(interval)
-          setPollingInterval(null)
-        }
-      } catch (err) {
-        console.error('Failed to get task status:', err)
-        clearInterval(interval)
-        setPollingInterval(null)
-      }
-    }, 2000) // Poll every 2 seconds
-
-    setPollingInterval(interval)
-  }
-
-  // Format time
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
-
-  // Open video in system player
-  const openInSystemPlayer = (videoUrl) => {
-    if (videoUrl) {
-      console.log('🎬 Opening video in system player:', videoUrl)
-      
-      // Method 1: Direct download and open
-      const link = document.createElement('a')
-      link.href = videoUrl
-      link.download = 'generated-video.mp4'
-      link.target = '_blank'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      
-      // Method 2: Open in new window
-      const videoWindow = window.open('', '_blank', 'width=800,height=600,scrollbars=no,resizable=yes')
-      if (videoWindow) {
-        videoWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>Generated Video</title>
-              <style>
-                body { margin: 0; padding: 0; background: black; display: flex; justify-content: center; align-items: center; height: 100vh; }
-                video { max-width: 100%; max-height: 100%; }
-              </style>
-            </head>
-            <body>
-              <video controls autoplay>
-                <source src="${videoUrl}" type="video/mp4">
-                Your browser does not support the video element.
-              </video>
-            </body>
-          </html>
-        `)
-        videoWindow.document.close()
-      }
-    }
-  }
-
-  // Handle user interaction to enable sound
-  const handleVideoClick = () => {
-    if (isGeneratedVideo && videoRef.current) {
-      videoRef.current.muted = false
-      console.log('🔊 Sound enabled by user click')
-    }
-  }
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval)
-      }
-      if (recordingIntervalRef.current) {
-        clearInterval(recordingIntervalRef.current)
-      }
-    }
-  }, [pollingInterval])
-
-  // Load voices on mount
-  useEffect(() => {
-    testApiConnection()
-    loadVoices()
-  }, [])
-
-  // Start base video on mount
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.play().catch(err => {
-        console.error('Failed to play base video:', err)
-      })
-    }
-  }, [])
-
-  // Update video source when isGeneratedVideo changes
-  useEffect(() => {
-    if (videoRef.current && isGeneratedVideo) {
-      videoRef.current.src = videoUrl
-      videoRef.current.load() // Force reload to apply new source
-      
-      // Start muted for autoplay, then enable sound
-      videoRef.current.muted = true
-      videoRef.current.play().then(() => {
-        console.log('✅ Video started playing (muted)')
-        // Enable sound after a short delay
-        setTimeout(() => {
+        if (event.streams && event.streams[0]) {
+          const stream = event.streams[0];
+          setVideoStream(stream);
+          
+          // Привязываем поток к video элементу
           if (videoRef.current) {
-            videoRef.current.muted = false
-            console.log('🔊 Sound enabled')
+            videoRef.current.srcObject = stream;
+            videoRef.current.play().then(() => {
+              setIsVideoPlaying(true);
+              setConnectionState('🎬 Видео поток активен!');
+            }).catch(error => {
+              console.error('Error playing video:', error);
+              setConnectionState('❌ Ошибка воспроизведения видео');
+            });
           }
-        }, 500)
-      }).catch(err => {
-        console.error('Failed to play generated video:', err)
-      })
+        }
+      };
+      
+      peerConnection.addEventListener('icegatheringstatechange', () => {
+        console.log('ICE gathering state:', peerConnection.iceGatheringState);
+        setConnectionState(`ICE gathering: ${peerConnection.iceGatheringState}`);
+      });
+      
+      peerConnection.addEventListener('icecandidate', (event) => {
+        console.log('ICE candidate:', event.candidate);
+        if (event.candidate) {
+          const { candidate, sdpMid, sdpMLineIndex } = event.candidate;
+          setIceCandidates(prev => [...prev, { candidate, sdpMid, sdpMLineIndex }]);
+          submitIceCandidate(candidate, sdpMid, sdpMLineIndex);
+        }
+      });
+      
+      peerConnection.addEventListener('iceconnectionstatechange', () => {
+        console.log('ICE connection state:', peerConnection.iceConnectionState);
+        setConnectionState(`ICE connection: ${peerConnection.iceConnectionState}`);
+        
+        if (peerConnection.iceConnectionState === 'connected' || 
+            peerConnection.iceConnectionState === 'completed') {
+          setConnectionState('🟢 WebRTC connection established!');
+          // Разрешаем создание Talk Stream только после установки соединения
+          setConnectionReady(true);
+        }
+      });
+      
+      peerConnection.addEventListener('connectionstatechange', () => {
+        console.log('Connection state:', peerConnection.connectionState);
+        setConnectionState(`Connection: ${peerConnection.connectionState}`);
+      });
+      
+      peerConnection.addEventListener('signalingstatechange', () => {
+        console.log('Signaling state:', peerConnection.signalingState);
+        setConnectionState(`Signaling: ${peerConnection.signalingState}`);
+      });
+      
+      const offer = {
+        type: 'offer',
+        sdp: sdpData.sdp_offer
+      };
+      
+      await peerConnection.setRemoteDescription(offer);
+      
+      const sessionClientAnswer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(sessionClientAnswer);
+      
+      const response = await fetch('http://localhost:8000/api/v1/streaming/submit-sdp-answer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          stream_id: streamData.stream_id,
+          session_id: streamData.session_id,
+          answer: sessionClientAnswer
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setStreamStarted(true);
+        setResult(JSON.stringify({
+          stream_creation: streamData,
+          sdp_data: sdpData,
+          stream_started: data,
+          ice_candidates_count: iceCandidates.length
+        }, null, 2));
+      } else {
+        setResult(`Ошибка запуска стрима: ${data.error}`);
+      }
+      
+    } catch (error) {
+      setResult(`Ошибка запуска стрима: ${error.message}`);
+    } finally {
+      setStartingStream(false);
     }
-  }, [videoUrl, isGeneratedVideo])
+  };
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>🎬 AI Talking Avatar</h1>
-        <p>Create animated videos with your voice and image</p>
+    <div className="App">
+      <header className="App-header">
+        <h1>D-ID Stream Test</h1>
         
-        {/* View Mode Toggle */}
-        <div className="view-mode-toggle">
-          <button
-            className={`mode-button ${viewMode === 'standard' ? 'active' : ''}`}
-            onClick={() => setViewMode('standard')}
-          >
-            📹 Standard Generation
-          </button>
-          <button
-            className={`mode-button ${viewMode === 'webrtc' ? 'active' : ''}`}
-            onClick={() => setViewMode('webrtc')}
-          >
-            🔴 Live Streaming
-          </button>
-        </div>
-      </header>
-
-      {viewMode === 'webrtc' ? (
-        <WebRTCStreaming />
-      ) : (
-        <div className="main-container">
-        {/* Left Panel - Controls */}
-        <div className="left-panel">
-          {/* API Status Section - Simplified */}
-          <section className="api-status">
-            <div className="status-indicator">
-              <div className={`status-dot ${healthStatus ? 'connected' : 'disconnected'}`}></div>
-              <span className="status-text">
-                {loading ? 'Testing...' : 
-                 healthStatus ? 'Connected Successfully' : 
-                 error ? 'Connection Failed' : 'Not Connected'}
-              </span>
-            </div>
-            <button onClick={testApiConnection} disabled={loading} className="test-button">
-              {loading ? 'Testing...' : 'Test Connection'}
-            </button>
-          </section>
-
-          {/* Voice Selection */}
-          <section className="voice-selection">
-            <h2>🎭 Voice Selection</h2>
-            {loadingVoices ? (
-              <p>Loading voices...</p>
-            ) : (
-              <div className="voice-selector">
-                <label htmlFor="voice-select">Choose a voice:</label>
-                <select
-                  id="voice-select"
-                  value={selectedVoice}
-                  onChange={(e) => setSelectedVoice(e.target.value)}
-                  disabled={voices.length === 0}
-                >
-                  {voices.map((voice) => (
-                    <option key={voice.voice_id} value={voice.voice_id}>
-                      {voice.name} ({voice.category})
-                    </option>
-                  ))}
-                </select>
-                {voices.length === 0 && <p className="error">No voices available</p>}
-              </div>
-            )}
-          </section>
-
-          {/* Image Upload */}
-          <section className="image-upload">
-            <h2>🖼️ Upload Image</h2>
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageSelect}
-              style={{ display: 'none' }}
-            />
-            <button 
-              onClick={() => imageInputRef.current?.click()}
-              className="upload-button"
-            >
-              Select Image
-            </button>
-            {imageFile && (
-              <div className="file-info">
-                <p>✅ {imageFile.name} ({Math.round(imageFile.size / 1024)} KB)</p>
-                {imagePreview && (
-                  <img src={imagePreview} alt="Preview" className="image-preview" />
-                )}
-              </div>
-            )}
-          </section>
-
-          {/* Audio Recording */}
-          <section className="audio-recording">
-            <h2>🎤 Record Audio</h2>
-            <div className="recording-controls">
-              {!isRecording ? (
-                <button 
-                  onClick={startRecording}
-                  className="record-button"
-                  disabled={!imageFile}
-                >
-                  🎤 Start Recording
-                </button>
-              ) : (
-                <button 
-                  onClick={stopRecording}
-                  className="stop-button"
-                >
-                  ⏹️ Stop Recording ({formatTime(recordingTime)})
-                </button>
-              )}
+        <div className="image-section">
+          <h3>Выберите изображение:</h3>
+          
+          <div className="image-options">
+            <div className="option">
+              <label>
+                <input 
+                  type="radio" 
+                  name="imageSource" 
+                  value="default" 
+                  defaultChecked 
+                  onChange={() => {
+                    setImageUrl('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face');
+                    setUploadedImage(null);
+                  }}
+                />
+                Использовать предустановленное изображение
+              </label>
             </div>
             
-            {audioUrl && (
-              <div className="audio-preview">
-                <p>✅ Audio recorded ({Math.round(audioBlob.size / 1024)} KB)</p>
-                <audio 
-                  controls 
-                  onError={(e) => console.error('Audio playback error:', e)}
-                  onLoadStart={() => console.log('Audio loading started')}
-                  onCanPlay={() => console.log('Audio can play')}
-                  onLoadedMetadata={() => console.log('Audio metadata loaded')}
-                >
-                  <source src={audioUrl} type={audioBlob?.type || 'audio/webm'} />
-                  <source src={audioUrl} type="audio/webm;codecs=opus" />
-                  <source src={audioUrl} type="audio/mp4" />
-                  <source src={audioUrl} type="audio/ogg" />
-                  Your browser does not support the audio element.
-                </audio>
-                <button 
-                  onClick={() => {
-                    const audio = document.querySelector('audio')
-                    if (audio) {
-                      audio.play().catch(err => console.error('Play error:', err))
+            <div className="option">
+              <label>
+                <input 
+                  type="radio" 
+                  name="imageSource" 
+                  value="upload" 
+                  onChange={() => {
+                    if (uploadedImage) {
+                      setImageUrl(uploadedImage);
                     }
                   }}
-                  className="play-button"
-                >
-                  ▶️ Play Audio
-                </button>
-              </div>
-            )}
-          </section>
-
-          {/* Generate Button */}
-          <section className="generate-section">
-            <button
-              onClick={generateVideo}
-              disabled={!imageFile || !audioBlob || generating}
-              className="generate-button"
-            >
-              {generating ? '🔄 Generating...' : '🚀 Generate Video'}
-            </button>
-            
-            {/* Open in system player button */}
-            {isGeneratedVideo && videoUrl && (
-              <button
-                onClick={() => openInSystemPlayer(videoUrl)}
-                style={{ 
-                  marginTop: '10px', 
-                  background: '#FF6B35', 
-                  color: 'white', 
-                  border: 'none', 
-                  padding: '8px 16px', 
-                  borderRadius: '4px',
-                  fontSize: '0.8rem'
-                }}
-              >
-                🖥️ Open in System Player
-              </button>
-            )}
-          </section>
-
-          {/* Task Status */}
-          {taskId && (
-            <section className="task-status">
-              <h2>📊 Generation Status</h2>
-              <div className="task-info">
-                <p><strong>Task ID:</strong> {taskId}</p>
-                {taskStatus && (
-                  <div className="status-details">
-                    <p><strong>Status:</strong> {taskStatus.status}</p>
-                    {taskStatus.progress !== undefined && (
-                      <div className="progress-bar">
-                        <div 
-                          className="progress-fill" 
-                          style={{ width: `${taskStatus.progress}%` }}
-                        ></div>
-                        <span>{taskStatus.progress}%</span>
-                      </div>
-                    )}
-                    {taskStatus.talk_id && (
-                      <p><strong>D-ID Talk ID:</strong> {taskStatus.talk_id}</p>
-                    )}
-                    {taskStatus.error_message && (
-                      <p className="error"><strong>Error:</strong> {taskStatus.error_message}</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </section>
+                />
+                Загрузить свое изображение
+              </label>
+              <input 
+                type="file" 
+                accept="image/*" 
+                onChange={handleImageUpload}
+                className="file-input"
+              />
+            </div>
+          </div>
+          
+          {imageUrl && (
+            <div className="image-preview">
+              <h4>Предварительный просмотр:</h4>
+              <img 
+                src={imageUrl} 
+                alt="Preview" 
+                style={{ maxWidth: '200px', maxHeight: '200px', border: '1px solid #ccc' }}
+              />
+            </div>
           )}
         </div>
-
-        {/* Right Panel - Video */}
-        <div className="right-panel">
-          <section className="video-section">
-            <h3>Video Preview</h3>
-            <div className="video-container">
-              <video 
-                ref={videoRef}
-                autoPlay
-                muted
-                playsInline
-                loop={!isGeneratedVideo}
-                className="result-video"
-                onEnded={() => {
-                  if (isGeneratedVideo) {
-                    // Return to waiting video after generated video ends
-                    setVideoUrl('/files/Waiting.mp4')
-                    setIsGeneratedVideo(false)
-                  }
-                }}
-                onPlay={() => {
-                  // Enable sound when video starts playing
-                  if (isGeneratedVideo && videoRef.current) {
-                    setTimeout(() => {
-                      videoRef.current.muted = false
-                      console.log('🔊 Sound enabled on play')
-                    }, 100)
-                  }
-                }}
-                onClick={handleVideoClick}
-              >
-                <source src={videoUrl} type="video/mp4" />
-                Your browser does not support the video element.
-              </video>
-            </div>
-          </section>
+        
+        <div className="talk-section">
+          <h3>Создать разговор:</h3>
+          <div className="talk-input">
+            <label>
+              Текст для аватара:
+              <textarea
+                value={talkText}
+                onChange={(e) => setTalkText(e.target.value)}
+                placeholder="Введите текст для аватара..."
+                rows={3}
+              />
+            </label>
+          </div>
         </div>
-      </div>
-      )}
+        
+        <div className="button-group">
+          <button 
+            onClick={createStream} 
+            disabled={loading}
+            className="create-button"
+          >
+            {loading ? 'Создание стрима...' : 'Create a new stream'}
+          </button>
+          
+          <button 
+            onClick={getSdpData} 
+            disabled={sdpLoading || !streamData}
+            className="sdp-button"
+          >
+            {sdpLoading ? 'Создание WebRTC...' : 'Start Stream'}
+          </button>
+          
+          <button 
+            onClick={createTalkStream} 
+            disabled={creatingTalk || !connectionReady}
+            className="talk-button"
+          >
+            {creatingTalk ? 'Создание разговора...' : connectionReady ? 'Create Talk Stream' : '⏳ Wait for connection...'}
+          </button>
+        </div>
+        
+                       {streamStarted && (
+                 <div className="stream-status">
+                   <span className="status-indicator">🟢 Стрим запущен</span>
+                 </div>
+               )}
+               
+               {connectionReady && (
+                 <div className="stream-status">
+                   <span className="status-indicator">🟢 WebRTC соединение готово</span>
+                 </div>
+               )}
+        
+        {talkCreated && (
+          <div className="stream-status">
+            <span className="status-indicator">🎤 Разговор создан</span>
+          </div>
+        )}
+        
+        {connectionState && (
+          <div className="connection-status">
+            <h4>Состояние соединения:</h4>
+            <div className="status-text">{connectionState}</div>
+            {iceCandidates.length > 0 && (
+              <div className="ice-info">
+                <small>ICE candidates отправлено: {iceCandidates.length}</small>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Video Player */}
+        <div className="video-section">
+          <h3>Видео поток:</h3>
+          <div className="video-container">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted={false}
+              controls
+              className="video-player"
+              style={{
+                width: '100%',
+                maxWidth: '640px',
+                height: 'auto',
+                border: '2px solid #4CAF50',
+                borderRadius: '10px',
+                backgroundColor: '#000'
+              }}
+            />
+            {!isVideoPlaying && streamStarted && (
+              <div className="video-placeholder">
+                <p>⏳ Ожидание видео потока...</p>
+                <p>После создания talk stream здесь появится видео аватара</p>
+              </div>
+            )}
+            {isVideoPlaying && (
+              <div className="video-status">
+                <span className="video-status-indicator">🎬 Видео активно</span>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {result && (
+          <div className="result">
+            <h3>Результат:</h3>
+            <pre>{result}</pre>
+          </div>
+        )}
+      </header>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

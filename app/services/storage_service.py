@@ -171,6 +171,79 @@ class StorageService:
             logger.error(f"Ошибка загрузки изображения в Cloudinary: {e}")
             raise StorageUploadError(f"Ошибка загрузки изображения: {e}")
     
+    def upload_base64_image(self, base64_data: str, filename: str = "uploaded_image.jpg", folder: str = "d_id_talking/images") -> UploadResult:
+        """
+        Загрузка base64 изображения в Cloudinary
+        
+        Args:
+            base64_data: Base64 строка изображения (с или без data URL префикса)
+            filename: Имя файла
+            folder: Папка для сохранения
+            
+        Returns:
+            UploadResult с информацией о загруженном файле
+        """
+        try:
+            import base64
+            
+            # Убираем data URL префикс если есть
+            if base64_data.startswith('data:'):
+                # Извлекаем base64 данные из data URL
+                header, data = base64_data.split(',', 1)
+                # Определяем формат из header
+                if 'image/jpeg' in header:
+                    filename = filename.replace('.jpg', '.jpg').replace('.jpeg', '.jpg')
+                elif 'image/png' in header:
+                    filename = filename.replace('.jpg', '.png').replace('.jpeg', '.png')
+                elif 'image/gif' in header:
+                    filename = filename.replace('.jpg', '.gif').replace('.jpeg', '.gif')
+                elif 'image/webp' in header:
+                    filename = filename.replace('.jpg', '.webp').replace('.jpeg', '.webp')
+            else:
+                data = base64_data
+            
+            # Декодируем base64 в байты
+            try:
+                file_data = base64.b64decode(data)
+            except Exception as e:
+                # Попробуем добавить padding если нужно
+                padding = 4 - len(data) % 4
+                if padding != 4:
+                    data += '=' * padding
+                    file_data = base64.b64decode(data)
+                else:
+                    raise e
+            
+            filename = self.normalize_filename(filename, "image")
+            logger.info(f"🔥 ЗАГРУЗКА BASE64 ИЗОБРАЖЕНИЯ В CLOUDINARY:")
+            logger.info(f"  Filename: {filename}")
+            logger.info(f"  Folder: {folder}")
+            logger.info(f"  Data size: {len(file_data)} bytes")
+            
+            # Загружаем файл в Cloudinary
+            result = cloudinary.uploader.upload(
+                file_data,
+                public_id=f"{folder}/{filename}",
+                resource_type="image",
+                overwrite=True,
+                invalidate=True
+            )
+            
+            # Создаем результат
+            upload_result = UploadResult(
+                public_url=result['secure_url'],
+                file_id=result['public_id'],
+                size=result.get('bytes', 0),
+                format=result.get('format', 'unknown')
+            )
+            
+            logger.info(f"Base64 изображение загружено: {upload_result.public_url}")
+            return upload_result
+            
+        except Exception as e:
+            logger.error(f"Ошибка загрузки base64 изображения в Cloudinary: {e}")
+            raise StorageUploadError(f"Ошибка загрузки base64 изображения: {e}")
+
     def upload_audio(self, file_data: bytes, filename: str, folder: str = "d_id_talking/audio") -> UploadResult:
         """
         Загрузка аудио файла в Cloudinary

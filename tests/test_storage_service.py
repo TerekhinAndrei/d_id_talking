@@ -70,7 +70,7 @@ class TestStorageService:
         """Тест ошибки Cloudinary при загрузке изображения"""
         with patch('cloudinary.uploader.upload', side_effect=Exception("Cloudinary error")):
             service = StorageService()
-            with pytest.raises(StorageUploadError, match="Неожиданная ошибка"):
+            with pytest.raises(StorageUploadError, match="Ошибка загрузки изображения"):
                 service.upload_image(b'test_image_data', 'test.jpg')
     
     def test_upload_audio_success(self):
@@ -165,8 +165,8 @@ class TestStorageService:
     def test_is_configured_false(self):
         """Тест проверки конфигурации - не настроено"""
         with patch.dict(os.environ, {}, clear=True):
-            service = StorageService()
-            assert service.is_configured() is False
+            with pytest.raises(StorageConfigurationError):
+                service = StorageService()
     
     def test_test_connection_success(self):
         """Тест успешного подключения к Cloudinary"""
