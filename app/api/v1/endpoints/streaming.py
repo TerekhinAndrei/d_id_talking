@@ -736,9 +736,15 @@ async def get_elevenlabs_voices(
         
     except Exception as e:
         logger.error(f"Failed to get ElevenLabs voices: {e}")
+        # Возвращаем голос по умолчанию вместо ошибки
         return GetVoicesResponse(
-            success=False,
-            error=f"Failed to get voices: {str(e)}"
+            success=True,
+            voices=[{
+                "voice_id": "21m00Tcm4TlvDq8ikWAM",
+                "name": "Rachel",
+                "category": "premade",
+                "description": "Default voice (fallback)"
+            }]
         )
 
 @router.post("/process-audio", response_model=ProcessAudioResponse)

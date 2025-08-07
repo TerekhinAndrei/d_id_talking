@@ -51,15 +51,34 @@ function App() {
     setLoadingVoices(true);
     try {
       const response = await fetch('http://localhost:8000/api/v1/streaming/elevenlabs-voices');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       if (data.success && data.voices) {
         setVoices(data.voices);
       } else {
         console.error('Failed to load voices:', data.error);
+        // Устанавливаем голос по умолчанию если загрузка не удалась
+        setVoices([{
+          voice_id: '21m00Tcm4TlvDq8ikWAM',
+          name: 'Rachel',
+          category: 'premade',
+          description: 'Default voice'
+        }]);
       }
     } catch (error) {
       console.error('Error loading voices:', error);
+      // Устанавливаем голос по умолчанию при ошибке
+      setVoices([{
+        voice_id: '21m00Tcm4TlvDq8ikWAM',
+        name: 'Rachel',
+        category: 'premade',
+        description: 'Default voice (fallback)'
+      }]);
     } finally {
       setLoadingVoices(false);
     }
