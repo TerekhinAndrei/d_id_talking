@@ -1,8 +1,10 @@
+"""
+Refactored main application following SOLID principles
+"""
+
 import os
 from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,394 +12,442 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi import WebSocket, WebSocketDisconnect
 import uvicorn
-from contextlib import asynccontextmanager
 import json
 import asyncio
+import logging
 
 from app.core.config import settings as config
+from app.core.factory import get_service_container, ServiceContainer
+from app.core.base import ConfigurationProvider
 from app.api.v1.api import api_router
-from app.services.d_id_websocket_service import DIdWebSocketService
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, config.LOG_LEVEL),
+    format=config.LOG_FORMAT
+)
+logger = logging.getLogger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    print("🚀 Starting FastAPI application...")
-    yield
-    # Shutdown
-    print("🛑 Shutting down FastAPI application...")
-
-
-def create_application() -> FastAPI:
+class ApplicationManager:
     """
-    Create FastAPI application with all middleware and routes
+    Application manager following SOLID principles:
+    - Single Responsibility: Manages application lifecycle
+    - Open/Closed: Extensible through composition
+    - Liskov Substitution: Uses interfaces
+    - Interface Segregation: Uses specific interfaces
+    - Dependency Inversion: Depends on abstractions
     """
-    app = FastAPI(
-        title=config.PROJECT_NAME,
-        version=config.VERSION,
-        description="FastAPI Backend API",
-        openapi_url=f"{config.API_V1_STR}/openapi.json",
-        lifespan=lifespan,
-    )
-
-    # Set up CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=config.ALLOWED_HOSTS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    # Set up trusted host middleware
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=config.ALLOWED_HOSTS,
-    )
-
-    # Include API router
-    app.include_router(api_router, prefix=config.API_V1_STR)
-
-    # Simple test WebSocket endpoint
-    @app.websocket("/ws/test")
-    async def websocket_test_endpoint(websocket: WebSocket):
-        """
-        Simple test WebSocket endpoint
-        """
-        await websocket.accept()
-        print("🔌 Test WebSocket подключение принято")
+    
+    def __init__(self):
+        self.app: Optional[FastAPI] = None
+        self.service_container: Optional[ServiceContainer] = None
+        self.config_provider: Optional[ConfigurationProvider] = None
+    
+    def create_application(self) -> FastAPI:
+        """Create FastAPI application with all middleware and routes"""
+        self.config_provider = ConfigurationProvider(config)
         
-        try:
-            await websocket.send_text(json.dumps({
-                "type": "connection_status", 
-                "status": "connected",
-                "message": "Test WebSocket connected"
-            }))
+        self.app = FastAPI(
+            title=config.PROJECT_NAME,
+            version=config.VERSION,
+            description="Refactored FastAPI Backend API following SOLID principles",
+            openapi_url=f"{config.API_V1_STR}/openapi.json",
+            lifespan=self._lifespan,
+        )
+        
+        self._setup_middleware()
+        self._setup_routes()
+        self._setup_websocket_endpoints()
+        
+        return self.app
+    
+    def _setup_middleware(self):
+        """Setup application middleware"""
+        # CORS middleware
+        self.app.add_middleware(
+            CORSMiddleware,
+            allow_origins=config.ALLOWED_HOSTS,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        
+        # Trusted host middleware
+        self.app.add_middleware(
+            TrustedHostMiddleware,
+            allowed_hosts=config.ALLOWED_HOSTS,
+        )
+    
+    def _setup_routes(self):
+        """Setup application routes"""
+        # Include API router
+        self.app.include_router(api_router, prefix=config.API_V1_STR)
+        
+        # Root endpoint that redirects to docs
+        @self.app.get("/")
+        async def root():
+            return RedirectResponse(url="/docs")
+    
+    def _setup_websocket_endpoints(self):
+        """Setup WebSocket endpoints"""
+        self._setup_test_websocket()
+        self._setup_simple_stream_websocket()
+        self._setup_stream_websocket()
+    
+    def _setup_test_websocket(self):
+        """Setup test WebSocket endpoint"""
+        @self.app.websocket("/ws/test")
+        async def websocket_test_endpoint(websocket: WebSocket):
+            """Simple test WebSocket endpoint"""
+            await websocket.accept()
+            logger.info("🔌 Test WebSocket connection accepted")
             
-            # Listen for client messages
-            while True:
-                try:
-                    data = await websocket.receive_text()
-                    message = json.loads(data)
-                    print(f"📨 Получено тестовое сообщение: {message}")
-                    
-                    await websocket.send_text(json.dumps({
-                        "type": "test_response",
-                        "message": "Test message received",
-                        "data": message
-                    }))
-                    
-                except WebSocketDisconnect:
-                    print("Test WebSocket client disconnected")
-                    break
-                except Exception as e:
-                    print(f"Test WebSocket error: {e}")
-                    break
-        
-        except Exception as e:
-            print(f"❌ Test WebSocket error: {e}")
             try:
                 await websocket.send_text(json.dumps({
-                    "type": "error",
-                    "message": f"Test connection failed: {str(e)}"
+                    "type": "connection_status", 
+                    "status": "connected",
+                    "message": "Test WebSocket connected"
                 }))
-            except:
-                pass  # WebSocket уже закрыт
-        finally:
-            try:
-                await websocket.close()
-            except:
-                pass  # WebSocket уже закрыт
-
-    # Simple streaming WebSocket endpoint (without D-ID service)
-    @app.websocket("/ws/stream-simple")
-    async def websocket_stream_simple_endpoint(websocket: WebSocket):
-        """
-        Simple streaming WebSocket endpoint without D-ID service
-        """
-        await websocket.accept()
-        print("🔌 Simple Stream WebSocket подключение принято")
-        
-        try:
-            await websocket.send_text(json.dumps({
-                "type": "connection_status", 
-                "status": "connected",
-                "message": "Simple Stream WebSocket connected (test mode)"
-            }))
+                
+                # Listen for client messages
+                while True:
+                    try:
+                        data = await websocket.receive_text()
+                        message = json.loads(data)
+                        logger.info(f"📨 Received test message: {message}")
+                        
+                        await websocket.send_text(json.dumps({
+                            "type": "test_response",
+                            "message": "Test message received",
+                            "data": message
+                        }))
+                        
+                    except WebSocketDisconnect:
+                        logger.info("Test WebSocket client disconnected")
+                        break
+                    except Exception as e:
+                        logger.error(f"Test WebSocket error: {e}")
+                        break
             
-            # Listen for client messages
-            while True:
+            except Exception as e:
+                logger.error(f"❌ Test WebSocket error: {e}")
                 try:
-                    data = await websocket.receive_text()
-                    message = json.loads(data)
-                    print(f"📨 Получено сообщение от клиента: {message}")
-                    
-                    message_type = message.get("type")
-                    
-                    if message_type == "init_stream":
-                        # Simulate stream initialization
-                        import uuid
-                        session_id = f"test-session-{uuid.uuid4().hex[:8]}"
-                        stream_id = f"test-stream-{uuid.uuid4().hex[:8]}"
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "message": f"Test connection failed: {str(e)}"
+                    }))
+                except:
+                    pass  # WebSocket already closed
+            finally:
+                try:
+                    await websocket.close()
+                except:
+                    pass  # WebSocket already closed
+    
+    def _setup_simple_stream_websocket(self):
+        """Setup simple streaming WebSocket endpoint"""
+        @self.app.websocket("/ws/stream-simple")
+        async def websocket_stream_simple_endpoint(websocket: WebSocket):
+            """Simple streaming WebSocket endpoint without D-ID service"""
+            await websocket.accept()
+            logger.info("🔌 Simple Stream WebSocket connection accepted")
+            
+            try:
+                await websocket.send_text(json.dumps({
+                    "type": "connection_status", 
+                    "status": "connected",
+                    "message": "Simple Stream WebSocket connected (test mode)"
+                }))
+                
+                # Listen for client messages
+                while True:
+                    try:
+                        data = await websocket.receive_text()
+                        message = json.loads(data)
+                        logger.info(f"📨 Received client message: {message}")
                         
-                        await websocket.send_text(json.dumps({
-                            "type": "stream_initialized",
-                            "session_id": session_id,
-                            "stream_id": stream_id,
-                            "status": "ready",
-                            "message": "Stream initialized (test mode)"
-                        }))
+                        message_type = message.get("type")
                         
-                    elif message_type == "text_to_speech":
-                        # Simulate text-to-speech
-                        text = message.get("text", "")
-                        voice_id = message.get("voice_id", "en-US-JennyNeural")
+                        if message_type == "init_stream":
+                            # Simulate stream initialization
+                            import uuid
+                            session_id = f"test-session-{uuid.uuid4().hex[:8]}"
+                            stream_id = f"test-stream-{uuid.uuid4().hex[:8]}"
+                            
+                            await websocket.send_text(json.dumps({
+                                "type": "stream_initialized",
+                                "session_id": session_id,
+                                "stream_id": stream_id,
+                                "status": "ready",
+                                "message": "Stream initialized (test mode)"
+                            }))
+                            
+                        elif message_type == "text_to_speech":
+                            # Simulate text-to-speech
+                            text = message.get("text", "")
+                            voice_id = message.get("voice_id", "en-US-JennyNeural")
+                            
+                            await websocket.send_text(json.dumps({
+                                "type": "text_to_speech_sent",
+                                "message": "Text sent for processing (test mode)"
+                            }))
+                            
+                            # Simulate audio response
+                            await asyncio.sleep(1)
+                            await websocket.send_text(json.dumps({
+                                "type": "audio_data",
+                                "data": "dGVzdC1hdWRpby1kYXRh",  # base64 encoded "test-audio-data"
+                                "timestamp": "2024-01-15T10:30:00Z"
+                            }))
+                            
+                        elif message_type == "speech_to_speech":
+                            # Simulate speech-to-speech
+                            audio_data = message.get("audio_data", "")
+                            
+                            await websocket.send_text(json.dumps({
+                                "type": "speech_to_speech_sent",
+                                "message": "Audio sent for processing (test mode)"
+                            }))
+                            
+                            # Simulate processed audio response
+                            await asyncio.sleep(1)
+                            await websocket.send_text(json.dumps({
+                                "type": "audio_data",
+                                "data": "dGVzdC1wcm9jZXNzZWQtYXVkaW8tZGF0YQ==",  # base64 encoded "test-processed-audio-data"
+                                "timestamp": "2024-01-15T10:30:00Z"
+                            }))
+                            
+                        else:
+                            await websocket.send_text(json.dumps({
+                                "type": "error",
+                                "message": f"Unknown message type: {message_type}"
+                            }))
                         
-                        await websocket.send_text(json.dumps({
-                            "type": "text_to_speech_sent",
-                            "message": "Text sent for processing (test mode)"
-                        }))
-                        
-                        # Simulate audio response
-                        await asyncio.sleep(1)
-                        await websocket.send_text(json.dumps({
-                            "type": "audio_data",
-                            "data": "dGVzdC1hdWRpby1kYXRh",  # base64 encoded "test-audio-data"
-                            "timestamp": "2024-01-15T10:30:00Z"
-                        }))
-                        
-                    elif message_type == "speech_to_speech":
-                        # Simulate speech-to-speech
-                        audio_data = message.get("audio_data", "")
-                        
-                        await websocket.send_text(json.dumps({
-                            "type": "speech_to_speech_sent",
-                            "message": "Audio sent for processing (test mode)"
-                        }))
-                        
-                        # Simulate processed audio response
-                        await asyncio.sleep(1)
-                        await websocket.send_text(json.dumps({
-                            "type": "audio_data",
-                            "data": "dGVzdC1wcm9jZXNzZWQtYXVkaW8tZGF0YQ==",  # base64 encoded "test-processed-audio-data"
-                            "timestamp": "2024-01-15T10:30:00Z"
-                        }))
-                        
-                    else:
+                    except WebSocketDisconnect:
+                        logger.info("Simple Stream WebSocket client disconnected")
+                        break
+                    except json.JSONDecodeError:
                         await websocket.send_text(json.dumps({
                             "type": "error",
-                            "message": f"Unknown message type: {message_type}"
+                            "message": "Invalid JSON message"
                         }))
-                    
-                except WebSocketDisconnect:
-                    print("Simple Stream WebSocket client disconnected")
-                    break
-                except json.JSONDecodeError:
-                    await websocket.send_text(json.dumps({
-                        "type": "error",
-                        "message": "Invalid JSON message"
-                    }))
-                except Exception as e:
-                    print(f"Simple Stream WebSocket error: {e}")
-                    await websocket.send_text(json.dumps({
-                        "type": "error",
-                        "message": f"Internal error: {str(e)}"
-                    }))
-        
-        except Exception as e:
-            print(f"❌ Simple Stream WebSocket error: {e}")
-            try:
-                await websocket.send_text(json.dumps({
-                    "type": "error",
-                    "message": f"Connection failed: {str(e)}"
-                }))
-            except:
-                pass  # WebSocket уже закрыт
-        finally:
-            try:
-                await websocket.close()
-            except:
-                pass  # WebSocket уже закрыт
-
-    # WebSocket endpoint for streaming
-    @app.websocket("/ws/stream")
-    async def websocket_stream_endpoint(websocket: WebSocket):
-        """
-        WebSocket endpoint for real-time streaming
-        """
-        await websocket.accept()
-        print("🔌 WebSocket подключение принято")
-        
-        service = DIdWebSocketService()
-        print(f"🔧 Создан сервис. Тестовый режим: {service.test_mode}")
-        
-        try:
-            # Connect to D-ID WebSocket (or test mode)
-            async def on_message(data):
-                print(f"📤 Отправляем сообщение клиенту: {data}")
-                await websocket.send_text(json.dumps(data))
-            
-            async def on_connection_change(status):
-                print(f"📤 Отправляем статус подключения: {status}")
-                await websocket.send_text(json.dumps({"type": "connection_status", "status": status}))
-            
-            print("🔧 Начинаем подключение к сервису...")
-            await service.connect(
-                on_message=on_message,
-                on_connection_change=on_connection_change
-            )
-            print("✅ Подключение к сервису завершено")
-            
-            # Listen for client messages
-            while True:
-                try:
-                    data = await websocket.receive_text()
-                    message = json.loads(data)
-                    print(f"📨 Получено сообщение от клиента: {message}")
-                    
-                    # Handle D-ID API responses
-                    if message.get("messageType") == "init-stream":
-                        # D-ID sent us session_id and stream_id
-                        session_id = message.get("session_id")
-                        stream_id = message.get("id")
-                        
+                    except Exception as e:
+                        logger.error(f"Simple Stream WebSocket error: {e}")
                         await websocket.send_text(json.dumps({
-                            "type": "stream_initialized",
-                            "session_id": session_id,
-                            "stream_id": stream_id,
-                            "status": "ready",
-                            "message": "Stream initialized by D-ID" + (" (test mode)" if service.test_mode else "")
+                            "type": "error",
+                            "message": f"Internal error: {str(e)}"
                         }))
-                        
-                        # Update service with session_id
-                        service.session_id = session_id
-                        service.stream_id = stream_id
-                        
-                    elif message.get("type") in ["init_stream", "text_to_speech", "speech_to_speech", "delete_stream"]:
-                        # Handle client messages
-                        await handle_client_message(service, message, websocket, session_id)
-                    
-                except WebSocketDisconnect:
-                    print("WebSocket client disconnected")
-                    break
-                except json.JSONDecodeError:
-                    await websocket.send_text(json.dumps({
-                        "type": "error",
-                        "message": "Invalid JSON message"
-                    }))
-                except Exception as e:
-                    print(f"Error handling WebSocket message: {e}")
-                    await websocket.send_text(json.dumps({
-                        "type": "error",
-                        "message": f"Internal error: {str(e)}"
-                    }))
-        
-        except Exception as e:
-            print(f"❌ WebSocket connection error: {e}")
-            try:
-                await websocket.send_text(json.dumps({
-                    "type": "error",
-                    "message": f"Connection failed: {str(e)}"
-                }))
-            except:
-                pass  # WebSocket уже закрыт
-        finally:
-            try:
-                if service.is_connected:
-                    await service.disconnect()
-            except:
-                pass  # Сервис уже отключен
-            try:
-                await websocket.close()
-            except:
-                pass  # WebSocket уже закрыт
-
-    async def handle_client_message(service, message, websocket, session_id):
-        """Handle client WebSocket messages"""
-        try:
-            message_type = message.get("type")
             
-            if message_type == "init_stream":
-                # Initialize stream
-                source_url = message.get("source_url", "https://create-images-results.d-id.com/DefaultPresenters/Noelle_f/image.jpeg")
-                presenter_type = message.get("presenter_type", "talk")
-                
-                await service.init_stream(source_url, presenter_type)
-                await websocket.send_text(json.dumps({
-                    "type": "init_stream_sent",
-                    "message": "Stream initialization sent to D-ID"
-                }))
-                
-            elif message_type == "text_to_speech":
-                # Send text for TTS
-                text = message.get("text", "")
-                voice_id = message.get("voice_id", "en-US-JennyNeural")
-                
-                if not text:
+            except Exception as e:
+                logger.error(f"❌ Simple Stream WebSocket error: {e}")
+                try:
                     await websocket.send_text(json.dumps({
                         "type": "error",
-                        "message": "Text is required for text-to-speech"
+                        "message": f"Connection failed: {str(e)}"
                     }))
-                    return
+                except:
+                    pass  # WebSocket already closed
+            finally:
+                try:
+                    await websocket.close()
+                except:
+                    pass  # WebSocket already closed
+    
+    def _setup_stream_websocket(self):
+        """Setup streaming WebSocket endpoint"""
+        @self.app.websocket("/ws/stream")
+        async def websocket_stream_endpoint(websocket: WebSocket):
+            """WebSocket endpoint for real-time streaming"""
+            await websocket.accept()
+            logger.info("🔌 WebSocket connection accepted")
+            
+            try:
+                # Get service container
+                service_container = get_service_container(self.config_provider)
                 
-                await service.send_stream_text(text, voice_id, session_id)
+                # Initialize services
+                await service_container.initialize()
+                
+                # Get TTS service for streaming
+                tts_service = service_container.get_tts_service()
+                
                 await websocket.send_text(json.dumps({
-                    "type": "text_to_speech_sent",
-                    "message": "Text sent for processing"
+                    "type": "connection_status", 
+                    "status": "connected",
+                    "message": "Stream WebSocket connected"
                 }))
                 
-            elif message_type == "speech_to_speech":
-                # Send audio for STS
-                audio_data = message.get("audio_data", "")
-                
-                if not audio_data:
+                # Listen for client messages
+                while True:
+                    try:
+                        data = await websocket.receive_text()
+                        message = json.loads(data)
+                        logger.info(f"📨 Received client message: {message}")
+                        
+                        message_type = message.get("type")
+                        
+                        if message_type == "text_to_speech":
+                            # Handle text-to-speech
+                            text = message.get("text", "")
+                            voice_id = message.get("voice_id", "21m00Tcm4TlvDq8ikWAM")
+                            
+                            if not text:
+                                await websocket.send_text(json.dumps({
+                                    "type": "error",
+                                    "message": "Text is required for text-to-speech"
+                                }))
+                                continue
+                            
+                            try:
+                                # Convert text to speech
+                                audio_data = await tts_service.text_to_speech(text, voice_id)
+                                
+                                # Send audio data
+                                import base64
+                                audio_base64 = base64.b64encode(audio_data.data).decode('utf-8')
+                                
+                                await websocket.send_text(json.dumps({
+                                    "type": "audio_data",
+                                    "data": audio_base64,
+                                    "timestamp": self._get_current_timestamp()
+                                }))
+                                
+                            except Exception as e:
+                                logger.error(f"TTS error: {e}")
+                                await websocket.send_text(json.dumps({
+                                    "type": "error",
+                                    "message": f"Text-to-speech failed: {str(e)}"
+                                }))
+                        
+                        elif message_type == "speech_to_speech":
+                            # Handle speech-to-speech
+                            audio_data_base64 = message.get("audio_data", "")
+                            voice_id = message.get("voice_id", "21m00Tcm4TlvDq8ikWAM")
+                            
+                            if not audio_data_base64:
+                                await websocket.send_text(json.dumps({
+                                    "type": "error",
+                                    "message": "Audio data is required for speech-to-speech"
+                                }))
+                                continue
+                            
+                            try:
+                                # Decode base64 audio data
+                                import base64
+                                audio_bytes = base64.b64decode(audio_data_base64)
+                                
+                                # Create audio data object
+                                from app.core.interfaces import AudioData, AudioFormat
+                                audio_data = AudioData(
+                                    data=audio_bytes,
+                                    format=AudioFormat.WAV,
+                                    sample_rate=44100,
+                                    bitrate="128k"
+                                )
+                                
+                                # Convert speech to speech
+                                processed_audio = await tts_service.speech_to_speech(audio_data, voice_id)
+                                
+                                # Send processed audio data
+                                processed_audio_base64 = base64.b64encode(processed_audio.data).decode('utf-8')
+                                
+                                await websocket.send_text(json.dumps({
+                                    "type": "audio_data",
+                                    "data": processed_audio_base64,
+                                    "timestamp": self._get_current_timestamp()
+                                }))
+                                
+                            except Exception as e:
+                                logger.error(f"STS error: {e}")
+                                await websocket.send_text(json.dumps({
+                                    "type": "error",
+                                    "message": f"Speech-to-speech failed: {str(e)}"
+                                }))
+                        
+                        else:
+                            await websocket.send_text(json.dumps({
+                                "type": "error",
+                                "message": f"Unknown message type: {message_type}"
+                            }))
+                    
+                    except WebSocketDisconnect:
+                        logger.info("WebSocket client disconnected")
+                        break
+                    except json.JSONDecodeError:
+                        await websocket.send_text(json.dumps({
+                            "type": "error",
+                            "message": "Invalid JSON message"
+                        }))
+                    except Exception as e:
+                        logger.error(f"WebSocket error: {e}")
+                        await websocket.send_text(json.dumps({
+                            "type": "error",
+                            "message": f"Internal error: {str(e)}"
+                        }))
+            
+            except Exception as e:
+                logger.error(f"❌ WebSocket connection error: {e}")
+                try:
                     await websocket.send_text(json.dumps({
                         "type": "error",
-                        "message": "Audio data is required for speech-to-speech"
+                        "message": f"Connection failed: {str(e)}"
                     }))
-                    return
-                
-                # Decode base64 audio data
-                import base64
-                audio_bytes = base64.b64decode(audio_data)
-                
-                await service.send_stream_audio(audio_bytes, session_id)
-                await websocket.send_text(json.dumps({
-                    "type": "speech_to_speech_sent",
-                    "message": "Audio sent for processing"
-                }))
-                
-            elif message_type == "delete_stream":
-                # Delete stream
-                await service.delete_stream()
-                await websocket.send_text(json.dumps({
-                    "type": "stream_deleted",
-                    "message": "Stream deleted"
-                }))
-                
+                except:
+                    pass  # WebSocket already closed
+            finally:
+                try:
+                    await websocket.close()
+                except:
+                    pass  # WebSocket already closed
+    
+    @asynccontextmanager
+    async def _lifespan(self, app: FastAPI):
+        """Application lifespan manager"""
+        # Startup
+        logger.info("🚀 Starting refactored FastAPI application...")
+        
+        try:
+            # Initialize service container
+            self.service_container = get_service_container(self.config_provider)
+            await self.service_container.initialize()
+            logger.info("✅ Services initialized successfully")
         except Exception as e:
-            print(f"Error handling client message: {e}")
-            await websocket.send_text(json.dumps({
-                "type": "error",
-                "message": f"Error processing message: {str(e)}"
-            }))
+            logger.error(f"❌ Service initialization failed: {e}")
+        
+        yield
+        
+        # Shutdown
+        logger.info("🛑 Shutting down refactored FastAPI application...")
+        
+        try:
+            if self.service_container:
+                await self.service_container.cleanup()
+            logger.info("✅ Services cleaned up successfully")
+        except Exception as e:
+            logger.error(f"❌ Service cleanup failed: {e}")
+    
+    def _get_current_timestamp(self) -> str:
+        """Get current timestamp"""
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc).isoformat()
 
-    # Root endpoint that redirects to docs
-    @app.get("/")
-    async def root():
-        return RedirectResponse(url="/docs")
 
-    return app
+# Load environment variables
+load_dotenv()
 
+# Create application manager
+app_manager = ApplicationManager()
 
-app = create_application()
+# Create application
+app = app_manager.create_application()
 
 
 if __name__ == "__main__":
     uvicorn.run(
-        "app.main:app",
+        "app.main_refactored:app",
         host="0.0.0.0",
         port=8000,
         reload=True,
         log_level="info",
-    ) 
+    )

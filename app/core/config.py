@@ -6,7 +6,7 @@ import os
 
 class Settings(BaseSettings):
     # Application settings
-    PROJECT_NAME: str = "FastAPI Backend"
+    PROJECT_NAME: str = "D-ID Talking Head"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     
     # CORS settings
-    ALLOWED_HOSTS: List[str] = ["*"]
+    ALLOWED_HOSTS: str = "http://localhost:3000,http://localhost:3001,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,testserver,localhost,localhost:3001"
     
     # Database settings
     DATABASE_URL: Optional[str] = None
@@ -36,17 +36,54 @@ class Settings(BaseSettings):
     ELEVENLABS_API_KEY: Optional[str] = None
     ELEVENLABS_BASE_URL: str = "https://api.elevenlabs.io/v1"
     ELEVENLABS_DEFAULT_VOICE_ID: str = "21m00Tcm4TlvDq8ikWAM"
+    ELEVENLABS_DEFAULT_MODEL: str = "eleven_multilingual_v2"
+    ELEVENLABS_STS_MODEL: str = "eleven_multilingual_sts_v2"
     
     # D-ID API Settings
     D_ID_API_KEY: Optional[str] = None
     D_ID_BASE_URL: str = "https://api.d-id.com"
     D_ID_DEFAULT_PRESENTER_ID: str = "bank://lively/driver-05"
+    D_ID_DEFAULT_DRIVER_URL: str = "bank://lively/"
     
     # Cloudinary Configuration
     CLOUDINARY_URL: Optional[str] = None
     
     # Client URL
     CLIENT_URL: str = "http://localhost:3000"
+    
+    # Frontend URLs
+    FRONTEND_URL: str = "http://localhost:5173"
+    FRONTEND_DEV_URLS: str = "http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176"
+    
+    # Default voice settings
+    DEFAULT_VOICE_ID: str = "21m00Tcm4TlvDq8ikWAM"
+    DEFAULT_VOICE_NAME: str = "Rachel"
+    DEFAULT_VOICE_DESCRIPTION: str = "Женский голос, теплый и дружелюбный"
+    
+    # Fallback voices
+    FALLBACK_VOICES: str = '[{"voice_id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel", "description": "Женский голос, теплый и дружелюбный"}, {"voice_id": "AZnzlk1XvdvUeBnXmlld", "name": "Domi", "description": "Женский голос, четкий и профессиональный"}, {"voice_id": "EXAVITQu4vr4xnSDxMaL", "name": "Bella", "description": "Женский голос, мягкий и естественный"}, {"voice_id": "ErXwobaYiN019PkySvjV", "name": "Antoni", "description": "Мужской голос, глубокий и авторитетный"}, {"voice_id": "MF3mGyEYCl7XYWbV9V6O", "name": "Elli", "description": "Женский голос, молодой и энергичный"}, {"voice_id": "VR6AewLTigWG4xSOukaG", "name": "Josh", "description": "Мужской голос, дружелюбный и доступный"}, {"voice_id": "pNInz6obpgDQGcFmaJgB", "name": "Adam", "description": "Мужской голос, нейтральный и универсальный"}, {"voice_id": "yoZ06aMxZJJ28mfd3POQ", "name": "Sam", "description": "Мужской голос, уверенный и профессиональный"}]'
+    
+    # Audio settings
+    AUDIO_SAMPLE_RATE: int = 44100
+    AUDIO_BITRATE: str = "128k"
+    AUDIO_FORMAT: str = "mp3"
+    
+    # WebRTC settings
+    WEBRTC_ICE_SERVERS: str = "stun:stun.cloudflare.com:3478"
+    WEBRTC_TIMEOUT: int = 30
+    
+    # Streaming settings
+    STREAMING_TIMEOUT: int = 60
+    STREAMING_MAX_RETRIES: int = 3
+    
+    # File upload settings
+    MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
+    ALLOWED_IMAGE_TYPES: str = "image/jpeg,image/png,image/webp"
+    ALLOWED_AUDIO_TYPES: str = "audio/mpeg,audio/wav,audio/webm,audio/ogg"
+    
+    # Logging settings
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
@@ -65,14 +102,74 @@ class Settings(BaseSettings):
             return secrets.token_urlsafe(32)
         return v
     
-    @field_validator("ALLOWED_HOSTS", mode="before")
+    @field_validator("ALLOWED_HOSTS", mode="after")
     @classmethod
-    def assemble_cors_origins(cls, v):
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
-            return v
-        raise ValueError(v)
+    def assemble_cors_origins(cls, v: str) -> List[str]:
+        if v.strip() == "":
+            return ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176", "testserver", "localhost", "localhost:3001"]
+        return [i.strip() for i in v.split(",")]
+    
+    @field_validator("FALLBACK_VOICES", mode="after")
+    @classmethod
+    def parse_fallback_voices(cls, v: str) -> List[dict]:
+        """Parse fallback voices from environment variable"""
+        import json
+        if v.strip() == "":
+            return [
+                {"voice_id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel", "description": "Женский голос, теплый и дружелюбный"},
+                {"voice_id": "AZnzlk1XvdvUeBnXmlld", "name": "Domi", "description": "Женский голос, четкий и профессиональный"},
+                {"voice_id": "EXAVITQu4vr4xnSDxMaL", "name": "Bella", "description": "Женский голос, мягкий и естественный"},
+                {"voice_id": "ErXwobaYiN019PkySvjV", "name": "Antoni", "description": "Мужской голос, глубокий и авторитетный"},
+                {"voice_id": "MF3mGyEYCl7XYWbV9V6O", "name": "Elli", "description": "Женский голос, молодой и энергичный"},
+                {"voice_id": "VR6AewLTigWG4xSOukaG", "name": "Josh", "description": "Мужской голос, дружелюбный и доступный"},
+                {"voice_id": "pNInz6obpgDQGcFmaJgB", "name": "Adam", "description": "Мужской голос, нейтральный и универсальный"},
+                {"voice_id": "yoZ06aMxZJJ28mfd3POQ", "name": "Sam", "description": "Мужской голос, уверенный и профессиональный"}
+            ]
+        try:
+            return json.loads(v)
+        except json.JSONDecodeError:
+            return [
+                {"voice_id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel", "description": "Женский голос, теплый и дружелюбный"},
+                {"voice_id": "AZnzlk1XvdvUeBnXmlld", "name": "Domi", "description": "Женский голос, четкий и профессиональный"},
+                {"voice_id": "EXAVITQu4vr4xnSDxMaL", "name": "Bella", "description": "Женский голос, мягкий и естественный"},
+                {"voice_id": "ErXwobaYiN019PkySvjV", "name": "Antoni", "description": "Мужской голос, глубокий и авторитетный"},
+                {"voice_id": "MF3mGyEYCl7XYWbV9V6O", "name": "Elli", "description": "Женский голос, молодой и энергичный"},
+                {"voice_id": "VR6AewLTigWG4xSOukaG", "name": "Josh", "description": "Мужской голос, дружелюбный и доступный"},
+                {"voice_id": "pNInz6obpgDQGcFmaJgB", "name": "Adam", "description": "Мужской голос, нейтральный и универсальный"},
+                {"voice_id": "yoZ06aMxZJJ28mfd3POQ", "name": "Sam", "description": "Мужской голос, уверенный и профессиональный"}
+            ]
+    
+    @field_validator("FRONTEND_DEV_URLS", mode="after")
+    @classmethod
+    def parse_frontend_dev_urls(cls, v: str) -> List[str]:
+        """Parse frontend dev URLs from environment variable"""
+        if v.strip() == "":
+            return ["http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176"]
+        return [i.strip() for i in v.split(",")]
+    
+    @field_validator("WEBRTC_ICE_SERVERS", mode="after")
+    @classmethod
+    def parse_webrtc_ice_servers(cls, v: str) -> List[str]:
+        """Parse WebRTC ICE servers from environment variable"""
+        if v.strip() == "":
+            return ["stun:stun.cloudflare.com:3478"]
+        return [i.strip() for i in v.split(",")]
+    
+    @field_validator("ALLOWED_IMAGE_TYPES", mode="after")
+    @classmethod
+    def parse_allowed_image_types(cls, v: str) -> List[str]:
+        """Parse allowed image types from environment variable"""
+        if v.strip() == "":
+            return ["image/jpeg", "image/png", "image/webp"]
+        return [i.strip() for i in v.split(",")]
+    
+    @field_validator("ALLOWED_AUDIO_TYPES", mode="after")
+    @classmethod
+    def parse_allowed_audio_types(cls, v: str) -> List[str]:
+        """Parse allowed audio types from environment variable"""
+        if v.strip() == "":
+            return ["audio/mpeg", "audio/wav", "audio/webm", "audio/ogg"]
+        return [i.strip() for i in v.split(",")]
     
     def is_elevenlabs_configured(self) -> bool:
         """Проверка конфигурации ElevenLabs"""

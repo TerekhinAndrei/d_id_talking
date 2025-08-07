@@ -9,10 +9,7 @@ from .elevenlabs_service import (
     ElevenLabsService,
     ElevenLabsServiceError,
     ElevenLabsConfigurationError,
-    ElevenLabsAPIError,
-    VoiceSettings,
-    SpeechToSpeechRequest,
-    Voice
+    ElevenLabsAPIError
 )
 
 # D-ID Service
@@ -21,26 +18,26 @@ from .d_id_service import (
     DIdServiceError,
     DIdConfigurationError,
     DIdAPIError,
-    DIdVideoRequest,
-    DIdVideoResponse,
-    DIdStatus,
     DIdModel,
     DIdScriptType,
     DIdProviderType,
-    DIdExpression,
     DIdScript,
-    DIdExpressionConfig,
-    DIdDriverExpressions,
     DIdConfig
 )
 
 # Storage Service
 from .storage_service import (
-    StorageService,
+    LocalStorageService,
+    CloudinaryStorageService,
     StorageServiceError,
     StorageConfigurationError,
-    StorageUploadError,
-    UploadResult
+    StorageAPIError,
+    create_storage_service
+)
+
+# WebRTC Service
+from .webrtc_service import (
+    WebRTCService
 )
 
 __all__ = [
@@ -49,31 +46,26 @@ __all__ = [
     "ElevenLabsServiceError", 
     "ElevenLabsConfigurationError",
     "ElevenLabsAPIError",
-    "VoiceSettings",
-    "SpeechToSpeechRequest",
-    "Voice",
     
     # D-ID
     "DIdService",
     "DIdServiceError",
     "DIdConfigurationError", 
     "DIdAPIError",
-    "DIdVideoRequest",
-    "DIdVideoResponse",
-    "DIdStatus",
     "DIdModel",
     "DIdScriptType",
     "DIdProviderType",
-    "DIdExpression",
     "DIdScript",
-    "DIdExpressionConfig",
-    "DIdDriverExpressions",
     "DIdConfig",
     
     # Storage
-    "StorageService",
+    "LocalStorageService",
+    "CloudinaryStorageService",
     "StorageServiceError",
     "StorageConfigurationError",
-    "StorageUploadError",
-    "UploadResult"
+    "StorageAPIError",
+    "create_storage_service",
+    
+    # WebRTC
+    "WebRTCService"
 ] 

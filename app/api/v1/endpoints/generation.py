@@ -1,93 +1,73 @@
 """
-API endpoints для генерации видео
+Refactored Generation API endpoints following SOLID principles
 """
 
-import os
-import uuid
 import logging
-import subprocess
-import tempfile
 from typing import Dict, Any, Optional
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel, Field
 
-from app.services.elevenlabs_service import ElevenLabsService, ElevenLabsServiceError
-from app.services.d_id_service import DIdService, DIdServiceError
-from app.services.storage_service import StorageService, StorageServiceError
-from app.models.generation import TaskStatusResponse
+from app.core.interfaces import (
+    ITTSService, IVideoGenerator, IStorageService, ITaskManager, IAudioProcessor,
+    VideoRequest, VideoResponse, VideoStatus, AudioData, AudioFormat, VoiceSettings
+)
+from app.core.factory import get_service_container
+from app.core.base import ConfigurationProvider
 from app.core.config import settings as config
+from app.models.generation import TaskStatusResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Хранилище задач в памяти (в продакшене заменить на базу данных)
-tasks_storage: Dict[str, Dict[str, Any]] = {}
+
+class VideoGenerationRequest(BaseModel):
+    """Request model for video generation"""
+    voice_id: Optional[str] = Field(None, description="Voice ID for TTS")
+    voice_settings: Optional[VoiceSettings] = Field(None, description="Voice settings")
+    driver_url: Optional[str] = Field(None, description="D-ID driver URL")
+    webhook: Optional[str] = Field(None, description="Webhook URL")
 
 
-def convert_audio_to_mp3(input_path: str, output_path: str) -> bool:
-    """
-    Конвертирует аудио файл в MP3 формат с помощью ffmpeg
-    """
-    try:
-        # Проверяем, что ffmpeg доступен
-        result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True)
-        if result.returncode != 0:
-            logger.error("ffmpeg не найден в системе")
-            return False
-        
-        # Конвертируем аудио в MP3
-        cmd = [
-            'ffmpeg', '-i', input_path,
-            '-acodec', 'libmp3lame',
-            '-ab', '128k',
-            '-ar', '44100',
-            '-y',  # Перезаписывать выходной файл
-            output_path
-        ]
-        
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            logger.info(f"Аудио успешно сконвертировано: {input_path} -> {output_path}")
-            return True
-        else:
-            logger.error(f"Ошибка конвертации аудио: {result.stderr}")
-            return False
-            
-    except Exception as e:
-        logger.error(f"Ошибка при конвертации аудио: {e}")
-        return False
+class VideoGenerationResponse(BaseModel):
+    """Response model for video generation"""
+    task_id: str
+    status: VideoStatus
+    message: str
 
 
-def get_audio_format(file_path: str) -> str:
-    """
-    Определяет формат аудио файла
-    """
-    try:
-        cmd = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', file_path]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            import json
-            data = json.loads(result.stdout)
-            format_name = data.get('format', {}).get('format_name', '').split(',')[0]
-            return format_name
-        else:
-            # Если ffprobe не работает, определяем по расширению
-            ext = os.path.splitext(file_path)[1].lower()
-            if ext == '.mp3':
-                return 'mp3'
-            elif ext == '.wav':
-                return 'wav'
-            elif ext == '.webm':
-                return 'webm'
-            elif ext == '.ogg':
-                return 'ogg'
-            else:
-                return 'unknown'
-    except Exception as e:
-        logger.error(f"Ошибка определения формата аудио: {e}")
-        return 'unknown'
+class VoiceResponse(BaseModel):
+    """Response model for voice information"""
+    voice_id: str
+    name: str
+    category: str
+    description: str
+
+
+class TTSRequest(BaseModel):
+    """Request model for text-to-speech"""
+    text: str = Field(..., description="Text to convert to speech")
+    voice_id: str = Field(..., description="Voice ID to use")
+    voice_settings: Optional[VoiceSettings] = Field(None, description="Voice settings")
+
+
+class PlayVoiceRequest(BaseModel):
+    """Request model for playing voice preview"""
+    voice_id: str = Field(..., description="Voice ID to play")
+    preview_text: Optional[str] = Field("Привет! Это пример голоса.", description="Text to preview")
+
+
+def get_services():
+    """Dependency injection for services"""
+    config_provider = ConfigurationProvider(config)
+    container = get_service_container(config_provider)
+    return {
+        "tts_service": container.get_tts_service(),
+        "video_generator": container.get_video_generator(),
+        "storage_service": container.get_storage_service(),
+        "task_manager": container.get_task_manager(),
+        "audio_processor": container.get_audio_processor(),
+        "config_provider": config_provider
+    }
 
 
 @router.post("/generate")
@@ -95,405 +75,528 @@ async def generate_video(
     image_file: UploadFile = File(...),
     audio_file: UploadFile = File(...),
     voice_id: Optional[str] = Form(None),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    services: Dict[str, Any] = Depends(get_services)
 ) -> Dict[str, Any]:
     """
-    Создание задачи генерации видео
+    Generate video from image and audio files
     """
     try:
-        # 🔥 ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ВХОДНЫХ ДАННЫХ
-        print("🔥 ВХОДНЫЕ ДАННЫЕ ОТ ФРОНТЕНДА:")
-        print(f"   📸 Image filename: {image_file.filename}")
-        print(f"   📸 Image content_type: {image_file.content_type}")
-        print(f"   🎵 Audio filename: {audio_file.filename}")
-        print(f"   🎵 Audio content_type: {audio_file.content_type}")
-        print(f"   🎤 Voice ID: {voice_id}")
+        # Extract services
+        tts_service = services["tts_service"]
+        video_generator = services["video_generator"]
+        storage_service = services["storage_service"]
+        task_manager = services["task_manager"]
+        audio_processor = services["audio_processor"]
+        config_provider = services["config_provider"]
         
-        # Валидация файлов
-        if not image_file.filename or not audio_file.filename:
-            raise HTTPException(status_code=400, detail="Необходимо загрузить изображение и аудио файлы")
+        # Validate file types
+        if not _validate_file_type(image_file.filename, config_provider.get_setting("ALLOWED_IMAGE_TYPES", [])):
+            raise HTTPException(status_code=400, detail="Invalid image file type")
         
-        # Создаем уникальный ID задачи
-        task_id = str(uuid.uuid4())
+        if not _validate_file_type(audio_file.filename, config_provider.get_setting("ALLOWED_AUDIO_TYPES", [])):
+            raise HTTPException(status_code=400, detail="Invalid audio file type")
         
-        # Создаем папку для задачи
-        task_folder = f"uploads/{task_id}"
-        os.makedirs(task_folder, exist_ok=True)
+        # Read file data
+        image_data = await image_file.read()
+        audio_data = await audio_file.read()
         
-        # Сохраняем файлы локально
-        image_path = os.path.join(task_folder, image_file.filename)
-        original_audio_path = os.path.join(task_folder, audio_file.filename)
+        # Upload files to storage
+        image_metadata = await storage_service.upload_file(
+            file_data=image_data,
+            filename=image_file.filename,
+            content_type=image_file.content_type
+        )
         
-        with open(image_path, "wb") as f:
-            f.write(await image_file.read())
+        audio_metadata = await storage_service.upload_file(
+            file_data=audio_data,
+            filename=audio_file.filename,
+            content_type=audio_file.content_type
+        )
         
-        with open(original_audio_path, "wb") as f:
-            f.write(await audio_file.read())
+        # Create audio data object
+        audio_format = _get_audio_format_from_filename(audio_file.filename)
+        audio_data_obj = AudioData(
+            data=audio_data,
+            format=audio_format,
+            sample_rate=44100,
+            bitrate="128k"
+        )
         
-        # 🔥 ПРОВЕРЯЕМ РАЗМЕРЫ ФАЙЛОВ
-        image_size = os.path.getsize(image_path)
-        audio_size = os.path.getsize(original_audio_path)
-        print(f"🔥 РАЗМЕРЫ ФАЙЛОВ:")
-        print(f"   📸 Изображение: {image_size} байт")
-        print(f"   🎵 Аудио: {audio_size} байт")
+        # Create video request
+        video_request = VideoRequest(
+            image_url=image_metadata.url,
+            audio_data=audio_data_obj,
+            driver_url=None,  # Use default
+            webhook=None,
+            config=None
+        )
         
-        # Проверяем минимальный размер аудио
-        if audio_size < 1000:  # Меньше 1KB
-            print(f"⚠️  ВНИМАНИЕ: Аудио файл очень маленький ({audio_size} байт)!")
-        elif audio_size < 10000:  # Меньше 10KB
-            print(f"⚠️  ВНИМАНИЕ: Аудио файл довольно маленький ({audio_size} байт)")
-        else:
-            print(f"✅ Аудио файл нормального размера ({audio_size} байт)")
+        # Create task
+        task_id = await task_manager.create_task(video_request)
         
-        # Конвертируем аудио в MP3 для совместимости с ElevenLabs
-        audio_format = get_audio_format(original_audio_path)
-        logger.info(f"Определен формат аудио: {audio_format}")
-        
-        if audio_format != 'mp3':
-            logger.info(f"Конвертируем аудио из {audio_format} в MP3...")
-            converted_audio_path = os.path.join(task_folder, "converted_audio.mp3")
-            
-            if convert_audio_to_mp3(original_audio_path, converted_audio_path):
-                audio_path = converted_audio_path
-                logger.info(f"Аудио сконвертировано: {converted_audio_path}")
-            else:
-                logger.warning(f"Не удалось сконвертировать аудио, используем оригинал")
-                audio_path = original_audio_path
-        else:
-            audio_path = original_audio_path
-            logger.info("Аудио уже в MP3 формате")
-        
-        # Инициализируем задачу
-        tasks_storage[task_id] = {
-            "status": "processing",
-            "progress": 0,
-            "image_path": image_path,
-            "audio_path": audio_path,
-            "voice_id": voice_id or config.ELEVENLABS_DEFAULT_VOICE_ID,
-            "video_url": None,
-            "error_message": None,
-            "talk_id": None
-        }
-        
-        logger.info(f"Получены файлы: {image_file.filename} ({os.path.getsize(image_path)} байт) и {audio_file.filename} ({os.path.getsize(audio_path)} байт)")
-        logger.info(f"🎯 Создана новая задача обработки через ElevenLabs: {task_id}")
-        logger.info(f"   📸 Изображение: {image_file.filename}")
-        logger.info(f"   🎵 Аудио: {os.path.basename(audio_path)} ({os.path.getsize(audio_path)} байт)")
-        if audio_path != original_audio_path:
-            logger.info(f"   🔄 Аудио сконвертировано в MP3 для совместимости с ElevenLabs")
-        
-        # Добавляем принудительный вывод в консоль
-        print(f"🎯 Создана новая задача обработки через ElevenLabs: {task_id}")
-        print(f"   📸 Изображение: {image_file.filename}")
-        print(f"   🎵 Аудио: {os.path.basename(audio_path)} ({os.path.getsize(audio_path)} байт)")
-        
-        # Запускаем фоновую обработку
+        # Start background processing
         if background_tasks:
-            background_tasks.add_task(process_video_task, task_id)
+            background_tasks.add_task(
+                _process_video_task,
+                task_id=task_id,
+                video_request=video_request,
+                services=services
+            )
         
         return {
+            "success": True,
             "task_id": task_id,
-            "status": "processing",
-            "progress": 0
+            "message": "Video generation task created",
+            "estimated_duration": 30
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in generate_video: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.post("/tts")
+async def text_to_speech(
+    request: TTSRequest,
+    services: Dict[str, Any] = Depends(get_services)
+) -> Dict[str, Any]:
+    """
+    Convert text to speech using ElevenLabs
+    """
+    try:
+        tts_service = services["tts_service"]
+        
+        # Convert text to speech
+        audio_data = await tts_service.text_to_speech(
+            text=request.text,
+            voice_id=request.voice_id,
+            settings=request.voice_settings
+        )
+        
+        # ElevenLabs returns binary data, convert to base64 for transmission
+        import base64
+        try:
+            # audio_data.data is already bytes from ElevenLabs
+            audio_base64 = base64.b64encode(audio_data.data).decode('utf-8')
+            logger.info(f"Successfully encoded TTS audio data to base64, size: {len(audio_base64)} chars")
+        except Exception as e:
+            logger.error(f"Error encoding TTS audio data to base64: {e}")
+            raise HTTPException(status_code=500, detail="Failed to encode audio data")
+        
+        return {
+            "success": True,
+            "audio_data": audio_base64,
+            "format": audio_data.format.value if hasattr(audio_data.format, 'value') else 'mp3',
+            "sample_rate": audio_data.sample_rate,
+            "bitrate": audio_data.bitrate,
+            "message": "Text converted to speech successfully"
         }
         
     except Exception as e:
-        logger.error(f"Ошибка создания задачи: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка создания задачи: {str(e)}")
+        logger.error(f"Error in text_to_speech: {e}")
+        raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
 
 
-async def process_video_task(task_id: str):
+@router.post("/sts")
+async def speech_to_speech(
+    audio: UploadFile = File(...),
+    voice_id: str = Form(...),
+    voice_settings: Optional[str] = Form(None),
+    services: Dict[str, Any] = Depends(get_services)
+) -> Dict[str, Any]:
     """
-    Фоновая обработка задачи генерации видео
+    Convert speech to speech using ElevenLabs
     """
     try:
-        task = tasks_storage.get(task_id)
-        if not task:
-            logger.error(f"Задача {task_id} не найдена")
-            return
+        tts_service = services["tts_service"]
         
-        # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ЗАДАЧИ
-        print(f"[{task_id}] 🔥 НАЧАЛО ОБРАБОТКИ ЗАДАЧИ:")
-        print(f"[{task_id}]   Task ID: {task_id}")
-        print(f"[{task_id}]   Image path: {task.get('image_path', 'N/A')}")
-        print(f"[{task_id}]   Audio path: {task.get('audio_path', 'N/A')}")
-        print(f"[{task_id}]   Voice ID: {task.get('voice_id', 'N/A')}")
-        print(f"[{task_id}]   Status: {task.get('status', 'N/A')}")
+        # Parse voice settings if provided
+        settings = None
+        if voice_settings:
+            import json
+            settings = VoiceSettings(**json.loads(voice_settings))
         
-        print(f"[{task_id}] Запускаю обработку через ElevenLabs Speech to Speech...")
+        # Read audio file
+        audio_data_bytes = await audio.read()
         
-        # Шаг 1: Загрузка файлов в облачное хранилище
-        print(f"[{task_id}] Шаг 1: Загрузка файлов в облачное хранилище...")
-        task["progress"] = 10
+        # Create audio data object
+        audio_format = _get_audio_format_from_filename(audio.filename)
+        audio_data_obj = AudioData(
+            data=audio_data_bytes,
+            format=audio_format,
+            sample_rate=44100,
+            bitrate="128k"
+        )
         
+        # Convert speech to speech
+        result_audio = await tts_service.speech_to_speech(
+            audio_data=audio_data_obj,
+            voice_id=voice_id,
+            settings=settings
+        )
+        
+        # ElevenLabs returns binary data, convert to base64 for transmission
+        import base64
         try:
-            print(f"[{task_id}] 🔥 СОЗДАНИЕ STORAGE SERVICE...")
-            logger.info(f"[{task_id}] 🔥 СОЗДАНИЕ STORAGE SERVICE...")
-            storage_service = StorageService()
-            print(f"[{task_id}] ✅ STORAGE SERVICE СОЗДАН")
-            logger.info(f"[{task_id}] ✅ STORAGE SERVICE СОЗДАН")
-            
-            # Загружаем изображение
-            print(f"[{task_id}] 🔥 ОТКРЫВАЕМ ИЗОБРАЖЕНИЕ: {task['image_path']}")
-            logger.info(f"[{task_id}] 🔥 ОТКРЫВАЕМ ИЗОБРАЖЕНИЕ: {task['image_path']}")
-            with open(task["image_path"], "rb") as f:
-                image_data = f.read()
-            print(f"[{task_id}] ✅ ИЗОБРАЖЕНИЕ ПРОЧИТАНО: {len(image_data)} байт")
-            logger.info(f"[{task_id}] ✅ ИЗОБРАЖЕНИЕ ПРОЧИТАНО: {len(image_data)} байт")
-            
-            print(f"[{task_id}] 🔥 ЗАГРУЖАЕМ ИЗОБРАЖЕНИЕ В CLOUDINARY...")
-            logger.info(f"[{task_id}] 🔥 ЗАГРУЖАЕМ ИЗОБРАЖЕНИЕ В CLOUDINARY...")
-            image_result = storage_service.upload_image(image_data, os.path.basename(task["image_path"]))
-            print(f"[{task_id}] ✅ ИЗОБРАЖЕНИЕ ЗАГРУЖЕНО: {image_result.public_url}")
-            logger.info(f"[{task_id}] ✅ ИЗОБРАЖЕНИЕ ЗАГРУЖЕНО: {image_result.public_url}")
-            
-            # Загружаем аудио
-            print(f"[{task_id}] 🔥 ОТКРЫВАЕМ АУДИО: {task['audio_path']}")
-            logger.info(f"[{task_id}] 🔥 ОТКРЫВАЕМ АУДИО: {task['audio_path']}")
-            with open(task["audio_path"], "rb") as f:
-                audio_data = f.read()
-            print(f"[{task_id}] ✅ АУДИО ПРОЧИТАНО: {len(audio_data)} байт")
-            logger.info(f"[{task_id}] ✅ АУДИО ПРОЧИТАНО: {len(audio_data)} байт")
-            
-            print(f"[{task_id}] 🔥 ЗАГРУЖАЕМ АУДИО В CLOUDINARY...")
-            logger.info(f"[{task_id}] 🔥 ЗАГРУЖАЕМ АУДИО В CLOUDINARY...")
-            audio_result = storage_service.upload_audio(audio_data, os.path.basename(task["audio_path"]))
-            print(f"[{task_id}] ✅ АУДИО ЗАГРУЖЕНО: {audio_result.public_url}")
-            logger.info(f"[{task_id}] ✅ АУДИО ЗАГРУЖЕНО: {audio_result.public_url}")
-            
-            # Проверяем, что URL доступен
-            print(f"[{task_id}] 🔥 ПРОВЕРЯЕМ ДОСТУПНОСТЬ URL АУДИО...")
-            logger.info(f"[{task_id}] 🔥 ПРОВЕРЯЕМ ДОСТУПНОСТЬ URL АУДИО...")
-            import requests
-            try:
-                test_response = requests.head(audio_result.public_url, timeout=10)
-                print(f"[{task_id}] ✅ URL АУДИО ДОСТУПЕН: {test_response.status_code}")
-                logger.info(f"[{task_id}] ✅ URL АУДИО ДОСТУПЕН: {test_response.status_code}")
-            except Exception as e:
-                print(f"[{task_id}] ⚠️ URL АУДИО НЕДОСТУПЕН: {e}")
-                logger.warning(f"[{task_id}] ⚠️ URL АУДИО НЕДОСТУПЕН: {e}")
-            
-            print(f"[{task_id}] 🔥 УСТАНАВЛИВАЕМ PROGRESS = 20")
-            logger.info(f"[{task_id}] 🔥 УСТАНАВЛИВАЕМ PROGRESS = 20")
-            task["progress"] = 20
-            print(f"[{task_id}] ✅ PROGRESS УСТАНОВЛЕН")
-            logger.info(f"[{task_id}] ✅ PROGRESS УСТАНОВЛЕН")
-            
-        except StorageServiceError as e:
-            logger.error(f"[{task_id}] Ошибка загрузки файлов в облако: {e}")
-            task["status"] = "failed"
-            task["error_message"] = f"Ошибка загрузки файлов: {str(e)}"
-            return
+            # result_audio.data is already bytes from ElevenLabs
+            audio_base64 = base64.b64encode(result_audio.data).decode('utf-8')
+            logger.info(f"Successfully encoded STS audio data to base64, size: {len(audio_base64)} chars")
+        except Exception as e:
+            logger.error(f"Error encoding STS audio data to base64: {e}")
+            raise HTTPException(status_code=500, detail="Failed to encode audio data")
         
-        # Шаг 2: Обработка аудио через ElevenLabs
-        print(f"[{task_id}] 🔥 ШАГ 2: ОБРАБОТКА АУДИО ЧЕРЕЗ ELEVENLABS...")
-        logger.info(f"[{task_id}] 🔥 ШАГ 2: ОБРАБОТКА АУДИО ЧЕРЕЗ ELEVENLABS...")
-        print(f"[{task_id}] 🔥 УСТАНАВЛИВАЕМ PROGRESS = 30")
-        logger.info(f"[{task_id}] 🔥 УСТАНАВЛИВАЕМ PROGRESS = 30")
-        task["progress"] = 30
-        print(f"[{task_id}] ✅ PROGRESS УСТАНОВЛЕН")
-        logger.info(f"[{task_id}] ✅ PROGRESS УСТАНОВЛЕН")
-        
-        try:
-            print(f"[{task_id}] 🔥 СОЗДАНИЕ ELEVENLABS SERVICE...")
-            logger.info(f"[{task_id}] 🔥 СОЗДАНИЕ ELEVENLABS SERVICE...")
-            elevenlabs_service = ElevenLabsService()
-            print(f"[{task_id}] ✅ ELEVENLABS SERVICE СОЗДАН")
-            logger.info(f"[{task_id}] ✅ ELEVENLABS SERVICE СОЗДАН")
-            
-            # Обрабатываем аудио через ElevenLabs
-            print(f"[{task_id}] 🔥 СОЗДАЕМ ПУТЬ ДЛЯ ОБРАБОТАННОГО АУДИО...")
-            logger.info(f"[{task_id}] 🔥 СОЗДАЕМ ПУТЬ ДЛЯ ОБРАБОТАННОГО АУДИО...")
-            processed_audio_path = os.path.join(os.path.dirname(task["audio_path"]), "processed_audio.mp3")
-            print(f"[{task_id}] ✅ ПУТЬ СОЗДАН: {processed_audio_path}")
-            logger.info(f"[{task_id}] ✅ ПУТЬ СОЗДАН: {processed_audio_path}")
-            
-            # Используем загруженное аудио из облака
-            print(f"[{task_id}] 🔥 ВЫЗЫВАЕМ ELEVENLABS SPEECH TO SPEECH...")
-            logger.info(f"[{task_id}] 🔥 ВЫЗЫВАЕМ ELEVENLABS SPEECH TO SPEECH...")
-            print(f"[{task_id}]   Audio URL: {audio_result.public_url}")
-            logger.info(f"[{task_id}]   Audio URL: {audio_result.public_url}")
-            print(f"[{task_id}]   Voice ID: {task['voice_id']}")
-            logger.info(f"[{task_id}]   Voice ID: {task['voice_id']}")
-            processed_audio_data = elevenlabs_service.speech_to_speech_with_url(
-                audio_result.public_url, 
-                task["voice_id"]
-            )
-            print(f"[{task_id}] ✅ ELEVENLABS ОБРАБОТКА ЗАВЕРШЕНА: {len(processed_audio_data)} байт")
-            logger.info(f"[{task_id}] ✅ ELEVENLABS ОБРАБОТКА ЗАВЕРШЕНА: {len(processed_audio_data)} байт")
-            
-            # Сохраняем обработанное аудио
-            print(f"[{task_id}] 🔥 СОХРАНЯЕМ ОБРАБОТАННОЕ АУДИО...")
-            logger.info(f"[{task_id}] 🔥 СОХРАНЯЕМ ОБРАБОТАННОЕ АУДИО...")
-            with open(processed_audio_path, "wb") as f:
-                f.write(processed_audio_data)
-            print(f"[{task_id}] ✅ ОБРАБОТАННОЕ АУДИО СОХРАНЕНО: {processed_audio_path}")
-            logger.info(f"[{task_id}] ✅ ОБРАБОТАННОЕ АУДИО СОХРАНЕНО: {processed_audio_path}")
-            
-            print(f"[{task_id}] 🔥 УСТАНАВЛИВАЕМ PROGRESS = 50")
-            logger.info(f"[{task_id}] 🔥 УСТАНАВЛИВАЕМ PROGRESS = 50")
-            task["progress"] = 50
-            print(f"[{task_id}] ✅ PROGRESS УСТАНОВЛЕН")
-            logger.info(f"[{task_id}] ✅ PROGRESS УСТАНОВЛЕН")
-            print(f"[{task_id}] ✅ ОБРАБОТКА ЧЕРЕЗ ELEVENLABS ЗАВЕРШЕНА УСПЕШНО!")
-            logger.info(f"[{task_id}] ✅ ОБРАБОТКА ЧЕРЕЗ ELEVENLABS ЗАВЕРШЕНА УСПЕШНО!")
-            
-        except ElevenLabsServiceError as e:
-            logger.error(f"[{task_id}] Ошибка сервиса ElevenLabs: {e}")
-            task["status"] = "failed"
-            task["error_message"] = f"Speech to speech processing failed: {str(e)}"
-            return
-        
-        # Шаг 3: Создание видео через D-ID
-        logger.info(f"[{task_id}] 🔥 ШАГ 3: СОЗДАНИЕ ВИДЕО ЧЕРЕЗ D-ID...")
-        logger.info(f"[{task_id}] 🔥 УСТАНАВЛИВАЕМ PROGRESS = 60")
-        task["progress"] = 60
-        logger.info(f"[{task_id}] ✅ PROGRESS УСТАНОВЛЕН")
-        
-        try:
-            logger.info(f"[{task_id}] 🔥 СОЗДАНИЕ D-ID SERVICE...")
-            d_id_service = DIdService()
-            logger.info(f"[{task_id}] ✅ D-ID SERVICE СОЗДАН")
-            
-            # Загружаем обработанное аудио в облако
-            logger.info(f"[{task_id}] 🔥 ОТКРЫВАЕМ ОБРАБОТАННОЕ АУДИО: {processed_audio_path}")
-            with open(processed_audio_path, "rb") as f:
-                processed_audio_data = f.read()
-            logger.info(f"[{task_id}] ✅ ОБРАБОТАННОЕ АУДИО ПРОЧИТАНО: {len(processed_audio_data)} байт")
-            
-            logger.info(f"[{task_id}] 🔥 ЗАГРУЖАЕМ ОБРАБОТАННОЕ АУДИО В CLOUDINARY...")
-            processed_audio_result = storage_service.upload_audio(processed_audio_data, "processed_audio.mp3")
-            logger.info(f"[{task_id}] ✅ ОБРАБОТАННОЕ АУДИО ЗАГРУЖЕНО: {processed_audio_result.public_url}")
-            
-            # Создаем видео через D-ID с публичными URL
-            logger.info(f"[{task_id}] 🔥 ВЫЗОВ D-ID API:")
-            logger.info(f"[{task_id}]   Image URL: {image_result.public_url}")
-            logger.info(f"[{task_id}]   Audio URL: {processed_audio_result.public_url}")
-            logger.info(f"[{task_id}] 🔥 ВЫЗЫВАЕМ D-ID CREATE_TALK...")
-            talk_id = d_id_service.create_talk(image_result.public_url, processed_audio_result.public_url)
-            logger.info(f"[{task_id}] ✅ D-ID CREATE_TALK ВЫЗВАН")
-            task["talk_id"] = talk_id
-            logger.info(f"[{task_id}] ✅ TALK_ID УСТАНОВЛЕН: {talk_id}")
-            logger.info(f"[{task_id}] ✅ TALK СОЗДАН В D-ID: {talk_id}")
-            
-            task["progress"] = 70
-            
-        except DIdServiceError as e:
-            logger.error(f"[{task_id}] Ошибка сервиса D-ID: {e}")
-            task["status"] = "failed"
-            task["error_message"] = f"D-ID service error: {str(e)}"
-            return
-        
-        # Шаг 4: Ожидание завершения генерации видео
-        logger.info(f"[{task_id}] Шаг 4: Ожидание завершения генерации видео...")
-        task["progress"] = 80
-        
-        try:
-            # Опрашиваем статус D-ID
-            max_attempts = 30  # Максимум 5 минут (30 * 10 секунд)
-            attempt = 0
-            
-            while attempt < max_attempts:
-                status_info = d_id_service.get_talk_status(talk_id)
-                
-                if status_info["status"] == "done":
-                    task["video_url"] = status_info["result_url"]
-                    task["status"] = "completed"
-                    task["progress"] = 100
-                    logger.info(f"[{task_id}] Видео готово: {task['video_url']}")
-                    break
-                elif status_info["status"] == "failed":
-                    task["status"] = "failed"
-                    task["error_message"] = f"D-ID video generation failed: {status_info.get('error', 'Unknown error')}"
-                    logger.error(f"[{task_id}] Ошибка генерации видео в D-ID: {task['error_message']}")
-                    break
-                else:
-                    # Обновляем прогресс на основе статуса
-                    if status_info["status"] == "created":
-                        task["progress"] = 85
-                    elif status_info["status"] == "started":
-                        task["progress"] = 90
-                    
-                    import asyncio
-                    await asyncio.sleep(10)  # Ждем 10 секунд
-                    attempt += 1
-            
-            if attempt >= max_attempts:
-                task["status"] = "failed"
-                task["error_message"] = "Timeout waiting for video generation"
-                logger.error(f"[{task_id}] Таймаут ожидания генерации видео")
-            
-        except DIdServiceError as e:
-            logger.error(f"[{task_id}] Ошибка получения статуса D-ID: {e}")
-            task["status"] = "failed"
-            task["error_message"] = f"Error getting D-ID status: {str(e)}"
-            return
-        
-        logger.info(f"[{task_id}] Обработка задачи завершена успешно!")
+        return {
+            "success": True,
+            "audio_data": audio_base64,
+            "format": result_audio.format.value if hasattr(result_audio.format, 'value') else 'mp3',
+            "sample_rate": result_audio.sample_rate,
+            "bitrate": result_audio.bitrate,
+            "message": "Speech converted successfully"
+        }
         
     except Exception as e:
-        logger.error(f"[{task_id}] Неожиданная ошибка при обработке задачи: {e}")
-        if task_id in tasks_storage:
-            tasks_storage[task_id]["status"] = "failed"
-            tasks_storage[task_id]["error_message"] = f"Unexpected error: {str(e)}"
+        logger.error(f"Error in speech_to_speech: {e}")
+        raise HTTPException(status_code=500, detail=f"STS failed: {str(e)}")
+
+
+@router.post("/play-voice")
+async def play_voice(
+    request: PlayVoiceRequest,
+    services: Dict[str, Any] = Depends(get_services)
+) -> Dict[str, Any]:
+    """
+    Play voice preview using ElevenLabs
+    """
+    try:
+        tts_service = services["tts_service"]
+        
+        # Validate input
+        if not request.voice_id:
+            raise HTTPException(status_code=400, detail="Voice ID is required")
+        
+        if not request.preview_text or not request.preview_text.strip():
+            raise HTTPException(status_code=400, detail="Preview text is required")
+        
+        logger.info(f"Generating voice preview for voice {request.voice_id}")
+        
+        # Convert preview text to speech
+        audio_data = await tts_service.text_to_speech(
+            text=request.preview_text,
+            voice_id=request.voice_id,
+            settings=None  # Use default settings for preview
+        )
+        
+        # Validate audio data
+        if not audio_data or not audio_data.data:
+            raise HTTPException(status_code=500, detail="Failed to generate audio data")
+        
+        # ElevenLabs returns binary data, convert to base64 for transmission
+        import base64
+        try:
+            # audio_data.data is already bytes from ElevenLabs
+            audio_base64 = base64.b64encode(audio_data.data).decode('utf-8')
+            logger.info(f"Successfully encoded audio data to base64, size: {len(audio_base64)} chars")
+        except Exception as e:
+            logger.error(f"Error encoding audio data to base64: {e}")
+            raise HTTPException(status_code=500, detail="Failed to encode audio data")
+        
+        # Validate base64 output
+        if not audio_base64:
+            raise HTTPException(status_code=500, detail="Generated audio data is empty")
+        
+        logger.info(f"Successfully generated voice preview for voice {request.voice_id}")
+        
+        return {
+            "success": True,
+            "audio_data": audio_base64,
+            "format": audio_data.format.value if hasattr(audio_data.format, 'value') else 'mp3',
+            "sample_rate": audio_data.sample_rate,
+            "bitrate": audio_data.bitrate,
+            "message": "Voice preview generated successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in play_voice: {e}")
+        raise HTTPException(status_code=500, detail=f"Voice preview failed: {str(e)}")
+
+
+@router.get("/test-auth")
+async def test_elevenlabs_auth(
+    services: Dict[str, Any] = Depends(get_services)
+) -> Dict[str, Any]:
+    """
+    Test ElevenLabs authentication
+    """
+    try:
+        tts_service = services["tts_service"]
+        
+        # Test authentication
+        auth_result = await tts_service.test_authentication()
+        
+        return {
+            "success": auth_result["status"] == "success",
+            "data": auth_result,
+            "message": auth_result["message"]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in test_elevenlabs_auth: {e}")
+        return {
+            "success": False,
+            "data": {
+                "status": "error",
+                "message": f"Authentication test failed: {str(e)}",
+                "timestamp": "2024-01-01T00:00:00Z"
+            },
+            "message": f"Authentication test failed: {str(e)}"
+        }
 
 
 @router.get("/status/{task_id}")
-async def get_task_status(task_id: str) -> TaskStatusResponse:
+async def get_task_status(
+    task_id: str,
+    services: Dict[str, Any] = Depends(get_services)
+) -> Dict[str, Any]:
     """
-    Получение статуса задачи
+    Get task status
     """
-    task = tasks_storage.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    return TaskStatusResponse(
-        task_id=task_id,
-        status=task["status"],
-        video_url=task["video_url"],
-        error_message=task["error_message"],
-        progress=task["progress"],
-        talk_id=task["talk_id"]
-    )
+    try:
+        task_manager = services["task_manager"]
+        
+        task = await task_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        return {
+            "success": True,
+            "data": {
+                "id": task.task_id,
+                "status": task.status.value,
+                "progress": 100.0 if task.status == VideoStatus.COMPLETED else 0.0,
+                "result_url": task.response.result_url if task.response else None,
+                "created_at": task.created_at.isoformat() if hasattr(task, 'created_at') else None,
+                "updated_at": task.updated_at.isoformat() if hasattr(task, 'updated_at') else None
+            },
+            "message": "Task completed successfully" if task.status == VideoStatus.COMPLETED else "Task status retrieved successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_task_status: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get("/voices")
-async def get_voices():
+async def get_voices(
+    services: Dict[str, Any] = Depends(get_services)
+) -> Dict[str, Any]:
     """
-    Получение списка доступных голосов ElevenLabs
+    Get available voices
     """
     try:
-        elevenlabs_service = ElevenLabsService()
-        voices = elevenlabs_service.get_available_voices()
-        return {"voices": voices}
-    except ElevenLabsServiceError as e:
-        logger.error(f"Error fetching voices: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching voices: {str(e)}")
+        tts_service = services["tts_service"]
+        
+        voices = await tts_service.get_available_voices()
+        
+        voice_responses = [
+            VoiceResponse(
+                voice_id=voice.voice_id,
+                name=voice.name,
+                category=voice.category,
+                description=voice.description
+            )
+            for voice in voices
+        ]
+        
+        return {
+            "success": True,
+            "voices": [voice.dict() for voice in voice_responses]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in get_voices: {e}")
+        return {
+            "success": False,
+            "voices": [],
+            "error": f"Internal server error: {str(e)}"
+        }
 
 
 @router.get("/voices/validate/{voice_id}")
-async def validate_voice(voice_id: str):
+async def validate_voice(
+    voice_id: str,
+    services: Dict[str, Any] = Depends(get_services)
+) -> Dict[str, Any]:
     """
-    Валидация ID голоса
+    Validate voice ID
     """
     try:
-        elevenlabs_service = ElevenLabsService()
-        is_valid = elevenlabs_service.validate_voice_id(voice_id)
-        return {"valid": is_valid}
-    except ElevenLabsServiceError as e:
-        logger.error(f"Error validating voice: {e}")
-        raise HTTPException(status_code=500, detail=f"Error validating voice: {str(e)}")
+        tts_service = services["tts_service"]
+        
+        is_valid = await tts_service.validate_voice_id(voice_id)
+        
+        return {
+            "success": True,
+            "valid": is_valid,
+            "voice": {
+                "voice_id": voice_id,
+                "name": "Unknown",
+                "category": "unknown"
+            } if is_valid else None,
+            "message": "Voice validation completed"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in validate_voice: {e}")
+        return {
+            "success": False,
+            "valid": False,
+            "error": f"Internal server error: {str(e)}"
+        }
 
 
 @router.get("/voices/{voice_id}")
-async def get_voice(voice_id: str):
+async def get_voice(
+    voice_id: str,
+    services: Dict[str, Any] = Depends(get_services)
+) -> Dict[str, Any]:
     """
-    Получение информации о конкретном голосе
+    Get specific voice information
     """
     try:
-        elevenlabs_service = ElevenLabsService()
-        voice = elevenlabs_service.get_voice_by_id(voice_id)
-        return voice
-    except ElevenLabsServiceError as e:
-        logger.error(f"Error fetching voice: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching voice: {str(e)}") 
+        tts_service = services["tts_service"]
+        
+        # Validate voice first
+        is_valid = await tts_service.validate_voice_id(voice_id)
+        if not is_valid:
+            return {
+                "success": False,
+                "voice": None,
+                "error": "Voice not found"
+            }
+        
+        # Get all voices and find the specific one
+        voices = await tts_service.get_available_voices()
+        voice = next((v for v in voices if v.voice_id == voice_id), None)
+        
+        if not voice:
+            return {
+                "success": False,
+                "voice": None,
+                "error": "Voice not found"
+            }
+        
+        voice_response = VoiceResponse(
+            voice_id=voice.voice_id,
+            name=voice.name,
+            category=voice.category,
+            description=voice.description
+        )
+        
+        return {
+            "success": True,
+            "voice": voice_response.dict()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in get_voice: {e}")
+        return {
+            "success": False,
+            "voice": None,
+            "error": f"Internal server error: {str(e)}"
+        }
+
+
+async def _process_video_task(
+    task_id: str,
+    video_request: VideoRequest,
+    services: Dict[str, Any]
+):
+    """
+    Background task for processing video generation
+    """
+    try:
+        task_manager = services["task_manager"]
+        video_generator = services["video_generator"]
+        
+        # Update task status to processing
+        await task_manager.update_task_status(task_id, VideoStatus.PROCESSING)
+        
+        # Create video
+        video_id = await video_generator.create_video(video_request)
+        
+        # Poll for completion
+        max_attempts = 30  # 5 minutes with 10-second intervals
+        attempt = 0
+        
+        while attempt < max_attempts:
+            video_response = await video_generator.get_video_status(video_id)
+            
+            if video_response.status == VideoStatus.COMPLETED:
+                await task_manager.update_task_status(
+                    task_id, 
+                    VideoStatus.COMPLETED, 
+                    response=video_response
+                )
+                logger.info(f"Video generation completed for task {task_id}")
+                return
+            
+            elif video_response.status == VideoStatus.FAILED:
+                await task_manager.update_task_status(
+                    task_id, 
+                    VideoStatus.FAILED, 
+                    error_message=video_response.error_message
+                )
+                logger.error(f"Video generation failed for task {task_id}: {video_response.error_message}")
+                return
+            
+            # Wait before next poll
+            import asyncio
+            await asyncio.sleep(10)
+            attempt += 1
+        
+        # Timeout
+        await task_manager.update_task_status(
+            task_id, 
+            VideoStatus.FAILED, 
+            error_message="Video generation timed out"
+        )
+        logger.error(f"Video generation timed out for task {task_id}")
+        
+    except Exception as e:
+        logger.error(f"Error in _process_video_task: {e}")
+        await task_manager.update_task_status(
+            task_id, 
+            VideoStatus.FAILED, 
+            error_message=f"Processing error: {str(e)}"
+        )
+
+
+def _validate_file_type(filename: str, allowed_types: list) -> bool:
+    """Validate file type"""
+    if not filename:
+        return False
+    
+    import mimetypes
+    mime_type, _ = mimetypes.guess_type(filename)
+    return mime_type in allowed_types if mime_type else False
+
+
+def _get_audio_format_from_filename(filename: str) -> AudioFormat:
+    """Get audio format from filename"""
+    extension = filename.lower().split('.')[-1] if '.' in filename else ''
+    
+    format_map = {
+        'mp3': AudioFormat.MP3,
+        'wav': AudioFormat.WAV,
+        'webm': AudioFormat.WEBM,
+        'ogg': AudioFormat.OGG
+    }
+    
+    return format_map.get(extension, AudioFormat.MP3)

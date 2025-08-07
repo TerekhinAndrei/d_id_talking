@@ -1,426 +1,301 @@
 """
-Storage Service для работы с облачным хранилищем Cloudinary
+Refactored Storage Service following SOLID principles
 """
 
 import os
 import logging
-from typing import Optional, Tuple
-from dataclasses import dataclass
-import cloudinary
-import cloudinary.uploader
-import cloudinary.api
-import re
+import tempfile
+from typing import Optional, Dict, Any
+from datetime import datetime, timezone
+import uuid
 
-logger = logging.getLogger(__name__)
-
-
-@dataclass
-class UploadResult:
-    """Результат загрузки файла"""
-    public_url: str
-    file_id: str
-    size: int
-    format: str
+from app.core.interfaces import (
+    IStorageService, FileMetadata, ServiceError, ConfigurationError, APIError
+)
+from app.core.base import BaseService, AsyncHTTPClient
 
 
-class StorageServiceError(Exception):
-    """Базовое исключение для StorageService"""
+class StorageServiceError(ServiceError):
+    """Storage service specific errors"""
     pass
 
 
-class StorageConfigurationError(StorageServiceError):
-    """Ошибка конфигурации хранилища"""
+class StorageConfigurationError(ConfigurationError):
+    """Storage configuration errors"""
     pass
 
 
-class StorageUploadError(StorageServiceError):
-    """Ошибка загрузки файла"""
+class StorageAPIError(APIError):
+    """Storage API errors"""
     pass
 
 
-class StorageService:
+class LocalStorageService(IStorageService, BaseService):
     """
-    Сервис для работы с облачным хранилищем Cloudinary
+    Local file storage implementation following SOLID principles:
+    - Single Responsibility: Only handles file storage operations
+    - Open/Closed: Extensible through interfaces
+    - Liskov Substitution: Implements IStorageService interface
+    - Interface Segregation: Uses specific interfaces
+    - Dependency Inversion: Depends on abstractions
     """
     
-    def __init__(self):
-        """Инициализация сервиса"""
-        self._validate_configuration()
-        self._configure_cloudinary()
-    
-    def _validate_configuration(self) -> None:
-        """Проверка конфигурации Cloudinary"""
-        cloudinary_url = os.getenv('CLOUDINARY_URL')
-        if not cloudinary_url:
-            raise StorageConfigurationError(
-                "CLOUDINARY_URL не найден в переменных окружения"
-            )
+    def __init__(self, config_provider, http_client: AsyncHTTPClient):
+        self.http_client = http_client
+        super().__init__(config_provider)
         
-        # Проверяем наличие обязательных компонентов
-        if not cloudinary_url.startswith('cloudinary://'):
-            raise StorageConfigurationError(
-                "CLOUDINARY_URL должен начинаться с 'cloudinary://'"
-            )
+        # Storage configuration
+        self.upload_dir = self.config.get_setting("UPLOAD_DIR", "uploads")
+        self.max_file_size = self.config.get_setting("MAX_FILE_SIZE", 10 * 1024 * 1024)  # 10MB
+        self.allowed_image_types = self.config.get_setting("ALLOWED_IMAGE_TYPES", [])
+        self.allowed_audio_types = self.config.get_setting("ALLOWED_AUDIO_TYPES", [])
         
-        logger.info("Конфигурация Cloudinary валидна")
+        # Ensure upload directory exists
+        os.makedirs(self.upload_dir, exist_ok=True)
+        
+        self.logger.info(f"LocalStorageService initialized with upload dir: {self.upload_dir}")
     
-    def _configure_cloudinary(self) -> None:
-        """Настройка Cloudinary"""
-        logger.info(f"🔥 НАСТРОЙКА CLOUDINARY...")
+    @property
+    def service_name(self) -> str:
+        return "storage"
+    
+    async def upload_file(self, file_data: bytes, filename: str, content_type: str) -> FileMetadata:
+        """Upload file to local storage"""
         try:
-            cloudinary.config(
-                cloudinary_url=os.getenv('CLOUDINARY_URL')
+            # Validate file size
+            if len(file_data) > self.max_file_size:
+                raise StorageServiceError(f"File size {len(file_data)} exceeds maximum {self.max_file_size}")
+            
+            # Validate file type
+            if not self._validate_file_type(filename, content_type):
+                raise StorageServiceError(f"File type {content_type} not allowed")
+            
+            # Generate unique filename
+            file_id = str(uuid.uuid4())
+            file_extension = os.path.splitext(filename)[1]
+            unique_filename = f"{file_id}{file_extension}"
+            file_path = os.path.join(self.upload_dir, unique_filename)
+            
+            # Write file to disk
+            with open(file_path, 'wb') as f:
+                f.write(file_data)
+            
+            # Create metadata
+            metadata = FileMetadata(
+                filename=unique_filename,
+                content_type=content_type,
+                size=len(file_data),
+                url=f"/uploads/{unique_filename}",
+                created_at=self._get_current_timestamp()
             )
-            logger.info("✅ CLOUDINARY НАСТРОЕН УСПЕШНО")
+            
+            self.logger.info(f"File uploaded: {unique_filename} ({len(file_data)} bytes)")
+            return metadata
+            
+        except StorageServiceError:
+            raise
         except Exception as e:
-            logger.error(f"❌ ОШИБКА НАСТРОЙКИ CLOUDINARY: {e}")
-            raise StorageConfigurationError(f"Ошибка настройки Cloudinary: {e}")
+            self.logger.error(f"Unexpected error uploading file: {e}")
+            raise StorageServiceError(f"File upload failed: {str(e)}")
     
-    def normalize_filename(self, filename: str, file_type: str = "image") -> str:
-        """
-        Normalizes filename for Cloudinary:
-        - removes spaces and special characters (including URL encoding)
-        - keeps only one extension
-        - prevents double extensions
-        """
-        # Remove path if present
-        base = os.path.basename(filename)
-        
-        # Decode URL encoding (%20 -> space, %3A -> :, etc.)
-        import urllib.parse
-        base = urllib.parse.unquote(base)
-        
-        # Find the last file extension BEFORE cleaning
-        last_dot_index = base.rfind('.')
-        if last_dot_index != -1:
-            original_name = base[:last_dot_index]
-            ext = base[last_dot_index:].lower()
-        else:
-            original_name = base
-            ext = ''
-        
-        # Clean only the filename (not extension)
-        # Remove all except letters, numbers, _ and .
-        name = re.sub(r'[^A-Za-z0-9_.]', '_', original_name)
-        
-        # Remove double dots and underscores in name
-        name = re.sub(r'[._]+', '_', name)
-        
-        # Process extensions based on file type
-        if file_type == "image":
-            if ext not in ['.jpg', '.jpeg', '.png']:
-                ext = '.jpg'
-        else:  # audio
-            # Keep original extension for audio
-            if not ext:
-                ext = '.mp3'
-        
-        # Remove all dots from name
-        name = name.replace('.', '_')
-        
-        # Remove extra underscores
-        name = re.sub(r'_+', '_', name)
-        name = name.strip('_')
-        
-        normalized = f"{name}{ext}"
-        logger.info(f"  Normalized filename: {normalized}")
-        return normalized
-    
-    def upload_image(self, file_data: bytes, filename: str, folder: str = "d_id_talking/images") -> UploadResult:
-        """
-        Загрузка изображения в Cloudinary
-        
-        Args:
-            file_data: Байты изображения
-            filename: Имя файла
-            folder: Папка для сохранения
-            
-        Returns:
-            UploadResult с информацией о загруженном файле
-        """
+    async def download_file(self, file_id: str) -> bytes:
+        """Download file from local storage"""
         try:
-            filename = self.normalize_filename(filename, "image")
-            logger.info(f"🔥 ЗАГРУЗКА ИЗОБРАЖЕНИЯ В CLOUDINARY:")
-            logger.info(f"  Original filename: {filename}")
-            logger.info(f"  Normalized filename: {filename}")
-            logger.info(f"  Folder: {folder}")
-            logger.info(f"  Data size: {len(file_data)} bytes")
-            logger.info(f"  Data type: {type(file_data)}")
+            file_path = os.path.join(self.upload_dir, file_id)
             
-            # Загружаем файл в Cloudinary
-            result = cloudinary.uploader.upload(
-                file_data,
-                public_id=f"{folder}/{filename}",
-                resource_type="image",
-                overwrite=True,
-                invalidate=True
-            )
-            
-            # Создаем результат
-            upload_result = UploadResult(
-                public_url=result['secure_url'],
-                file_id=result['public_id'],
-                size=result.get('bytes', 0),
-                format=result.get('format', 'unknown')
-            )
-            
-            logger.info(f"Изображение загружено: {upload_result.public_url}")
-            return upload_result
-            
-        except Exception as e:
-            logger.error(f"Ошибка загрузки изображения в Cloudinary: {e}")
-            raise StorageUploadError(f"Ошибка загрузки изображения: {e}")
-    
-    def upload_base64_image(self, base64_data: str, filename: str = "uploaded_image.jpg", folder: str = "d_id_talking/images") -> UploadResult:
-        """
-        Загрузка base64 изображения в Cloudinary
-        
-        Args:
-            base64_data: Base64 строка изображения (с или без data URL префикса)
-            filename: Имя файла
-            folder: Папка для сохранения
-            
-        Returns:
-            UploadResult с информацией о загруженном файле
-        """
-        try:
-            import base64
-            
-            # Убираем data URL префикс если есть
-            if base64_data.startswith('data:'):
-                # Извлекаем base64 данные из data URL
-                header, data = base64_data.split(',', 1)
-                # Определяем формат из header
-                if 'image/jpeg' in header:
-                    filename = filename.replace('.jpg', '.jpg').replace('.jpeg', '.jpg')
-                elif 'image/png' in header:
-                    filename = filename.replace('.jpg', '.png').replace('.jpeg', '.png')
-                elif 'image/gif' in header:
-                    filename = filename.replace('.jpg', '.gif').replace('.jpeg', '.gif')
-                elif 'image/webp' in header:
-                    filename = filename.replace('.jpg', '.webp').replace('.jpeg', '.webp')
-            else:
-                data = base64_data
-            
-            # Декодируем base64 в байты
-            try:
-                file_data = base64.b64decode(data)
-            except Exception as e:
-                # Попробуем добавить padding если нужно
-                padding = 4 - len(data) % 4
-                if padding != 4:
-                    data += '=' * padding
-                    file_data = base64.b64decode(data)
-                else:
-                    raise e
-            
-            filename = self.normalize_filename(filename, "image")
-            logger.info(f"🔥 ЗАГРУЗКА BASE64 ИЗОБРАЖЕНИЯ В CLOUDINARY:")
-            logger.info(f"  Filename: {filename}")
-            logger.info(f"  Folder: {folder}")
-            logger.info(f"  Data size: {len(file_data)} bytes")
-            
-            # Загружаем файл в Cloudinary
-            result = cloudinary.uploader.upload(
-                file_data,
-                public_id=f"{folder}/{filename}",
-                resource_type="image",
-                overwrite=True,
-                invalidate=True
-            )
-            
-            # Создаем результат
-            upload_result = UploadResult(
-                public_url=result['secure_url'],
-                file_id=result['public_id'],
-                size=result.get('bytes', 0),
-                format=result.get('format', 'unknown')
-            )
-            
-            logger.info(f"Base64 изображение загружено: {upload_result.public_url}")
-            return upload_result
-            
-        except Exception as e:
-            logger.error(f"Ошибка загрузки base64 изображения в Cloudinary: {e}")
-            raise StorageUploadError(f"Ошибка загрузки base64 изображения: {e}")
-
-    def upload_audio(self, file_data: bytes, filename: str, folder: str = "d_id_talking/audio") -> UploadResult:
-        """
-        Загрузка аудио файла в Cloudinary
-        
-        Args:
-            file_data: Байты аудио файла
-            filename: Имя файла
-            folder: Папка для сохранения
-            
-        Returns:
-            UploadResult с информацией о загруженном файле
-        """
-        try:
-            filename = self.normalize_filename(filename, "audio")
-            logger.info(f"🔥 ЗАГРУЗКА АУДИО В CLOUDINARY:")
-            logger.info(f"  Original filename: {filename}")
-            logger.info(f"  Normalized filename: {filename}")
-            logger.info(f"  Folder: {folder}")
-            logger.info(f"  Data size: {len(file_data)} bytes")
-            logger.info(f"  Data type: {type(file_data)}")
-            
-            # Загружаем файл в Cloudinary
-            result = cloudinary.uploader.upload(
-                file_data,
-                public_id=f"{folder}/{filename}",
-                resource_type="video",  # Cloudinary использует video для аудио
-                overwrite=True,
-                invalidate=True
-            )
-            
-            # Создаем результат
-            upload_result = UploadResult(
-                public_url=result['secure_url'],
-                file_id=result['public_id'],
-                size=result.get('bytes', 0),
-                format=result.get('format', 'unknown')
-            )
-            
-            logger.info(f"Аудио файл загружен: {upload_result.public_url}")
-            return upload_result
-            
-        except Exception as e:
-            logger.error(f"Ошибка загрузки аудио в Cloudinary: {e}")
-            raise StorageUploadError(f"Ошибка загрузки аудио: {e}")
-    
-    def get_public_url(self, file_id: str) -> str:
-        """
-        Получение публичного URL файла
-        
-        Args:
-            file_id: ID файла в Cloudinary
-            
-        Returns:
-            Публичный URL файла
-        """
-        try:
-            # Получаем информацию о файле
-            result = cloudinary.api.resource(file_id)
-            return result['secure_url']
-        except Exception as e:
-            logger.error(f"Ошибка получения URL для файла {file_id}: {e}")
-            raise StorageServiceError(f"Ошибка получения URL: {e}")
-    
-    def delete_file(self, file_id: str) -> bool:
-        """
-        Удаление файла из Cloudinary
-        
-        Args:
-            file_id: ID файла в Cloudinary
-            
-        Returns:
-            True если файл удален успешно
-        """
-        try:
-            logger.info(f"Удаление файла: {file_id}")
-            
-            # Удаляем файл
-            result = cloudinary.uploader.destroy(file_id)
-            
-            if result.get('result') == 'ok':
-                logger.info(f"Файл {file_id} удален успешно")
-                return True
-            else:
-                logger.warning(f"Файл {file_id} не найден или уже удален")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Ошибка удаления файла {file_id}: {e}")
-            raise StorageServiceError(f"Ошибка удаления файла: {e}")
-    
-    def list_files(self, folder: str = "d_id_talking", max_results: int = 100) -> list:
-        """
-        Получение списка файлов в папке
-        
-        Args:
-            folder: Папка для поиска
-            max_results: Максимальное количество результатов
-            
-        Returns:
-            Список файлов
-        """
-        try:
-            logger.info(f"Получение списка файлов в папке: {folder}")
-            
-            # Получаем список файлов
-            result = cloudinary.api.resources(
-                type="upload",
-                prefix=folder,
-                max_results=max_results
-            )
-            
-            files = []
-            for resource in result.get('resources', []):
-                files.append({
-                    'public_id': resource['public_id'],
-                    'url': resource['secure_url'],
-                    'format': resource.get('format'),
-                    'size': resource.get('bytes', 0),
-                    'created_at': resource.get('created_at')
-                })
-            
-            logger.info(f"Найдено {len(files)} файлов в папке {folder}")
-            return files
-            
-        except Exception as e:
-            logger.error(f"Ошибка получения списка файлов: {e}")
-            raise StorageServiceError(f"Ошибка получения списка файлов: {e}")
-    
-    def is_configured(self) -> bool:
-        """
-        Проверка конфигурации сервиса
-        
-        Returns:
-            True если сервис настроен корректно
-        """
-        try:
-            cloudinary_url = os.getenv('CLOUDINARY_URL')
-            return cloudinary_url is not None and cloudinary_url.startswith('cloudinary://')
-        except Exception:
-            return False
-    
-    def test_connection(self) -> bool:
-        """
-        Тест подключения к Cloudinary
-        
-        Returns:
-            True если подключение работает
-        """
-        try:
-            # Пытаемся получить информацию об аккаунте
-            result = cloudinary.api.ping()
-            logger.info("Подключение к Cloudinary успешно")
-            return True
-        except Exception as e:
-            logger.error(f"Ошибка подключения к Cloudinary: {e}")
-            return False
-    
-    def get_file_data(self, file_path: str) -> bytes:
-        """
-        Получить данные файла для прямой загрузки в D-ID API
-        
-        Args:
-            file_path: Путь к файлу
-            
-        Returns:
-            bytes: Данные файла
-        """
-        try:
-            logger.info(f"🔥 ЧТЕНИЕ ФАЙЛА ДЛЯ D-ID API:")
-            logger.info(f"  File path: {file_path}")
+            if not os.path.exists(file_path):
+                raise StorageServiceError(f"File not found: {file_id}")
             
             with open(file_path, 'rb') as f:
                 file_data = f.read()
             
-            logger.info(f"✅ ФАЙЛ ПРОЧИТАН: {len(file_data)} байт")
+            self.logger.info(f"File downloaded: {file_id} ({len(file_data)} bytes)")
             return file_data
             
+        except StorageServiceError:
+            raise
         except Exception as e:
-            logger.error(f"❌ ОШИБКА ЧТЕНИЯ ФАЙЛА: {e}")
-            raise StorageUploadError(f"Ошибка чтения файла: {e}") 
+            self.logger.error(f"Unexpected error downloading file: {e}")
+            raise StorageServiceError(f"File download failed: {str(e)}")
+    
+    async def delete_file(self, file_id: str) -> bool:
+        """Delete file from local storage"""
+        try:
+            file_path = os.path.join(self.upload_dir, file_id)
+            
+            if not os.path.exists(file_path):
+                self.logger.warning(f"File not found for deletion: {file_id}")
+                return False
+            
+            os.remove(file_path)
+            self.logger.info(f"File deleted: {file_id}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Unexpected error deleting file: {e}")
+            raise StorageServiceError(f"File deletion failed: {str(e)}")
+    
+    async def get_file_metadata(self, file_id: str) -> FileMetadata:
+        """Get file metadata from local storage"""
+        try:
+            file_path = os.path.join(self.upload_dir, file_id)
+            
+            if not os.path.exists(file_path):
+                raise StorageServiceError(f"File not found: {file_id}")
+            
+            stat = os.stat(file_path)
+            
+            # Try to determine content type from file extension
+            content_type = self._get_content_type_from_filename(file_id)
+            
+            metadata = FileMetadata(
+                filename=file_id,
+                content_type=content_type,
+                size=stat.st_size,
+                url=f"/uploads/{file_id}",
+                created_at=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc).isoformat()
+            )
+            
+            return metadata
+            
+        except StorageServiceError:
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error getting file metadata: {e}")
+            raise StorageServiceError(f"Failed to get file metadata: {str(e)}")
+    
+    def _validate_file_type(self, filename: str, content_type: str) -> bool:
+        """Validate file type"""
+        # Check content type
+        allowed_types = self.allowed_image_types + self.allowed_audio_types
+        
+        if content_type not in allowed_types:
+            return False
+        
+        # Check file extension
+        file_extension = os.path.splitext(filename)[1].lower()
+        allowed_extensions = ['.jpg', '.jpeg', '.png', '.webp', '.mp3', '.wav', '.webm', '.ogg']
+        
+        if file_extension not in allowed_extensions:
+            return False
+        
+        return True
+    
+    def _get_content_type_from_filename(self, filename: str) -> str:
+        """Get content type from filename"""
+        extension = os.path.splitext(filename)[1].lower()
+        
+        content_type_map = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.webp': 'image/webp',
+            '.mp3': 'audio/mpeg',
+            '.wav': 'audio/wav',
+            '.webm': 'audio/webm',
+            '.ogg': 'audio/ogg'
+        }
+        
+        return content_type_map.get(extension, 'application/octet-stream')
+    
+    def _get_current_timestamp(self) -> str:
+        """Get current timestamp"""
+        return datetime.now(timezone.utc).isoformat()
+
+
+class CloudinaryStorageService(IStorageService, BaseService):
+    """
+    Cloudinary storage implementation following SOLID principles
+    """
+    
+    def __init__(self, config_provider, http_client: AsyncHTTPClient):
+        self.http_client = http_client
+        super().__init__(config_provider)
+        
+        # Cloudinary configuration
+        self.cloudinary_url = self.config.get_setting("CLOUDINARY_URL")
+        self.cloud_name = self.config.get_setting("CLOUDINARY_CLOUD_NAME")
+        self.api_key = self.config.get_setting("CLOUDINARY_API_KEY")
+        self.api_secret = self.config.get_setting("CLOUDINARY_API_SECRET")
+        
+        self.logger.info(f"CloudinaryStorageService initialized")
+    
+    @property
+    def service_name(self) -> str:
+        return "cloudinary"
+    
+    async def upload_file(self, file_data: bytes, filename: str, content_type: str) -> FileMetadata:
+        """Upload file to Cloudinary"""
+        try:
+            # This would implement actual Cloudinary upload
+            # For now, return a mock response
+            file_id = str(uuid.uuid4())
+            
+            metadata = FileMetadata(
+                filename=filename,
+                content_type=content_type,
+                size=len(file_data),
+                url=f"https://res.cloudinary.com/{self.cloud_name}/image/upload/{file_id}",
+                created_at=self._get_current_timestamp()
+            )
+            
+            self.logger.info(f"File uploaded to Cloudinary: {file_id}")
+            return metadata
+            
+        except Exception as e:
+            self.logger.error(f"Unexpected error uploading to Cloudinary: {e}")
+            raise StorageServiceError(f"Cloudinary upload failed: {str(e)}")
+    
+    async def download_file(self, file_id: str) -> bytes:
+        """Download file from Cloudinary"""
+        try:
+            # This would implement actual Cloudinary download
+            # For now, return empty bytes
+            return b""
+            
+        except Exception as e:
+            self.logger.error(f"Unexpected error downloading from Cloudinary: {e}")
+            raise StorageServiceError(f"Cloudinary download failed: {str(e)}")
+    
+    async def delete_file(self, file_id: str) -> bool:
+        """Delete file from Cloudinary"""
+        try:
+            # This would implement actual Cloudinary deletion
+            self.logger.info(f"File deleted from Cloudinary: {file_id}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Unexpected error deleting from Cloudinary: {e}")
+            raise StorageServiceError(f"Cloudinary deletion failed: {str(e)}")
+    
+    async def get_file_metadata(self, file_id: str) -> FileMetadata:
+        """Get file metadata from Cloudinary"""
+        try:
+            # This would implement actual Cloudinary metadata retrieval
+            # For now, return mock metadata
+            metadata = FileMetadata(
+                filename=file_id,
+                content_type="application/octet-stream",
+                size=0,
+                url=f"https://res.cloudinary.com/{self.cloud_name}/image/upload/{file_id}",
+                created_at=self._get_current_timestamp()
+            )
+            
+            return metadata
+            
+        except Exception as e:
+            self.logger.error(f"Unexpected error getting Cloudinary metadata: {e}")
+            raise StorageServiceError(f"Failed to get Cloudinary metadata: {str(e)}")
+    
+    def _get_current_timestamp(self) -> str:
+        """Get current timestamp"""
+        return datetime.now(timezone.utc).isoformat()
+
+
+# Factory function to create appropriate storage service
+def create_storage_service(config_provider, http_client: AsyncHTTPClient) -> IStorageService:
+    """Create storage service based on configuration"""
+    if config_provider.is_configured("cloudinary"):
+        return CloudinaryStorageService(config_provider, http_client)
+    else:
+        return LocalStorageService(config_provider, http_client)

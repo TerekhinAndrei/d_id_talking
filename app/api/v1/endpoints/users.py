@@ -32,85 +32,146 @@ class User(UserBase):
         from_attributes = True
 
 
+class UserListResponse(BaseModel):
+    success: bool
+    data: List[User]
+    total: int
+    message: Optional[str] = None
+
+
+class UserResponse(BaseModel):
+    success: bool
+    data: Optional[User] = None
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
 # Mock database for demonstration
 users_db = {}
 
 
-@router.get("/", response_model=List[User])
+@router.get("/", response_model=UserListResponse)
 async def get_users(skip: int = 0, limit: int = 100):
     """
     Retrieve all users with pagination
     """
-    users = list(users_db.values())
-    return users[skip : skip + limit]
+    try:
+        users = list(users_db.values())
+        paginated_users = users[skip : skip + limit]
+        
+        return UserListResponse(
+            success=True,
+            data=paginated_users,
+            total=len(users),
+            message=f"Retrieved {len(paginated_users)} users"
+        )
+    except Exception as e:
+        return UserListResponse(
+            success=False,
+            data=[],
+            total=0,
+            error=f"Failed to retrieve users: {str(e)}"
+        )
 
 
-@router.get("/{user_id}", response_model=User)
+@router.get("/{user_id}", response_model=UserResponse)
 async def get_user(user_id: str):
     """
     Retrieve a specific user by ID
     """
-    if user_id not in users_db:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+    try:
+        if user_id not in users_db:
+            return UserResponse(
+                success=False,
+                error="User not found"
+            )
+        
+        return UserResponse(
+            success=True,
+            data=users_db[user_id],
+            message="User retrieved successfully"
         )
-    return users_db[user_id]
+    except Exception as e:
+        return UserResponse(
+            success=False,
+            error=f"Failed to retrieve user: {str(e)}"
+        )
 
 
-@router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(user: UserCreate):
     """
     Create a new user
     """
-    # Check if email already exists
-    for existing_user in users_db.values():
-        if existing_user["email"] == user.email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
-            )
-    
-    user_id = str(uuid.uuid4())
-    now = datetime.utcnow()
-    
-    user_data = {
-        "id": user_id,
-        "email": user.email,
-        "full_name": user.full_name,
-        "is_active": user.is_active,
-        "created_at": now,
-        "updated_at": now
-    }
-    
-    users_db[user_id] = user_data
-    return user_data
+    try:
+        # Check if email already exists
+        for existing_user in users_db.values():
+            if existing_user["email"] == user.email:
+                return UserResponse(
+                    success=False,
+                    error="Email already registered"
+                )
+        
+        user_id = str(uuid.uuid4())
+        now = datetime.utcnow()
+        
+        user_data = {
+            "id": user_id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "is_active": user.is_active,
+            "created_at": now,
+            "updated_at": now
+        }
+        
+        users_db[user_id] = user_data
+        
+        return UserResponse(
+            success=True,
+            data=user_data,
+            message="User created successfully"
+        )
+    except Exception as e:
+        return UserResponse(
+            success=False,
+            error=f"Failed to create user: {str(e)}"
+        )
 
 
-@router.put("/{user_id}", response_model=User)
+@router.put("/{user_id}", response_model=UserResponse)
 async def update_user(user_id: str, user_update: UserUpdate):
     """
     Update an existing user
     """
-    if user_id not in users_db:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+    try:
+        if user_id not in users_db:
+            return UserResponse(
+                success=False,
+                error="User not found"
+            )
+        
+        user_data = users_db[user_id]
+        
+        # Update only provided fields
+        if user_update.email is not None:
+            user_data["email"] = user_update.email
+        if user_update.full_name is not None:
+            user_data["full_name"] = user_update.full_name
+        if user_update.is_active is not None:
+            user_data["is_active"] = user_update.is_active
+        
+        user_data["updated_at"] = datetime.utcnow()
+        
+        return UserResponse(
+            success=True,
+            data=user_data,
+            message="User updated successfully"
         )
-    
-    user_data = users_db[user_id]
-    
-    # Update only provided fields
-    if user_update.email is not None:
-        user_data["email"] = user_update.email
-    if user_update.full_name is not None:
-        user_data["full_name"] = user_update.full_name
-    if user_update.is_active is not None:
-        user_data["is_active"] = user_update.is_active
-    
-    user_data["updated_at"] = datetime.utcnow()
-    
-    return user_data
+    except Exception as e:
+        return UserResponse(
+            success=False,
+            error=f"Failed to update user: {str(e)}"
+        )
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

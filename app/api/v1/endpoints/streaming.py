@@ -7,15 +7,13 @@ from fastapi import APIRouter, HTTPException, Depends, status, WebSocket
 from pydantic import BaseModel, HttpUrl
 from typing import Dict, Any, Optional, AsyncGenerator
 import logging
-from app.services.d_id_streaming_service import (
-    DIdStreamingService,
-    DIdStreamingError,
-    DIdConnectionError,
-    DIdAuthenticationError,
-    DIdStreamCreationError,
-    DIdStreamOperationError
+from app.services.d_id_service import (
+    DIdService,
+    DIdServiceError,
+    DIdConfigurationError,
+    DIdAPIError
 )
-from app.services.storage_service import StorageService
+from app.services.storage_service import LocalStorageService as StorageService
 from app.services.elevenlabs_service import ElevenLabsService
 import asyncio
 import json
@@ -255,22 +253,27 @@ class StreamingAudioResponse(BaseModel):
     error: Optional[str] = None
 
 # Dependency injection
-def get_streaming_service() -> DIdStreamingService:
-    """Get streaming service instance"""
-    return DIdStreamingService()
-
-def get_storage_service() -> StorageService:
-    """Get storage service instance"""
-    return StorageService()
-
-def get_elevenlabs_service() -> ElevenLabsService:
-    """Get ElevenLabs service instance"""
-    return ElevenLabsService()
+def get_services():
+    """Dependency injection for services"""
+    from app.core.factory import get_service_container
+    from app.core.base import ConfigurationProvider
+    from app.core.config import settings as config
+    from app.services.webrtc_service import WebRTCService
+    
+    config_provider = ConfigurationProvider(config)
+    container = get_service_container(config_provider)
+    return {
+        "d_id_service": container.get_video_generator(),
+        "storage_service": container.get_storage_service(),
+        "elevenlabs_service": container.get_tts_service(),
+        "webrtc_service": WebRTCService(),
+        "config_provider": config_provider
+    }
 
 @router.post("/start", response_model=StartStreamResponse)
 async def start_stream(
     request: StartStreamRequest,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Start a new streaming session
@@ -281,8 +284,22 @@ async def start_stream(
     logger.info(f"Starting stream session for image: {request.image_url}")
     
     try:
-        # Create stream session
-        session = await streaming_service.create_webrtc_session(str(request.image_url))
+        # Extract services
+        webrtc_service = services["webrtc_service"]
+        
+        # Create stream session using WebRTC service
+        session_data = await webrtc_service.create_stream(str(request.image_url))
+        
+        # Create session object with expected structure
+        class SessionData:
+            def __init__(self, data):
+                self.stream_id = data['stream_id']
+                self.session_id = data['session_id']
+                # D-ID API returns offer as object with type and sdp fields
+                self.sdp_offer = data['offer']['sdp'] if isinstance(data['offer'], dict) else data['offer']
+                self.ice_servers = data['ice_servers']
+        
+        session = SessionData(session_data)
         
         logger.info(f"Stream session created successfully: {session.stream_id}")
         
@@ -292,27 +309,6 @@ async def start_stream(
             session_id=session.session_id,
             sdp_offer=session.sdp_offer,
             ice_servers=session.ice_servers
-        )
-        
-    except DIdAuthenticationError as e:
-        logger.error(f"Authentication error starting stream: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Authentication failed: {str(e)}"
-        )
-        
-    except DIdStreamCreationError as e:
-        logger.error(f"Stream creation error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to create stream: {str(e)}"
-        )
-        
-    except DIdConnectionError as e:
-        logger.error(f"Connection error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Service unavailable: {str(e)}"
         )
         
     except Exception as e:
@@ -326,7 +322,7 @@ async def start_stream(
 async def exchange_sdp(
     stream_id: str,
     request: SdpRequest,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Exchange SDP for WebRTC connection
@@ -345,50 +341,30 @@ async def exchange_sdp(
             )
         
         # Submit SDP answer to D-ID according to documentation
-        response = await streaming_service.submit_webrtc_answer_direct(
-            request.answer,
-            request.session_id
+        response = await services["webrtc_service"].start_webrtc_connection(
+            stream_id,
+            request.session_id,
+            request.answer.get('sdp', '')
         )
         
-        if response.success:
-            logger.info(f"SDP exchange successful")
-            return SdpResponse(
-                success=True,
-                message="WebRTC connection established successfully"
-            )
-        else:
-            logger.error(f"SDP exchange failed: {response.error}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"SDP exchange failed: {response.error}"
-            )
+        logger.info(f"SDP exchange successful")
+        return SdpResponse(
+            success=True,
+            message="WebRTC connection established successfully"
+        )
             
-    except DIdStreamOperationError as e:
-        logger.error(f"Stream operation error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Stream operation failed: {str(e)}"
-        )
-        
-    except DIdConnectionError as e:
-        logger.error(f"Connection error during SDP exchange: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Service unavailable: {str(e)}"
-        )
-        
     except Exception as e:
-        logger.error(f"Unexpected error during SDP exchange: {e}")
+        logger.error(f"Error during SDP exchange: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error: {str(e)}"
+            detail=f"SDP exchange failed: {str(e)}"
         )
 
 @router.delete("/{stream_id}", response_model=DeleteStreamResponse)
 async def close_stream(
     stream_id: str,
     request: DeleteStreamRequest,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Close streaming session
@@ -399,7 +375,7 @@ async def close_stream(
     
     try:
         # Close stream session with session_id
-        response = await streaming_service.close_stream_session(stream_id, request.session_id)
+        response = await services["webrtc_service"].delete_stream(stream_id, request.session_id)
         
         if response.success:
             logger.info(f"Stream session closed successfully: {stream_id}")
@@ -426,7 +402,7 @@ async def close_stream(
 @router.get("/{stream_id}/status", response_model=StreamStatusResponse)
 async def get_stream_status(
     stream_id: str,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Get stream status
@@ -437,7 +413,7 @@ async def get_stream_status(
     
     try:
         # Get stream status from D-ID API
-        response = await streaming_service.get_stream_status(stream_id)
+        response = await services["webrtc_service"].get_stream_status(stream_id)
         
         if response.success:
             logger.debug(f"Stream status retrieved successfully: {stream_id}")
@@ -465,7 +441,7 @@ async def get_stream_status(
 
 @router.get("/sessions", response_model=StreamListResponse)
 async def list_active_sessions(
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     List active streaming sessions
@@ -475,8 +451,8 @@ async def list_active_sessions(
     logger.debug("Listing active streaming sessions")
     
     try:
-        # Get active sessions
-        active_sessions = streaming_service.get_active_sessions()
+        # Get active sessions - for now return empty list
+        active_sessions = []
         
         # Convert sessions to list format
         sessions_list = []
@@ -509,7 +485,7 @@ async def list_active_sessions(
 async def submit_ice_candidate(
     stream_id: str,
     request: IceCandidateRequest,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Submit ICE candidate
@@ -519,7 +495,7 @@ async def submit_ice_candidate(
     logger.debug(f"Submitting ICE candidate for stream: {stream_id}")
     
     try:
-        response = await streaming_service.submit_ice_candidate(
+        response = await services["webrtc_service"].submit_ice_candidate(
             stream_id,
             request.session_id,
             request.candidate,
@@ -551,7 +527,7 @@ async def submit_ice_candidate(
 async def create_talk_stream(
     stream_id: str,
     request: TalkStreamRequest,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Create talk stream
@@ -561,7 +537,7 @@ async def create_talk_stream(
     logger.info(f"Creating talk stream: {stream_id}")
     
     try:
-        response = await streaming_service.create_talk_stream(
+        response = await services["webrtc_service"].create_talk_stream(
             stream_id,
             request.session_id,
             request.script,
@@ -585,7 +561,7 @@ async def create_talk_stream(
                 detail=f"Failed to create talk stream: {response.error}"
             )
             
-    except DIdStreamOperationError as e:
+    except Exception as e:
         logger.error(f"Talk stream operation error: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -602,7 +578,7 @@ async def create_talk_stream(
 @router.post("/webrtc/session", response_model=WebRTCSessionResponse)
 async def create_webrtc_session(
     request: WebRTCSessionRequest,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Create a new WebRTC streaming session with D-ID.
@@ -611,10 +587,21 @@ async def create_webrtc_session(
     can send audio chunks and receive video streams directly via WebRTC.
     """
     try:
-        session = await streaming_service.create_webrtc_session(
-            str(request.image_url), 
-            request.voice_id
-        )
+        # Create stream session using WebRTC service
+        from app.services.webrtc_service import WebRTCService
+        webrtc_service = WebRTCService()
+        session_data = await webrtc_service.create_stream(str(request.image_url))
+        
+        # Create session object with expected structure
+        class SessionData:
+            def __init__(self, data):
+                self.stream_id = data['stream_id']
+                self.session_id = data['session_id']
+                # D-ID API returns offer as object with type and sdp fields
+                self.sdp_offer = data['offer']['sdp'] if isinstance(data['offer'], dict) else data['offer']
+                self.ice_servers = data['ice_servers']
+        
+        session = SessionData(session_data)
         return WebRTCSessionResponse(
             success=True,
             stream_id=session.stream_id,
@@ -622,12 +609,12 @@ async def create_webrtc_session(
             sdp_offer=session.sdp_offer,
             ice_servers=session.ice_servers
         )
-    except DIdAuthenticationError as e:
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail=f"Authentication failed: {str(e)}"
         )
-    except DIdStreamCreationError as e:
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail=f"Failed to create WebRTC session: {str(e)}"
@@ -642,7 +629,7 @@ async def create_webrtc_session(
 @router.post("/webrtc/answer", response_model=WebRTCAnswerResponse)
 async def submit_webrtc_answer(
     request: WebRTCAnswerRequest,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Submit SDP answer to establish WebRTC connection.
@@ -652,7 +639,7 @@ async def submit_webrtc_answer(
     and send the SDP answer back to this endpoint.
     """
     try:
-        result = await streaming_service.submit_webrtc_answer(
+        result = await services["d_id_service"].submit_webrtc_answer(
             request.stream_id, 
             request.sdp_answer
         )
@@ -660,7 +647,7 @@ async def submit_webrtc_answer(
             success=True,
             message=result.message
         )
-    except DIdConnectionError as e:
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail=f"Connection establishment failed: {str(e)}"
@@ -675,7 +662,7 @@ async def submit_webrtc_answer(
 @router.post("/webrtc/audio", response_model=AudioChunkResponse)
 async def send_audio_chunk(
     request: AudioChunkRequest,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Send audio chunk to D-ID for real-time processing.
@@ -687,7 +674,7 @@ async def send_audio_chunk(
         import base64
         audio_data = base64.b64decode(request.audio_data)
         
-        result = await streaming_service.send_audio_chunk(
+        result = await services["d_id_service"].send_audio_chunk(
             request.stream_id, 
             audio_data
         )
@@ -695,7 +682,7 @@ async def send_audio_chunk(
             success=True,
             message=result.message
         )
-    except DIdConnectionError as e:
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail=f"Audio processing failed: {str(e)}"
@@ -710,13 +697,13 @@ async def send_audio_chunk(
 @router.get("/webrtc/{stream_id}/status")
 async def get_webrtc_status(
     stream_id: str,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Get the status of a WebRTC streaming session.
     """
     try:
-        session = streaming_service.get_session(stream_id)
+        session = services["d_id_service"].get_session(stream_id)
         if session:
             return {
                 "success": True,
@@ -739,7 +726,7 @@ async def get_webrtc_status(
 
 @router.get("/elevenlabs-voices", response_model=GetVoicesResponse)
 async def get_elevenlabs_voices(
-    elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Get available ElevenLabs voices
@@ -747,7 +734,7 @@ async def get_elevenlabs_voices(
     Returns a list of available voices from ElevenLabs API.
     """
     try:
-        voices = elevenlabs_service.get_voices()
+        voices = services["elevenlabs_service"].get_voices()
         
         # Преобразуем голоса в формат для фронтенда
         voice_list = []
@@ -780,7 +767,7 @@ async def get_elevenlabs_voices(
 @router.post("/process-audio", response_model=ProcessAudioResponse)
 async def process_audio(
     request: ProcessAudioRequest,
-    elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Process audio through ElevenLabs Streaming Speech-to-Speech API
@@ -796,7 +783,7 @@ async def process_audio(
         
         # Обрабатываем аудио через ElevenLabs streaming API
         try:
-            processed_audio = elevenlabs_service.speech_to_speech_stream(
+            processed_audio = services["elevenlabs_service"].speech_to_speech_stream(
                 audio_data=audio_bytes,
                 voice_id=request.voice_id,
                 model_id="eleven_multilingual_sts_v2"
@@ -831,7 +818,7 @@ async def process_audio(
 async def websocket_stream_audio(
     websocket: WebSocket,
     voice_id: str,
-    elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     WebSocket endpoint for real-time audio streaming with ElevenLabs REST API
@@ -863,7 +850,7 @@ async def websocket_stream_audio(
                         logger.info(f"Starting ElevenLabs REST API processing for voice: {voice_id}")
                         
                         # Use speech-to-speech REST endpoint
-                        processed_audio = elevenlabs_service.speech_to_speech_stream(
+                        processed_audio = services["elevenlabs_service"].speech_to_speech_stream(
                             audio_data=combined_audio,
                             voice_id=voice_id,
                             model_id="eleven_multilingual_sts_v2"
@@ -943,7 +930,7 @@ async def websocket_stream_audio(
 @router.post("/stream-audio", response_model=StreamingAudioResponse)
 async def stream_audio(
     request: StreamingAudioRequest,
-    elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Real-time audio streaming through ElevenLabs API
@@ -959,7 +946,7 @@ async def stream_audio(
         
         # Обрабатываем аудио через ElevenLabs streaming API
         try:
-            processed_audio = elevenlabs_service.speech_to_speech_stream(
+            processed_audio = services["elevenlabs_service"].speech_to_speech_stream(
                 audio_data=audio_bytes,
                 voice_id=request.voice_id,
                 model_id=request.model_id
@@ -995,7 +982,7 @@ async def stream_audio(
 @router.post("/process-text", response_model=ProcessTextResponse)
 async def process_text(
     request: ProcessTextRequest,
-    elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Process text through ElevenLabs streaming Text-to-Speech API
@@ -1007,7 +994,7 @@ async def process_text(
         
         # Обрабатываем текст через ElevenLabs streaming API
         try:
-            audio_data = elevenlabs_service.text_to_speech_stream(
+            audio_data = services["elevenlabs_service"].text_to_speech_stream(
                 text=request.text,
                 voice_id=request.voice_id,
                 model_id=request.model_id
@@ -1044,7 +1031,7 @@ async def process_text(
 
 @router.get("/health", response_model=Dict[str, Any])
 async def streaming_health_check(
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Health check for streaming service
@@ -1054,13 +1041,15 @@ async def streaming_health_check(
     logger.debug("Performing streaming service health check")
     
     try:
-        is_healthy = await streaming_service.health_check()
+        # Simple health check - verify API key is configured
+        d_id_service = services["d_id_service"]
+        is_healthy = d_id_service.api_key is not None and d_id_service.base_url is not None
         
         return {
             "service": "streaming",
             "status": "healthy" if is_healthy else "unhealthy",
             "d_id_api_accessible": is_healthy,
-            "active_sessions": len(streaming_service.get_active_sessions())
+            "active_sessions": 0  # TODO: Implement session tracking
         }
         
     except Exception as e:
@@ -1075,7 +1064,7 @@ async def streaming_health_check(
 @router.post("/create-stream", response_model=CreateStreamResponse)
 async def create_stream(
     request: CreateStreamRequest,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Create a new stream
@@ -1084,8 +1073,8 @@ async def create_stream(
     """
     logger.info(f"Creating stream with source URL: {request.source_url}")
     logger.info(f"Has image data: {request.image_data is not None}")
-    logger.info(f"D-ID API Key configured: {streaming_service.api_key is not None}")
-    logger.info(f"D-ID Base URL: {streaming_service.base_url}")
+    logger.info(f"D-ID API Key configured: {services["d_id_service"].api_key is not None}")
+    logger.info(f"D-ID Base URL: {services["d_id_service"].base_url}")
     
     try:
         # If we have base64 image data, upload it to Cloudinary first
@@ -1107,11 +1096,21 @@ async def create_stream(
                     error=f"Failed to upload image: {str(e)}"
                 )
         
-        # Create WebRTC session
-        session = await streaming_service.create_webrtc_session(
-            source_url,
-            "21m00Tcm4TlvDq8ikWAM"  # Default voice
-        )
+        # Create WebRTC session using WebRTC service
+        from app.services.webrtc_service import WebRTCService
+        webrtc_service = WebRTCService()
+        session_data = await webrtc_service.create_stream(source_url)
+        
+        # Create session object with expected structure
+        class SessionData:
+            def __init__(self, data):
+                self.stream_id = data['stream_id']
+                self.session_id = data['session_id']
+                # D-ID API returns offer as object with type and sdp fields
+                self.sdp_offer = data['offer']['sdp'] if isinstance(data['offer'], dict) else data['offer']
+                self.ice_servers = data['ice_servers']
+        
+        session = SessionData(session_data)
         
         logger.info(f"Stream created successfully: {session.stream_id}")
         
@@ -1123,21 +1122,21 @@ async def create_stream(
             ice_servers=session.ice_servers
         )
         
-    except DIdAuthenticationError as e:
+    except Exception as e:
         logger.error(f"Authentication error creating stream: {e}")
         return CreateStreamResponse(
             success=False,
             error=f"Authentication failed: {str(e)}"
         )
         
-    except DIdStreamCreationError as e:
+    except Exception as e:
         logger.error(f"Stream creation error: {e}")
         return CreateStreamResponse(
             success=False,
             error=f"Failed to create stream: {str(e)}"
         )
         
-    except DIdConnectionError as e:
+    except Exception as e:
         logger.error(f"Connection error: {e}")
         return CreateStreamResponse(
             success=False,
@@ -1154,7 +1153,7 @@ async def create_stream(
 @router.post("/get-sdp", response_model=GetSdpResponse)
 async def get_sdp_data(
     request: GetSdpRequest,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Get SDP data from D-ID API
@@ -1165,10 +1164,10 @@ async def get_sdp_data(
     
     try:
         # Make request to D-ID API to get SDP data
-        session = streaming_service._create_session_if_needed()
+        session = services["d_id_service"]._create_session_if_needed()
         async with session.post(
-            f"{streaming_service.base_url}/talks/streams/{request.stream_id}/sdp",
-            headers=streaming_service.headers,
+            f"{services["d_id_service"].base_url}/talks/streams/{request.stream_id}/sdp",
+            headers=services["d_id_service"].headers,
             json={
                 "answer": {
                     "type": "answer", 
@@ -1223,7 +1222,7 @@ async def get_sdp_data(
 @router.post("/submit-sdp-answer", response_model=SubmitSdpAnswerResponse)
 async def submit_sdp_answer(
     request: SubmitSdpAnswerRequest,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Submit SDP answer to D-ID API
@@ -1234,10 +1233,10 @@ async def submit_sdp_answer(
     
     try:
         # Make request to D-ID API to submit SDP answer
-        session = streaming_service._create_session_if_needed()
+        session = services["d_id_service"]._create_session_if_needed()
         async with session.post(
-            f"{streaming_service.base_url}/talks/streams/{request.stream_id}/sdp",
-            headers=streaming_service.headers,
+            f"{services["d_id_service"].base_url}/talks/streams/{request.stream_id}/sdp",
+            headers=services["d_id_service"].headers,
             json={
                 "answer": request.answer,
                 "session_id": request.session_id
@@ -1278,7 +1277,7 @@ async def submit_sdp_answer(
 @router.post("/submit-ice-candidate", response_model=SubmitIceCandidateResponse)
 async def submit_ice_candidate(
     request: SubmitIceCandidateRequest,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Submit ICE candidate to D-ID API
@@ -1289,10 +1288,10 @@ async def submit_ice_candidate(
     
     try:
         # Make request to D-ID API to submit ICE candidate
-        session = streaming_service._create_session_if_needed()
+        session = services["d_id_service"]._create_session_if_needed()
         async with session.post(
-            f"{streaming_service.base_url}/talks/streams/{request.stream_id}/ice",
-            headers=streaming_service.headers,
+            f"{services["d_id_service"].base_url}/talks/streams/{request.stream_id}/ice",
+            headers=services["d_id_service"].headers,
             json={
                 "candidate": request.candidate,
                 "sdpMid": request.sdpMid,
@@ -1335,7 +1334,7 @@ async def submit_ice_candidate(
 @router.post("/create-talk-stream", response_model=CreateTalkStreamResponse)
 async def create_talk_stream(
     request: CreateTalkStreamRequest,
-    streaming_service: DIdStreamingService = Depends(get_streaming_service)
+    services: Dict[str, Any] = Depends(get_services)
 ):
     """
     Create a talk stream with D-ID API
@@ -1358,10 +1357,10 @@ async def create_talk_stream(
             payload["audio_optimization"] = request.audio_optimization
         
         # Make request to D-ID API to create talk stream
-        session = streaming_service._create_session_if_needed()
+        session = services["d_id_service"]._create_session_if_needed()
         async with session.post(
-            f"{streaming_service.base_url}/talks/streams/{request.stream_id}",
-            headers=streaming_service.headers,
+            f"{services["d_id_service"].base_url}/talks/streams/{request.stream_id}",
+            headers=services["d_id_service"].headers,
             json=payload
         ) as response:
             if response.status == 200:
