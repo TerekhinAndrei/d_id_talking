@@ -96,14 +96,15 @@ const VoiceSelector = ({
             onChange={onVoiceChange}
             disabled={loadingVoices}
           >
-            <option value="">
-              {loadingVoices ? 'Загрузка голосов...' : 'Выберите голос'}
-            </option>
-            {voices.map(voice => (
-              <option key={voice.voice_id} value={voice.voice_id}>
-                {voice.name} - {voice.description}
-              </option>
-            ))}
+            {loadingVoices ? (
+              <option value="">Загрузка голосов...</option>
+            ) : (
+              voices && voices.length > 0 && voices.map((voice) => (
+                <option key={voice.voice_id} value={voice.voice_id}>
+                  {voice.name} - {voice.description}
+                </option>
+              ))
+            )}
           </select>
           {loadingVoices && (
             <div className="loading-indicator">

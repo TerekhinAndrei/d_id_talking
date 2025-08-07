@@ -20,7 +20,16 @@ export const useDIdStreaming = () => {
       
       const response = await apiService.createDIdStream(imageUrl);
       
-      if (response.success) {
+      console.log('🎯 Hook received response:', response);
+      console.log('🔍 Checking response.success:', response.success);
+      console.log('🔍 Response type:', typeof response.success);
+      console.log('🔍 Response keys:', Object.keys(response));
+      
+      // Check if success is true (boolean) or truthy
+      const isSuccess = response.success === true || response.success === 'true';
+      console.log('🔍 Is success:', isSuccess);
+      
+      if (isSuccess) {
         console.log('✅ Stream created successfully:', {
           streamId: response.stream_id,
           sessionId: response.session_id,
@@ -44,10 +53,29 @@ export const useDIdStreaming = () => {
           iceServers: response.ice_servers
         };
       } else {
-        throw new Error(response.message || 'Failed to create stream');
+        console.log('❌ Response.success is false, response:', response);
+        console.log('❌ Response.error:', response.error);
+        
+        // Check for specific D-ID authentication error
+        if (response.error && response.error.includes('Authentication failed')) {
+          throw new Error('Ошибка подключения к D-ID API. Сервер не может подключиться к D-ID.');
+        }
+        
+        // Check for backend method missing error
+        if (response.error && response.error.includes('_create_session_if_needed')) {
+          throw new Error('Бэкенд не полностью реализован. Некоторые методы D-ID API отсутствуют.');
+        }
+        
+        // Check for D-ID API errors
+        if (response.error && response.error.includes('SDP exchange failed')) {
+          throw new Error('D-ID API отклонил запрос. Проверьте формат данных.');
+        }
+        
+        throw new Error(response.error || response.message || 'Failed to create stream');
       }
     } catch (error) {
       console.error('❌ Error creating stream:', error);
+      console.error('❌ Error stack:', error.stack);
       setStreamState(prev => ({
         ...prev,
         error: error.message,
@@ -59,8 +87,18 @@ export const useDIdStreaming = () => {
   }, []);
 
   // Step 2: Start the stream
-  const startStream = useCallback(async (sdpAnswer) => {
-    if (!streamState.streamId || !streamState.sessionId) {
+  const startStream = useCallback(async (sdpAnswer, streamId, sessionId) => {
+    // Use passed parameters if provided, otherwise use state
+    const currentStreamId = streamId || streamState.streamId;
+    const currentSessionId = sessionId || streamState.sessionId;
+    
+    if (!currentStreamId || !currentSessionId) {
+      console.error('❌ Missing stream data:', { 
+        currentStreamId, 
+        currentSessionId,
+        stateStreamId: streamState.streamId,
+        stateSessionId: streamState.sessionId 
+      });
       throw new Error('Stream not created yet');
     }
     
@@ -68,10 +106,12 @@ export const useDIdStreaming = () => {
     
     try {
       console.log('🔗 Step 2: Starting D-ID stream with SDP answer');
+      console.log('🔗 Using streamId:', currentStreamId);
+      console.log('🔗 Using sessionId:', currentSessionId);
       
       const response = await apiService.startDIdStream(
-        streamState.streamId,
-        streamState.sessionId,
+        currentStreamId,
+        currentSessionId,
         sdpAnswer
       );
       
@@ -101,17 +141,29 @@ export const useDIdStreaming = () => {
   }, [streamState.streamId, streamState.sessionId]);
 
   // Step 3: Submit ICE candidate
-  const submitIceCandidate = useCallback(async (candidate, sdpMid, sdpMLineIndex) => {
-    if (!streamState.streamId || !streamState.sessionId) {
+  const submitIceCandidate = useCallback(async (candidate, sdpMid, sdpMLineIndex, streamId, sessionId) => {
+    // Use passed parameters if provided, otherwise use state
+    const currentStreamId = streamId || streamState.streamId;
+    const currentSessionId = sessionId || streamState.sessionId;
+    
+    if (!currentStreamId || !currentSessionId) {
+      console.error('❌ Missing stream data for ICE candidate:', { 
+        currentStreamId, 
+        currentSessionId,
+        stateStreamId: streamState.streamId,
+        stateSessionId: streamState.sessionId 
+      });
       throw new Error('Stream not connected yet');
     }
     
     try {
       console.log('🌐 Step 3: Submitting ICE candidate:', { candidate, sdpMid, sdpMLineIndex });
+      console.log('🌐 Using streamId:', currentStreamId);
+      console.log('🌐 Using sessionId:', currentSessionId);
       
       const response = await apiService.submitDIdIceCandidate(
-        streamState.streamId,
-        streamState.sessionId,
+        currentStreamId,
+        currentSessionId,
         candidate,
         sdpMid,
         sdpMLineIndex
@@ -141,21 +193,32 @@ export const useDIdStreaming = () => {
   }, [streamState.streamId, streamState.sessionId]);
 
   // Step 4: Create talk stream
-  const createTalk = useCallback(async (text, voiceId) => {
-    if (!streamState.streamId || !streamState.sessionId) {
+  const createTalk = useCallback(async (script, voiceId, streamId, sessionId) => {
+    // Use passed parameters if provided, otherwise use state
+    const currentStreamId = streamId || streamState.streamId;
+    const currentSessionId = sessionId || streamState.sessionId;
+    
+    if (!currentStreamId || !currentSessionId) {
+      console.error('❌ Missing stream data for talk creation:', { 
+        currentStreamId, 
+        currentSessionId,
+        stateStreamId: streamState.streamId,
+        stateSessionId: streamState.sessionId 
+      });
       throw new Error('Stream not connected yet');
     }
     
     setStreamState(prev => ({ ...prev, status: 'talking', error: null }));
     
     try {
-      console.log('🎤 Step 4: Creating talk stream:', { text, voiceId });
+      console.log('🎤 Step 4: Creating talk stream:', { script, voiceId });
+      console.log('🎤 Using streamId:', currentStreamId);
+      console.log('🎤 Using sessionId:', currentSessionId);
       
       const response = await apiService.createDIdTalk(
-        streamState.streamId,
-        streamState.sessionId,
-        text,
-        voiceId
+        currentStreamId,
+        currentSessionId,
+        script
       );
       
       if (response.success) {

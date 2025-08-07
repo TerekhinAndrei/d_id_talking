@@ -12,16 +12,24 @@ class ApiService {
     };
 
     try {
+      console.log(`🌐 API Request: ${url}`, config);
       const response = await fetch(url, config);
+      
+      console.log(`📡 API Response status: ${response.status}`);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error(`❌ API Error (${endpoint}):`, errorData);
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
       
-      return await response.json();
+      const data = await response.json();
+      console.log(`✅ API Response (${endpoint}):`, data);
+      console.log(`🔍 Response data.success:`, data.success);
+      console.log(`🔍 Response data type:`, typeof data.success);
+      return data;
     } catch (error) {
-      console.error(`API Error (${endpoint}):`, error);
+      console.error(`❌ API Error (${endpoint}):`, error);
       throw error;
     }
   }
@@ -158,62 +166,82 @@ class ApiService {
   }
 
   // D-ID Streaming API Methods
-  async createDIdStream(imageUrl) {
+  async createDIdStream(imageUrl, description = 'D-ID streaming session') {
     // Step 1: Create a new stream
-    return this.request('/streaming/start', {
-      method: 'POST',
-      body: JSON.stringify({
-        image_url: imageUrl,
-        description: 'Interactive video stream'
-      }),
-    });
+    console.log('🚀 createDIdStream called with:', { imageUrl, description });
+    
+    try {
+      const result = await this.request('/streaming/start', {
+        method: 'POST',
+        body: JSON.stringify({
+          image_url: imageUrl,
+          description: description
+        }),
+      });
+      
+      console.log('🎯 createDIdStream result:', result);
+      console.log('🔍 result.success:', result.success);
+      console.log('🔍 typeof result.success:', typeof result.success);
+      return result;
+    } catch (error) {
+      console.error('❌ createDIdStream error:', error);
+      throw error;
+    }
   }
 
   async startDIdStream(streamId, sessionId, sdpAnswer) {
     // Step 2: Start the stream
+    console.log('🎬 startDIdStream called with:', { streamId, sessionId, sdpAnswerLength: sdpAnswer.sdp ? sdpAnswer.sdp.length : 'unknown' });
+    
+    const payload = {
+      answer: {
+        type: sdpAnswer.type || 'answer',
+        sdp: sdpAnswer.sdp || sdpAnswer
+      },
+      session_id: sessionId
+    };
+    
+    console.log('📤 SDP payload:', payload);
+    
     return this.request(`/streaming/${streamId}/sdp`, {
       method: 'POST',
-      body: JSON.stringify({
-        answer: {
-          type: 'answer',
-          sdp: sdpAnswer
-        },
-        session_id: sessionId
-      }),
+      body: JSON.stringify(payload),
     });
   }
 
   async submitDIdIceCandidate(streamId, sessionId, candidate, sdpMid, sdpMLineIndex) {
     // Step 3: Submit ICE candidate
+    console.log('🎬 submitDIdIceCandidate called with:', { 
+      streamId, 
+      sessionId, 
+      candidateLength: candidate.length,
+      sdpMid,
+      sdpMLineIndex
+    });
+    
+    const payload = {
+      candidate: candidate,
+      sdpMid: sdpMid,
+      sdpMLineIndex: sdpMLineIndex,
+      session_id: sessionId
+    };
+    
+    console.log('📤 ICE payload:', payload);
+    
     return this.request(`/streaming/${streamId}/ice`, {
       method: 'POST',
-      body: JSON.stringify({
-        candidate: candidate,
-        sdpMid: sdpMid,
-        sdpMLineIndex: sdpMLineIndex,
-        session_id: sessionId
-      }),
+      body: JSON.stringify(payload),
     });
   }
 
-  async createDIdTalk(streamId, sessionId, text, voiceId) {
+  async createDIdTalk(streamId, sessionId, script) {
     // Step 4: Create talk stream
-    return this.request(`/streaming/${streamId}/talk`, {
+    return this.request('/streaming/create-talk-stream', {
       method: 'POST',
       body: JSON.stringify({
-        script: {
-          type: 'text',
-          provider: {
-            type: 'elevenlabs',
-            voice_id: voiceId
-          },
-          input: text
-        },
-        config: {
-          fluent: 'false',
-          pad_audio: '0.0'
-        },
-        session_id: sessionId
+        stream_id: streamId,
+        session_id: sessionId,
+        script: script
       }),
     });
   }
@@ -231,6 +259,15 @@ class ApiService {
   async getDIdStreamStatus(streamId) {
     // Get stream status
     return this.request(`/streaming/${streamId}/status`);
+  }
+
+  // Upload to Cloudinary
+  async uploadToCloudinary(formData) {
+    return this.request('/streaming/upload/image', {
+      method: 'POST',
+      headers: {}, // Let browser set Content-Type for FormData
+      body: formData,
+    });
   }
 }
 

@@ -1,4 +1,5 @@
 export const DEFAULT_AVATAR_URL = '/default_avatar.jpg';
+export const DEFAULT_VOICE_ID = '9BWtsMINqrJLrRacOk9x'; // Aria - первый голос из API
 
 export const FALLBACK_VOICES = [
   { voice_id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', description: 'Женский голос, теплый и дружелюбный' },

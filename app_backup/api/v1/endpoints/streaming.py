@@ -3,7 +3,7 @@ Streaming API Endpoints
 API endpoints for D-ID Live Streaming functionality
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status, WebSocket
+from fastapi import APIRouter, HTTPException, Depends, status, WebSocket, UploadFile, File
 from pydantic import BaseModel, HttpUrl
 from typing import Dict, Any, Optional, AsyncGenerator
 import logging
@@ -15,6 +15,8 @@ from app.services.d_id_service import (
 )
 from app.services.storage_service import LocalStorageService as StorageService
 from app.services.elevenlabs_service import ElevenLabsService
+from app.core.factory import get_service_container
+from app.core.base import ConfigurationProvider
 import asyncio
 import json
 import base64
@@ -333,8 +335,7 @@ async def exchange_sdp(
     
     try:
         # Extract SDP answer from the request
-        sdp_answer = request.answer.get('sdp')
-        if not sdp_answer:
+        if not request.answer:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Missing SDP answer in request"
@@ -344,7 +345,7 @@ async def exchange_sdp(
         response = await services["webrtc_service"].start_webrtc_connection(
             stream_id,
             request.session_id,
-            request.answer.get('sdp', '')
+            request.answer
         )
         
         logger.info(f"SDP exchange successful")
@@ -1395,4 +1396,59 @@ async def create_talk_stream(
         return CreateTalkStreamResponse(
             success=False,
             error=f"Internal server error: {str(e)}"
-        ) 
+        )
+
+
+# Image Upload Endpoint
+class UploadImageResponse(BaseModel):
+    """Response model for image upload"""
+    success: bool
+    url: Optional[str] = None
+    error: Optional[str] = None
+
+
+@router.post("/upload/image", response_model=UploadImageResponse)
+async def upload_image(
+    file: UploadFile = File(...),
+    container: Any = Depends(lambda: {
+        "storage_service": get_service_container(ConfigurationProvider()).get_storage_service(),
+    })
+) -> UploadImageResponse:
+    """
+    Upload an image to cloud storage
+    
+    Args:
+        file: The image file to upload
+        container: Dependency injection container
+        
+    Returns:
+        UploadImageResponse: Upload result with URL
+    """
+    try:
+        logger.info(f"📤 Uploading image: {file.filename}")
+        
+        storage_service = container["storage_service"]
+        
+        # Read file content
+        content = await file.read()
+        
+        # Upload to storage
+        result = storage_service.upload_file_content(
+            content=content,
+            filename=file.filename,
+            content_type=file.content_type
+        )
+        
+        logger.info(f"✅ Image uploaded successfully: {result.public_url}")
+        
+        return UploadImageResponse(
+            success=True,
+            url=result.public_url
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error uploading image: {e}")
+        return UploadImageResponse(
+            success=False,
+            error=f"Failed to upload image: {str(e)}"
+        )

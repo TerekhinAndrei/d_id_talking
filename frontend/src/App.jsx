@@ -10,13 +10,14 @@ import Features from './components/Features';
 import Technologies from './components/Technologies';
 import StatusGrid from './components/StatusGrid';
 import ElevenLabsTester from './components/ElevenLabsTester';
+import DIdStreamingTester from './components/DIdStreamingTester';
 
 // Hooks
 import { useVoices } from './hooks/useVoices';
 import { useDIdStreaming } from './hooks/useDIdStreaming';
 
 // Constants
-import { DEFAULT_AVATAR_URL } from './constants';
+import { DEFAULT_AVATAR_URL, DEFAULT_VOICE_ID } from './constants';
 
 // Services
 import { apiService } from './services/api';
@@ -24,9 +25,10 @@ import { apiService } from './services/api';
 function App() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(DEFAULT_AVATAR_URL);
-  const [selectedVoice, setSelectedVoice] = useState('');
+  const [selectedVoice, setSelectedVoice] = useState(DEFAULT_VOICE_ID);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showElevenLabsTester, setShowElevenLabsTester] = useState(false);
+  const [showDIdStreamingTester, setShowDIdStreamingTester] = useState(false);
 
   const { voices, loadingVoices, voicesError, retryFetchVoices } = useVoices();
   const { 
@@ -60,6 +62,44 @@ function App() {
     console.log('🎤 Запрос на воспроизведение голоса передан в VoiceSelector');
   };
 
+  const uploadDefaultImage = async () => {
+    try {
+      console.log('📤 Загружаем дефолтное изображение в Cloudinary...');
+      
+      // Получаем дефолтное изображение как файл
+      const defaultImageUrl = `${window.location.origin}${DEFAULT_AVATAR_URL}`;
+      console.log('📸 Загружаем дефолтное изображение с URL:', defaultImageUrl);
+      console.log('📸 window.location.origin:', window.location.origin);
+      console.log('📸 DEFAULT_AVATAR_URL:', DEFAULT_AVATAR_URL);
+      
+      const response = await fetch(defaultImageUrl);
+      console.log('📸 Fetch response status:', response.status);
+      console.log('📸 Fetch response ok:', response.ok);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch default image: ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      const file = new File([blob], 'default_avatar.jpg', { type: 'image/jpeg' });
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const uploadResponse = await apiService.uploadToCloudinary(formData);
+      console.log('📥 Получен ответ от Cloudinary для дефолтного изображения:', uploadResponse);
+      
+      if (uploadResponse.success && uploadResponse.url) {
+        console.log('✅ Дефолтное изображение загружено в Cloudinary:', uploadResponse.url);
+        return uploadResponse.url;
+      } else {
+        throw new Error('Не удалось загрузить дефолтное изображение в Cloudinary');
+      }
+    } catch (error) {
+      console.error('❌ Ошибка загрузки дефолтного изображения:', error);
+      throw error;
+    }
+  };
+
   const handleCreateStream = async () => {
     if (!selectedVoice) {
       alert('Сначала выберите голос');
@@ -69,13 +109,40 @@ function App() {
     try {
       console.log('🚀 Начинаем полный флоу D-ID стриминга');
       
-      // Используем загруженное изображение или изображение по умолчанию
-      const imageUrl = selectedImage ? previewUrl : DEFAULT_AVATAR_URL;
+      let imageUrl;
+      
+      // ВСЕГДА загружаем изображение в Cloudinary
+      if (selectedImage) {
+        console.log('📸 Загружаем локальное изображение пользователя в Cloudinary...');
+        const formData = new FormData();
+        formData.append('file', selectedImage);
+        
+        try {
+          console.log('📤 Отправляем пользовательское изображение в Cloudinary...');
+          const uploadResponse = await apiService.uploadToCloudinary(formData);
+          console.log('📥 Получен ответ от Cloudinary:', uploadResponse);
+          
+          if (uploadResponse.success && uploadResponse.url) {
+            imageUrl = uploadResponse.url;
+            console.log('✅ Пользовательское изображение загружено в Cloudinary:', imageUrl);
+          } else {
+            throw new Error('Не удалось загрузить пользовательское изображение');
+          }
+        } catch (uploadError) {
+          console.warn('⚠️ Ошибка загрузки пользовательского изображения, загружаем дефолтное:', uploadError);
+          imageUrl = await uploadDefaultImage();
+        }
+      } else {
+        console.log('📸 Загружаем дефолтное изображение в Cloudinary...');
+        imageUrl = await uploadDefaultImage();
+      }
+      
       console.log('📸 Используем изображение:', selectedImage ? 'загруженное пользователем' : 'по умолчанию');
       
       // Step 1: Create stream
-      console.log('📸 Создание стрима с изображением');
+      console.log('📸 Создание стрима с изображением:', imageUrl);
       const streamResult = await createStream(imageUrl);
+      console.log('📥 Результат создания стрима:', streamResult);
       
       if (!streamResult.success) {
         throw new Error('Не удалось создать стрим');
@@ -86,7 +153,7 @@ function App() {
       // Step 2: Start stream (simplified SDP answer)
       console.log('🔗 Запуск стрима');
       const sdpAnswer = streamResult.sdpOffer.replace(/a=sendonly/g, 'a=recvonly');
-      const startResult = await startStream(sdpAnswer);
+      const startResult = await startStream(sdpAnswer, streamResult.streamId, streamResult.sessionId);
       
       if (!startResult.success) {
         throw new Error('Не удалось запустить стрим');
@@ -94,12 +161,17 @@ function App() {
       
       console.log('✅ Стрим запущен');
       
+      // Use updated session ID from start result
+      const currentSessionId = startResult.sessionId || streamResult.sessionId;
+      
       // Step 3: Submit ICE candidate (simplified)
       console.log('🌐 Отправка ICE candidate');
       const iceResult = await submitIceCandidate(
         'candidate:1 1 UDP 2122252543 192.168.1.1 12345 typ host',
         '0',
-        0
+        0,
+        streamResult.streamId,
+        currentSessionId
       );
       
       if (!iceResult.success) {
@@ -108,24 +180,46 @@ function App() {
         console.log('✅ ICE candidate отправлен');
       }
       
+      // Use latest session ID
+      const latestSessionId = (iceResult && iceResult.sessionId) || currentSessionId;
+      
       // Step 4: Create talk stream
       console.log('🎤 Создание talk стрима');
-      const talkText = "Привет! Это тестовый стрим с D-ID API.";
-      const talkResult = await createTalk(talkText, selectedVoice);
+      
+      // Use audio script format like in the working test panel
+      const audioScript = {
+        type: "audio",
+        audio_url: "https://www.soundjay.com/misc/sounds/bell-ringing-05.wav"
+      };
+      
+      const talkResult = await createTalk(audioScript, selectedVoice, streamResult.streamId, latestSessionId);
       
       if (!talkResult.success) {
         throw new Error('Не удалось создать talk стрим');
       }
       
-      console.log('✅ Talk стрим создан:', talkResult.talkId);
+      console.log('✅ Talk стрим создан:', talkResult.talk_id || talkResult.talkId);
+      console.log('✅ Полный процесс D-ID стриминга завершен успешно!');
       
-      // Success message
+      // Simple success notification without technical details
       const imageInfo = selectedImage ? 'с загруженным изображением' : 'с изображением по умолчанию';
-      alert(`🎉 Стрим успешно создан ${imageInfo}!\n\nСтатус: ${talkResult.status}\nTalk ID: ${talkResult.talkId}\n\nСтрим готов к воспроизведению!`);
+      console.log(`🎉 Стрим успешно создан ${imageInfo} и готов к использованию!`);
       
     } catch (error) {
       console.error('❌ Ошибка создания стрима:', error);
-      alert(`Ошибка при создании стрима: ${error.message}`);
+      
+      // Показываем понятную ошибку пользователю
+      let errorMessage = error.message;
+      
+      if (error.message.includes('Ошибка подключения к D-ID API')) {
+        errorMessage = 'D-ID API временно недоступен. Попробуйте позже.';
+      } else if (error.message.includes('Authentication failed')) {
+        errorMessage = 'Ошибка аутентификации D-ID. Проверьте настройки API.';
+      } else if (error.message.includes('Failed to create stream')) {
+        errorMessage = 'Не удалось создать стрим. Попробуйте еще раз.';
+      }
+      
+      alert(`Ошибка: ${errorMessage}`);
     } finally {
       // Reset state after some time
       setTimeout(() => {
@@ -210,20 +304,33 @@ function App() {
             </div>
           )}
 
-          {/* ElevenLabs Tester Section */}
+          {/* Testing Panel Section */}
           <div className="section">
             <div className="section-header">
-              <h2>ElevenLabs API Тестирование</h2>
-              <button 
-                className="toggle-tester-btn"
-                onClick={() => setShowElevenLabsTester(!showElevenLabsTester)}
-              >
-                {showElevenLabsTester ? 'Скрыть' : 'Показать'} Тестер
-              </button>
+              <h2>Панель тестирования</h2>
+              <div className="tester-buttons">
+                <button 
+                  className="toggle-tester-btn"
+                  onClick={() => setShowElevenLabsTester(!showElevenLabsTester)}
+                >
+                  {showElevenLabsTester ? 'Скрыть' : 'Показать'} ElevenLabs Тестер
+                </button>
+                
+                <button 
+                  className="toggle-tester-btn"
+                  onClick={() => setShowDIdStreamingTester(!showDIdStreamingTester)}
+                >
+                  {showDIdStreamingTester ? 'Скрыть' : 'Показать'} D-ID Streaming Тестер
+                </button>
+              </div>
             </div>
             
             {showElevenLabsTester && (
               <ElevenLabsTester />
+            )}
+            
+            {showDIdStreamingTester && (
+              <DIdStreamingTester />
             )}
           </div>
 
@@ -237,6 +344,8 @@ function App() {
           <Technologies />
         </main>
       </div>
+      
+
     </div>
   );
 }

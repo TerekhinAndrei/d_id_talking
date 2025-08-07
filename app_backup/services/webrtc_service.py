@@ -53,7 +53,7 @@ class WebRTCService:
             logger.error(f"Headers: {self.headers}")
             raise
     
-    async def start_webrtc_connection(self, stream_id: str, session_id: str, answer: str) -> Dict[str, Any]:
+    async def start_webrtc_connection(self, stream_id: str, session_id: str, answer: Dict[str, Any]) -> Dict[str, Any]:
         """
         Step 2: Start a WebRTC connection
         POST /talks/streams/{stream_id}/sdp
