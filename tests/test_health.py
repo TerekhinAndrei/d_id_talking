@@ -40,5 +40,5 @@ def test_openapi_schema():
     assert response.status_code == 200
     data = response.json()
     assert "openapi" in data
-    assert data["info"]["title"] == "FastAPI Backend"
+    assert data["info"]["title"] == "D-ID Talking Head"
     assert data["info"]["version"] == "1.0.0" 

@@ -1,157 +1,237 @@
-import axios from 'axios';
+const API_BASE_URL = '/api/v1';
 
-// Create axios instance with default configuration
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
-  timeout: parseInt(import.meta.env.VITE_API_TIMEOUT) || 30000, // Increased timeout to 30 seconds
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+class ApiService {
+  async request(endpoint, options = {}) {
+    const url = `${API_BASE_URL}${endpoint}`;
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
 
-// Request interceptor for adding auth tokens, etc.
-api.interceptors.request.use(
-  (config) => {
-    // You can add auth tokens here
-    // const token = localStorage.getItem('token');
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Response interceptor for handling errors
-api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  (error) => {
-    // Handle common errors here
-    if (error.response?.status === 401) {
-      // Handle unauthorized
-      console.error('Unauthorized access');
-    } else if (error.response?.status === 500) {
-      // Handle server errors
-      console.error('Server error');
-    }
-    return Promise.reject(error);
-  }
-);
-
-// API methods
-export const apiService = {
-  // Health check
-  async getHealth() {
-    const response = await api.get('/api/v1/health');
-    return response.data;
-  },
-
-  // Voices
-  async getVoices() {
-    const response = await api.get('/api/v1/voices');
-    return response.data;
-  },
-
-  async validateVoice(voiceId) {
-    const response = await api.get(`/api/v1/voices/${voiceId}/validate`);
-    return response.data;
-  },
-
-  async getVoiceById(voiceId) {
-    const response = await api.get(`/api/v1/voices/${voiceId}`);
-    return response.data;
-  },
-
-  // Video Generation
-  async generateVideo(imageFile, audioFile, voiceId = null) {
-    console.log('API Service - generateVideo called with:', {
-      imageFile: imageFile?.name,
-      imageFileSize: imageFile?.size,
-      audioFile: audioFile?.size,
-      audioFileType: audioFile?.type,
-      voiceId
-    });
-
-    const formData = new FormData();
-    formData.append('image_file', imageFile);
-    
-    // Convert Blob to File with proper name and type
-    if (audioFile instanceof Blob) {
-      let audioFileName;
-      let audioFileObj;
+    try {
+      const response = await fetch(url, config);
       
-      // Use original format but with proper extension
-      if (audioFile.type === 'audio/webm' || audioFile.type === 'audio/webm;codecs=opus') {
-        audioFileName = `audio_${Date.now()}.webm`;
-        audioFileObj = new File([audioFile], audioFileName, { type: audioFile.type });
-        console.log('WebM audio file:', audioFileName, audioFileObj.size, 'bytes');
-      } else {
-        audioFileName = `audio_${Date.now()}.${audioFile.type.split('/')[1] || 'webm'}`;
-        audioFileObj = new File([audioFile], audioFileName, { type: audioFile.type });
-        console.log('Audio file:', audioFileName, audioFileObj.size, 'bytes');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
       
-      formData.append('audio_file', audioFileObj);
-    } else {
-      formData.append('audio_file', audioFile);
+      return await response.json();
+    } catch (error) {
+      console.error(`API Error (${endpoint}):`, error);
+      throw error;
     }
-    
+  }
+
+  // ElevenLabs Voice Management
+  async getVoices() {
+    return this.request('/generation/voices');
+  }
+
+  async getVoice(voiceId) {
+    return this.request(`/generation/voices/${voiceId}`);
+  }
+
+  async validateVoice(voiceId) {
+    return this.request(`/generation/voices/validate/${voiceId}`);
+  }
+
+  // ElevenLabs TTS (Text-to-Speech)
+  async textToSpeech(text, voiceId, settings = null) {
+    return this.request('/generation/tts', {
+      method: 'POST',
+      body: JSON.stringify({
+        text,
+        voice_id: voiceId,
+        voice_settings: settings
+      }),
+    });
+  }
+
+  // ElevenLabs STS (Speech-to-Speech)
+  async speechToSpeech(audioFile, voiceId, settings = null) {
+    const formData = new FormData();
+    formData.append('audio', audioFile);
+    formData.append('voice_id', voiceId);
+    if (settings) {
+      formData.append('voice_settings', JSON.stringify(settings));
+    }
+
+    return this.request('/generation/sts', {
+      method: 'POST',
+      headers: {}, // Let browser set Content-Type for FormData
+      body: formData,
+    });
+  }
+
+  // ElevenLabs Authentication Test
+  async testElevenLabsAuth() {
+    return this.request('/generation/test-auth');
+  }
+
+  // Voice Preview/Play
+  async playVoice(voiceId, previewText = "Привет! Это пример голоса.") {
+    try {
+      console.log('🎤 Запрос воспроизведения голоса:', { voiceId, previewText });
+      
+      const response = await this.request('/generation/play-voice', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          voice_id: voiceId,
+          preview_text: previewText
+        }),
+      });
+
+      console.log('📡 Ответ playVoice:', {
+        success: response.success,
+        hasAudioData: !!response.audio_data,
+        format: response.format,
+        dataLength: response.audio_data?.length || 0
+      });
+
+      // Validate response
+      if (!response.success) {
+        throw new Error(response.message || 'Ошибка воспроизведения голоса');
+      }
+
+      if (!response.audio_data) {
+        throw new Error('Сервер не вернул аудио данные');
+      }
+
+      if (typeof response.audio_data !== 'string') {
+        throw new Error('Аудио данные должны быть строкой');
+      }
+
+      if (response.audio_data.length === 0) {
+        throw new Error('Получены пустые аудио данные');
+      }
+
+      return response;
+    } catch (error) {
+      console.error('❌ Ошибка playVoice:', error);
+      throw error;
+    }
+  }
+
+  // Video Generation
+  async generateVideo(imageFile, audioFile, voiceId = null, settings = null) {
+    const formData = new FormData();
+    formData.append('image_file', imageFile);
+    formData.append('audio_file', audioFile);
     if (voiceId) {
       formData.append('voice_id', voiceId);
     }
-
-    // Debug FormData contents
-    console.log('FormData entries:');
-    for (let [key, value] of formData.entries()) {
-      console.log(`${key}:`, value instanceof File ? `${value.name} (${value.size} bytes, type: ${value.type})` : value);
+    if (settings) {
+      formData.append('voice_settings', JSON.stringify(settings));
     }
 
-    console.log('Sending request to /api/v1/generate...');
-    const response = await api.post('/api/v1/generate', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    return this.request('/generation/generate', {
+      method: 'POST',
+      headers: {}, // Let browser set Content-Type for FormData
+      body: formData,
     });
-    console.log('Response received:', response.data);
-    return response.data;
-  },
+  }
 
   async getTaskStatus(taskId) {
-    const response = await api.get(`/api/v1/status/${taskId}`);
-    return response.data;
-  },
+    return this.request(`/generation/status/${taskId}`);
+  }
 
+  // Streaming
+  async createStream(imageFile, voiceId) {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    formData.append('voice_id', voiceId);
 
+    return this.request('/streaming/create', {
+      method: 'POST',
+      headers: {}, // Let browser set Content-Type for FormData
+      body: formData,
+    });
+  }
 
-  // Users (legacy methods)
-  async getUsers() {
-    const response = await api.get('/users');
-    return response.data;
-  },
+  // Health Check
+  async healthCheck() {
+    return this.request('/health');
+  }
 
-  async getUserById(id) {
-    const response = await api.get(`/users/${id}`);
-    return response.data;
-  },
+  // D-ID Streaming API Methods
+  async createDIdStream(imageUrl) {
+    // Step 1: Create a new stream
+    return this.request('/streaming/start', {
+      method: 'POST',
+      body: JSON.stringify({
+        image_url: imageUrl,
+        description: 'Interactive video stream'
+      }),
+    });
+  }
 
-  async createUser(userData) {
-    const response = await api.post('/users', userData);
-    return response.data;
-  },
+  async startDIdStream(streamId, sessionId, sdpAnswer) {
+    // Step 2: Start the stream
+    return this.request(`/streaming/${streamId}/sdp`, {
+      method: 'POST',
+      body: JSON.stringify({
+        answer: {
+          type: 'answer',
+          sdp: sdpAnswer
+        },
+        session_id: sessionId
+      }),
+    });
+  }
 
-  async updateUser(id, userData) {
-    const response = await api.put(`/users/${id}`, userData);
-    return response.data;
-  },
+  async submitDIdIceCandidate(streamId, sessionId, candidate, sdpMid, sdpMLineIndex) {
+    // Step 3: Submit ICE candidate
+    return this.request(`/streaming/${streamId}/ice`, {
+      method: 'POST',
+      body: JSON.stringify({
+        candidate: candidate,
+        sdpMid: sdpMid,
+        sdpMLineIndex: sdpMLineIndex,
+        session_id: sessionId
+      }),
+    });
+  }
 
-  async deleteUser(id) {
-    const response = await api.delete(`/users/${id}`);
-    return response.data;
-  },
-};
+  async createDIdTalk(streamId, sessionId, text, voiceId) {
+    // Step 4: Create talk stream
+    return this.request(`/streaming/${streamId}/talk`, {
+      method: 'POST',
+      body: JSON.stringify({
+        script: {
+          type: 'text',
+          provider: {
+            type: 'elevenlabs',
+            voice_id: voiceId
+          },
+          input: text
+        },
+        config: {
+          fluent: 'false',
+          pad_audio: '0.0'
+        },
+        session_id: sessionId
+      }),
+    });
+  }
 
-export default api; 
+  async closeDIdStream(streamId, sessionId) {
+    // Step 5: Close the stream
+    return this.request(`/streaming/${streamId}`, {
+      method: 'DELETE',
+      body: JSON.stringify({
+        session_id: sessionId
+      }),
+    });
+  }
+
+  async getDIdStreamStatus(streamId) {
+    // Get stream status
+    return this.request(`/streaming/${streamId}/status`);
+  }
+}
+
+export const apiService = new ApiService();

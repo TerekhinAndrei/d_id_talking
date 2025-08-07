@@ -1,104 +1,53 @@
-# Environment variables
+# Backend Protection - DO NOT MODIFY
+# These files are protected and should not be changed
+
+# Core backend files - PROTECTED
+app/main.py
+app/core/config.py
+app/core/base.py
+app/core/factory.py
+app/core/interfaces.py
+
+# API endpoints - PROTECTED
+app/api/v1/api.py
+app/api/v1/endpoints/*.py
+
+# Services - PROTECTED
+app/services/*.py
+
+# Models - PROTECTED
+app/models/*.py
+
+# Environment files
 .env
 .env.local
-.env.backup
-.env.test_invalid
+.env.production
 
-# Python
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
 
-# Virtual environments
+# Virtual environment
 venv/
 env/
 ENV/
-env.bak/
-venv.bak/
 
-# IDE
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# OS
+# OS files
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
-
-# macOS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
 
 # Logs
 *.log
-logs/
 
-# Test results and temporary files
-test_*.mp3
-test_*.wav
-test_*.jpg
-test_*.jpeg
-test_*.png
-*.mp3
-*.wav
-*.jpg
-*.jpeg
-*.png
-*.mp4
-*.avi
-*.mov
-
-# Uploads directory (user uploaded files)
+# Uploads
 uploads/
 
-# Node modules (frontend)
-frontend/node_modules/
-frontend/dist/
-frontend/.env
-
-# Coverage reports
-htmlcov/
-.coverage
-.coverage.*
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# Backup files
-*.bak
-*.backup 
+# Test files
+test_files/ 
