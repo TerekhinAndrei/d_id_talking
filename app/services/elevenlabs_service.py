@@ -335,6 +335,71 @@ class ElevenLabsService:
         except Exception as e:
             logger.error(f"Error in text_to_speech: {str(e)}")
             raise ElevenLabsServiceError(f"Text to speech processing failed: {str(e)}")
+
+    def text_to_speech_stream(self, text: str, voice_id: str, model_id: str = "eleven_multilingual_v2") -> bytes:
+        """
+        Convert text to speech using ElevenLabs streaming TTS API
+        
+        Args:
+            text: Text to convert to speech
+            voice_id: Voice ID to use
+            model_id: Model ID to use (default: eleven_multilingual_v2)
+            
+        Returns:
+            bytes: Audio data from streaming response
+            
+        Raises:
+            ElevenLabsConfigurationError: If service is not configured
+            ElevenLabsAPIError: If API returns an error
+            ElevenLabsServiceError: For other service errors
+        """
+        try:
+            self._validate_configuration()
+            
+            url = f"{self.base_url}/text-to-speech/{voice_id}/stream"
+            headers = {"xi-api-key": self.api_key}
+            
+            data = {
+                "text": text,
+                "model_id": model_id,
+                "voice_settings": {
+                    "stability": 0.5,
+                    "similarity_boost": 0.75,
+                    "style": 0.0,
+                    "use_speaker_boost": True
+                }
+            }
+            
+            logger.info(f"Converting text to speech (streaming)... Voice: {voice_id}, Text length: {len(text)}")
+            
+            response = requests.post(
+                url,
+                headers=headers,
+                json=data,
+                timeout=60,
+                stream=True  # Enable streaming
+            )
+            
+            response.raise_for_status()
+            
+            # Collect all chunks into a single bytes object
+            audio_chunks = []
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:  # filter out keep-alive new chunks
+                    audio_chunks.append(chunk)
+            
+            audio_data = b''.join(audio_chunks)
+            
+            logger.info(f"Text-to-Speech streaming successful! Voice: {voice_id}, Size: {len(audio_data)} bytes")
+            return audio_data
+            
+        except requests.exceptions.HTTPError as e:
+            raise ElevenLabsAPIError(e.response.status_code, e.response.text)
+        except ElevenLabsAPIError:
+            raise
+        except Exception as e:
+            logger.error(f"Error in text_to_speech_stream: {str(e)}")
+            raise ElevenLabsServiceError(f"Text to speech streaming failed: {str(e)}")
     
     def get_available_voices(self) -> List[Voice]:
         """

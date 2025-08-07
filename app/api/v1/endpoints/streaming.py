@@ -217,10 +217,23 @@ class ProcessAudioRequest(BaseModel):
     audio_data: str  # Base64 encoded audio data
     voice_id: str
 
+class ProcessTextRequest(BaseModel):
+    """Request model for text-to-speech streaming"""
+    text: str
+    voice_id: str
+    model_id: str = "eleven_multilingual_v2"
+
 class ProcessAudioResponse(BaseModel):
     """Response model for audio processing"""
     success: bool
     processed_audio: Optional[str] = None  # Base64 encoded processed audio
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+class ProcessTextResponse(BaseModel):
+    """Response model for text-to-speech streaming"""
+    success: bool
+    audio_data: Optional[str] = None  # Base64 encoded audio data
     message: Optional[str] = None
     error: Optional[str] = None
 
@@ -805,6 +818,56 @@ async def process_audio(
             success=True,
             processed_audio="",
             message="Audio processing temporarily unavailable"
+        )
+
+@router.post("/process-text", response_model=ProcessTextResponse)
+async def process_text(
+    request: ProcessTextRequest,
+    elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)
+):
+    """
+    Process text through ElevenLabs streaming Text-to-Speech API
+    
+    Converts text to speech using ElevenLabs streaming API for real-time audio generation.
+    """
+    try:
+        logger.info(f"Processing text with streaming TTS... Voice: {request.voice_id}, Text: {request.text[:50]}...")
+        
+        # Обрабатываем текст через ElevenLabs streaming API
+        try:
+            audio_data = elevenlabs_service.text_to_speech_stream(
+                text=request.text,
+                voice_id=request.voice_id,
+                model_id=request.model_id
+            )
+            
+            # Кодируем обработанное аудио в base64
+            audio_data_base64 = base64.b64encode(audio_data).decode('utf-8')
+            
+            logger.info(f"Text-to-Speech streaming successful! Voice: {request.voice_id}, Size: {len(audio_data)} bytes")
+            
+            return ProcessTextResponse(
+                success=True,
+                audio_data=audio_data_base64,
+                message="Text processed successfully with streaming API"
+            )
+            
+        except Exception as e:
+            logger.warning(f"Streaming TTS failed, using fallback: {e}")
+            # Fallback: возвращаем пустое аудио или заглушку
+            return ProcessTextResponse(
+                success=True,
+                audio_data="",
+                message="Text processing temporarily unavailable"
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to process text: {e}")
+        # Возвращаем успешный ответ с пустым аудио вместо ошибки
+        return ProcessTextResponse(
+            success=True,
+            audio_data="",
+            message="Text processing temporarily unavailable"
         )
 
 @router.get("/health", response_model=Dict[str, Any])

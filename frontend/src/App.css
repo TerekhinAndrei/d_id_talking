@@ -417,6 +417,68 @@
   font-size: 0.9rem;
 }
 
+.text-processing-section {
+  margin: 20px 0;
+  padding: 20px;
+  background: rgba(33, 150, 243, 0.1);
+  border-radius: 10px;
+  border: 2px solid #2196F3;
+}
+
+.text-processing-section h4 {
+  margin: 0 0 15px 0;
+  color: #2196F3;
+  font-size: 1.1rem;
+}
+
+.text-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.text-input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #2196F3;
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  color: #333;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: #1976D2;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+.process-text-button {
+  background: #2196F3;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  align-self: flex-start;
+}
+
+.process-text-button:hover:not(:disabled) {
+  background: #1976D2;
+  transform: scale(1.02);
+}
+
+.process-text-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+}
+
 @keyframes pulse {
   0% {
     box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);

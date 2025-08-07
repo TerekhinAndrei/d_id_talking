@@ -26,6 +26,8 @@ function App() {
   const [microphoneStream, setMicrophoneStream] = useState(null);
   const [audioContext, setAudioContext] = useState(null);
   const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [textToProcess, setTextToProcess] = useState('');
+  const [processingText, setProcessingText] = useState(false);
   
   const peerConnectionRef = useRef(null);
   const videoRef = useRef(null);
@@ -183,6 +185,65 @@ function App() {
       }
     } catch (error) {
       console.error('❌ Error sending audio to server:', error);
+    }
+  };
+
+  const processTextWithStreaming = async (text) => {
+    setProcessingText(true);
+    try {
+      console.log('🎤 Processing text with streaming TTS...', text);
+      
+      const response = await fetch('http://localhost:8000/api/v1/streaming/process-text', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: text,
+          voice_id: selectedVoice,
+          model_id: "eleven_multilingual_v2"
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.audio_data) {
+        console.log('✅ Text processed with streaming TTS successfully');
+        
+        // Конвертируем base64 аудио в Blob и воспроизводим
+        const audioBytes = atob(data.audio_data);
+        const audioArray = new Uint8Array(audioBytes.length);
+        for (let i = 0; i < audioBytes.length; i++) {
+          audioArray[i] = audioBytes.charCodeAt(i);
+        }
+        
+        const audioBlob = new Blob([audioArray], { type: 'audio/mpeg' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        // Создаем и воспроизводим аудио
+        const audio = new Audio(audioUrl);
+        audio.play().catch(error => {
+          console.error('Error playing processed audio:', error);
+        });
+        
+        // Очищаем URL после воспроизведения
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+        };
+        
+      } else {
+        console.warn('Text processing temporarily unavailable');
+      }
+    } catch (error) {
+      console.error('Error processing text with streaming TTS:', error);
+    } finally {
+      setProcessingText(false);
+    }
+  };
+
+  const handleTextProcessing = async () => {
+    if (textToProcess.trim()) {
+      await processTextWithStreaming(textToProcess.trim());
     }
   };
 
@@ -619,6 +680,26 @@ function App() {
                    </button>
                  </div>
                )}
+               
+               <div className="text-processing-section">
+                 <h4>🎤 Тестирование Streaming Text-to-Speech</h4>
+                 <div className="text-input-group">
+                   <textarea
+                     value={textToProcess}
+                     onChange={(e) => setTextToProcess(e.target.value)}
+                     placeholder="Введите текст для обработки через ElevenLabs streaming API..."
+                     rows={3}
+                     className="text-input"
+                   />
+                   <button 
+                     onClick={handleTextProcessing}
+                     disabled={processingText || !textToProcess.trim()}
+                     className="process-text-button"
+                   >
+                     {processingText ? 'Обработка...' : 'Обработать текст'}
+                   </button>
+                 </div>
+               </div>
         
         {talkCreated && (
           <div className="stream-status">
