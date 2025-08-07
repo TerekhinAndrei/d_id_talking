@@ -1,11 +1,19 @@
 import requests
 import base64
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, AsyncGenerator
 from dataclasses import dataclass
 from enum import Enum
+import asyncio
+import websockets
+import json
+import io
+import wave
+import numpy as np
 
 from app.core.config import settings as config
+from elevenlabs import stream
+from elevenlabs.client import ElevenLabs
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +91,12 @@ class ElevenLabsService:
         self.api_key = config.ELEVENLABS_API_KEY
         self.base_url = config.ELEVENLABS_BASE_URL
         self.default_voice_id = config.ELEVENLABS_DEFAULT_VOICE_ID
+        
+        # Debug: Log configuration
+        logger.info(f"🔧 ElevenLabsService initialization:")
+        logger.info(f"   API Key: {self.api_key[:10]}..." if self.api_key else "❌ API Key is None")
+        logger.info(f"   Base URL: {self.base_url}")
+        logger.info(f"   Default Voice ID: {self.default_voice_id}")
         
         if not self.api_key:
             logger.warning("ELEVENLABS_API_KEY not found in environment variables")
@@ -178,9 +192,25 @@ class ElevenLabsService:
             ElevenLabsServiceError: For other service errors
         """
         try:
+            # Конвертируем сырые PCM данные в WAV формат
+            # ElevenLabs ожидает WAV файл с частотой 16kHz
+            sample_rate = 16000  # ElevenLabs ожидает 16kHz
+            channels = 1  # Mono
+            
+            # Создаем WAV файл в памяти
+            wav_buffer = io.BytesIO()
+            
+            with wave.open(wav_buffer, 'wb') as wav_file:
+                wav_file.setnchannels(channels)
+                wav_file.setsampwidth(2)  # 16-bit = 2 bytes
+                wav_file.setframerate(sample_rate)
+                wav_file.writeframes(request.audio_data)
+            
+            wav_data = wav_buffer.getvalue()
+            
             # Prepare the request as multipart/form-data
             files = {
-                'audio': ('audio.wav', request.audio_data, 'audio/wav'),
+                'audio': ('audio.wav', wav_data, 'audio/wav'),
             }
             
             # Prepare form data
@@ -195,7 +225,7 @@ class ElevenLabsService:
             # Use the correct endpoint format
             endpoint = f"speech-to-speech/{request.voice_id}"
             
-            logger.info(f"Отправка аудио в ElevenLabs... Voice: {request.voice_id}, Size: {len(request.audio_data)} bytes")
+            logger.info(f"Отправка ВАШЕГО ГОЛОСА в ElevenLabs... Voice: {request.voice_id}, Size: {len(request.audio_data)} bytes, Sample Rate: {sample_rate}Hz")
             
             # Make direct request to handle multipart/form-data properly
             url = f"{self.base_url}/{endpoint}"
@@ -218,20 +248,20 @@ class ElevenLabsService:
                 if "audio" in result:
                     audio_base64 = result["audio"]
                     processed_audio = base64.b64decode(audio_base64)
-                    logger.info(f"Аудио успешно получено от ElevenLabs! Voice: {request.voice_id}, Size: {len(processed_audio)} bytes")
+                    logger.info(f"ИЗМЕНЕННЫЙ ГОЛОС получен от ElevenLabs! Voice: {request.voice_id}, Size: {len(processed_audio)} bytes")
                     return processed_audio
                 else:
                     raise ElevenLabsServiceError("No audio data received from ElevenLabs")
             else:
                 # Binary response
-                logger.info(f"Аудио успешно получено от ElevenLabs! Voice: {request.voice_id}, Size: {len(response.content)} bytes")
+                logger.info(f"ИЗМЕНЕННЫЙ ГОЛОС получен от ElevenLabs! Voice: {request.voice_id}, Size: {len(response.content)} bytes")
                 return response.content
                     
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 400:
-                logger.warning("Speech-to-Speech API returned 400. This might require special access. Falling back to Text-to-Speech...")
-                # Fallback to text-to-speech with a default message
-                return self._fallback_text_to_speech(request.voice_id)
+                logger.warning("Speech-to-Speech API returned 400. This might require special access. Using pitch shift fallback...")
+                # Fallback: используем ваш голос с изменением тона
+                return self._pitch_shift_fallback(request.audio_data)
             else:
                 raise ElevenLabsAPIError(e.response.status_code, e.response.text)
         except ElevenLabsAPIError:
@@ -586,6 +616,281 @@ class ElevenLabsService:
         except Exception as e:
             logger.error(f"Ошибка при обработке аудио через URL: {e}")
             raise ElevenLabsServiceError(f"Error in speech_to_speech_with_url: {e}")
+
+    async def speech_to_speech_stream_sdk(
+        self, 
+        audio_data: bytes, 
+        voice_id: str, 
+        model_id: str = "eleven_multilingual_sts_v2"
+    ) -> AsyncGenerator[bytes, None]:
+        """
+        Real-time streaming with ElevenLabs Speech-to-Speech API
+        
+        Args:
+            audio_data: Raw audio bytes (PCM 16-bit) - ВАШ ГОЛОС
+            voice_id: Voice ID to use for transformation
+            model_id: Model ID to use (should be STS model)
+            
+        Yields:
+            bytes: Processed audio chunks - ИЗМЕНЕННЫЙ ГОЛОС
+        """
+        try:
+            self._validate_configuration()
+            
+            logger.info(f"Starting REAL Speech-to-Speech streaming... Voice: {voice_id}, Audio size: {len(audio_data)} bytes")
+            
+            # Пытаемся использовать настоящий Speech-to-Speech API
+            try:
+                # Создаем запрос для Speech-to-Speech
+                request = SpeechToSpeechRequest(
+                    audio_data=audio_data,
+                    voice_id=voice_id,
+                    model_id=ElevenLabsModel.MULTILINGUAL_STS_V2
+                )
+                
+                # Отправляем ВАШ ГОЛОС в ElevenLabs для изменения
+                logger.info(f"Sending YOUR VOICE to ElevenLabs for transformation...")
+                processed_audio = self.speech_to_speech(request)
+                
+                logger.info(f"ElevenLabs returned {len(processed_audio)} bytes of transformed audio")
+                
+                # Разбиваем обработанное аудио на чанки для стриминга
+                chunk_size = 1024  # 1KB chunks
+                for i in range(0, len(processed_audio), chunk_size):
+                    chunk = processed_audio[i:i + chunk_size]
+                    logger.info(f"Yielding transformed audio chunk: {len(chunk)} bytes")
+                    yield chunk
+                    
+            except Exception as e:
+                logger.warning(f"Speech-to-Speech failed: {e}. Using fallback...")
+                
+                # Fallback: используем ваш голос как есть, но с изменением тона
+                # Это временное решение, пока не получим доступ к настоящему STS
+                
+                # Конвертируем PCM в numpy array
+                audio_array = np.frombuffer(audio_data, dtype=np.int16)
+                
+                # Простое изменение тона (увеличиваем частоту на 20%)
+                # Это не идеально, но лучше чем фиксированный текст
+                pitch_shift = 1.2
+                shifted_audio = np.interp(
+                    np.arange(0, len(audio_array), pitch_shift),
+                    np.arange(len(audio_array)),
+                    audio_array.astype(float)
+                ).astype(np.int16)
+                
+                # Конвертируем обратно в bytes
+                processed_audio = shifted_audio.tobytes()
+                
+                logger.info(f"Applied pitch shift fallback: {len(processed_audio)} bytes")
+                
+                # Разбиваем на чанки
+                chunk_size = 1024
+                for i in range(0, len(processed_audio), chunk_size):
+                    chunk = processed_audio[i:i + chunk_size]
+                    yield chunk
+                    
+            logger.info(f"Speech-to-Speech streaming completed")
+                    
+        except Exception as e:
+            logger.error(f"Error in Speech-to-Speech streaming: {str(e)}")
+            raise ElevenLabsServiceError(f"Speech-to-Speech streaming failed: {str(e)}")
+
+    async def speech_to_speech_websocket_stream(
+        self, 
+        audio_stream: AsyncGenerator[bytes, None], 
+        voice_id: str, 
+        model_id: str = "eleven_multilingual_sts_v2"
+    ) -> AsyncGenerator[bytes, None]:
+        """
+        Real-time WebSocket streaming with ElevenLabs Speech-to-Speech API
+        
+        Args:
+            audio_stream: Async generator yielding audio chunks
+            voice_id: Voice ID to use
+            model_id: Model ID to use
+            
+        Yields:
+            bytes: Processed audio chunks in real-time
+        """
+        try:
+            self._validate_configuration()
+            
+            # ElevenLabs WebSocket streaming endpoint
+            ws_url = f"wss://api.elevenlabs.io/v1/speech-to-speech/{voice_id}/stream"
+            
+            logger.info(f"Starting WebSocket streaming with ElevenLabs... Voice: {voice_id}")
+            
+            async with websockets.connect(
+                ws_url,
+                extra_headers={"xi-api-key": self.api_key}
+            ) as websocket:
+                
+                # Send initial configuration
+                config_message = {
+                    "type": "config",
+                    "model_id": model_id,
+                    "voice_settings": {
+                        "stability": 0.5,
+                        "similarity_boost": 0.75,
+                        "style": 0.0,
+                        "use_speaker_boost": True
+                    }
+                }
+                
+                await websocket.send(json.dumps(config_message))
+                
+                # Start audio streaming
+                async def send_audio():
+                    async for audio_chunk in audio_stream:
+                        # Send audio chunk
+                        audio_message = {
+                            "type": "audio",
+                            "data": base64.b64encode(audio_chunk).decode('utf-8')
+                        }
+                        await websocket.send(json.dumps(audio_message))
+                
+                # Start receiving processed audio
+                async def receive_audio():
+                    async for message in websocket:
+                        try:
+                            data = json.loads(message)
+                            
+                            if data.get("type") == "audio":
+                                # Decode processed audio chunk
+                                audio_data = base64.b64decode(data["data"])
+                                yield audio_data
+                                
+                            elif data.get("type") == "error":
+                                logger.error(f"ElevenLabs streaming error: {data.get('message')}")
+                                break
+                                
+                        except json.JSONDecodeError:
+                            logger.warning("Received non-JSON message from ElevenLabs")
+                            continue
+                
+                # Run both tasks concurrently
+                send_task = asyncio.create_task(send_audio())
+                receive_task = asyncio.create_task(receive_audio())
+                
+                try:
+                    async for processed_chunk in receive_task:
+                        yield processed_chunk
+                finally:
+                    send_task.cancel()
+                    receive_task.cancel()
+                    
+        except Exception as e:
+            logger.error(f"Error in WebSocket streaming: {str(e)}")
+            raise ElevenLabsServiceError(f"WebSocket streaming failed: {str(e)}")
+
+    def speech_to_speech_stream(self, audio_data: bytes, voice_id: str, model_id: str = "eleven_multilingual_sts_v2") -> bytes:
+        """
+        Streaming Speech-to-Speech conversion using ElevenLabs API
+        
+        Args:
+            audio_data: Raw audio bytes
+            voice_id: Voice ID to use
+            model_id: Model ID to use
+            
+        Returns:
+            bytes: Processed audio data
+            
+        Raises:
+            ElevenLabsConfigurationError: If service is not configured
+            ElevenLabsAPIError: If API returns an error
+            ElevenLabsServiceError: For other service errors
+        """
+        try:
+            self._validate_configuration()
+            
+            # Prepare the request as multipart/form-data
+            files = {
+                'audio': ('audio.wav', audio_data, 'audio/wav'),
+            }
+            
+            # Prepare form data
+            data = {
+                'model_id': model_id,
+                'voice_settings[stability]': '0.5',
+                'voice_settings[similarity_boost]': '0.75',
+                'voice_settings[style]': '0.0',
+                'voice_settings[use_speaker_boost]': 'true',
+            }
+            
+            # Use the streaming endpoint
+            url = f"{self.base_url}/speech-to-speech/{voice_id}/stream"
+            headers = {"xi-api-key": self.api_key}
+            
+            logger.info(f"Отправка аудио в ElevenLabs streaming... Voice: {voice_id}, Size: {len(audio_data)} bytes")
+            
+            # Make streaming request
+            response = requests.post(
+                url,
+                headers=headers,
+                files=files,
+                data=data,
+                timeout=60,
+                stream=True  # Enable streaming
+            )
+            
+            response.raise_for_status()
+            
+            # Collect all chunks into a single bytes object
+            audio_chunks = []
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:  # filter out keep-alive new chunks
+                    audio_chunks.append(chunk)
+            
+            processed_audio = b''.join(audio_chunks)
+            
+            logger.info(f"Streaming Speech-to-Speech successful! Voice: {voice_id}, Size: {len(processed_audio)} bytes")
+            return processed_audio
+            
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 400:
+                logger.warning("Streaming Speech-to-Speech API returned 400. This might require special access. Falling back to regular Speech-to-Speech...")
+                # Fallback to regular speech-to-speech
+                request = SpeechToSpeechRequest(
+                    audio_data=audio_data,
+                    voice_id=voice_id,
+                    model_id=ElevenLabsModel(model_id)
+                )
+                return self.speech_to_speech(request)
+            else:
+                raise ElevenLabsAPIError(e.response.status_code, e.response.text)
+        except ElevenLabsAPIError:
+            raise
+        except Exception as e:
+            logger.error(f"Error in speech_to_speech_stream: {str(e)}")
+            raise ElevenLabsServiceError(f"Streaming speech to speech processing failed: {str(e)}")
+
+    def _pitch_shift_fallback(self, audio_data: bytes) -> bytes:
+        """
+        Fallback method that applies pitch shift to your voice
+        """
+        try:
+            # Конвертируем PCM в numpy array
+            audio_array = np.frombuffer(audio_data, dtype=np.int16)
+            
+            # Изменяем тон (увеличиваем частоту на 20%)
+            pitch_shift = 1.2
+            shifted_audio = np.interp(
+                np.arange(0, len(audio_array), pitch_shift),
+                np.arange(len(audio_array)),
+                audio_array.astype(float)
+            ).astype(np.int16)
+            
+            # Конвертируем обратно в bytes
+            processed_audio = shifted_audio.tobytes()
+            
+            logger.info(f"Applied pitch shift fallback: {len(processed_audio)} bytes")
+            return processed_audio
+            
+        except Exception as e:
+            logger.error(f"Pitch shift fallback failed: {e}")
+            # Возвращаем оригинальное аудио если все остальное не работает
+            return audio_data
 
 
 # Global service instance

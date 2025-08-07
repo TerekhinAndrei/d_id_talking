@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Playback Test</title>
+</head>
+<body>
+    <h1>🎵 Audio Playback Test</h1>
+    
+    <button onclick="testAudioPlayback()">Test Audio Playback</button>
+    <button onclick="testWebSocket()">Test WebSocket</button>
+    
+    <div id="status"></div>
+    
+    <script>
+        function log(message) {
+            console.log(message);
+            document.getElementById('status').innerHTML += '<p>' + message + '</p>';
+        }
+        
+        async function testAudioPlayback() {
+            try {
+                log('🎵 Testing audio playback...');
+                
+                // Create test audio data (1 second of silence)
+                const sampleRate = 44100;
+                const duration = 1; // 1 second
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Create a simple sine wave
+                const buffer = audioContext.createBuffer(1, sampleRate * duration, sampleRate);
+                const channelData = buffer.getChannelData(0);
+                
+                for (let i = 0; i < channelData.length; i++) {
+                    channelData[i] = Math.sin(2 * Math.PI * 440 * i / sampleRate) * 0.1; // 440Hz tone
+                }
+                
+                // Convert to MP3-like format
+                const audioBlob = new Blob([buffer], { type: 'audio/wav' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                const audio = new Audio(audioUrl);
+                audio.volume = 0.5;
+                
+                audio.oncanplaythrough = () => {
+                    log('✅ Audio ready to play');
+                    audio.play().then(() => {
+                        log('🎵 Audio playback started successfully!');
+                    }).catch(error => {
+                        log('❌ Error playing audio: ' + error);
+                    });
+                };
+                
+                audio.onerror = (error) => {
+                    log('❌ Audio error: ' + error);
+                };
+                
+                log('✅ Audio test completed');
+                
+            } catch (error) {
+                log('❌ Audio test failed: ' + error);
+            }
+        }
+        
+        async function testWebSocket() {
+            try {
+                log('🔌 Testing WebSocket connection...');
+                
+                const wsUrl = 'ws://localhost:8000/api/v1/streaming/ws/stream-audio/21m00Tcm4TlvDq8ikWAM';
+                const ws = new WebSocket(wsUrl);
+                
+                ws.onopen = () => {
+                    log('✅ WebSocket connected');
+                    
+                    // Send configuration
+                    const config = {
+                        type: 'config',
+                        sample_rate: 44100,
+                        voice_id: '21m00Tcm4TlvDq8ikWAM',
+                        model_id: 'eleven_multilingual_v2'
+                    };
+                    
+                    ws.send(JSON.stringify(config));
+                    log('📤 Configuration sent');
+                };
+                
+                ws.onmessage = (event) => {
+                    if (typeof event.data === 'string') {
+                        const data = JSON.parse(event.data);
+                        log('📥 Received: ' + JSON.stringify(data));
+                    } else {
+                        log('🎵 Received audio: ' + event.data.byteLength + ' bytes');
+                        
+                        // Try to play the audio
+                        const audioBlob = new Blob([event.data], { type: 'audio/mpeg' });
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        const audio = new Audio(audioUrl);
+                        
+                        audio.oncanplaythrough = () => {
+                            audio.play().then(() => {
+                                log('🎵 WebSocket audio played successfully!');
+                            }).catch(error => {
+                                log('❌ Error playing WebSocket audio: ' + error);
+                            });
+                        };
+                    }
+                };
+                
+                ws.onerror = (error) => {
+                    log('❌ WebSocket error: ' + error);
+                };
+                
+                ws.onclose = () => {
+                    log('🔌 WebSocket closed');
+                };
+                
+                // Send test audio after 2 seconds
+                setTimeout(() => {
+                    const testAudio = new ArrayBuffer(1024);
+                    ws.send(testAudio);
+                    log('📤 Test audio sent');
+                }, 2000);
+                
+            } catch (error) {
+                log('❌ WebSocket test failed: ' + error);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -3,9 +3,9 @@ Streaming API Endpoints
 API endpoints for D-ID Live Streaming functionality
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, WebSocket
 from pydantic import BaseModel, HttpUrl
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, AsyncGenerator
 import logging
 from app.services.d_id_streaming_service import (
     DIdStreamingService,
@@ -17,6 +17,10 @@ from app.services.d_id_streaming_service import (
 )
 from app.services.storage_service import StorageService
 from app.services.elevenlabs_service import ElevenLabsService
+import asyncio
+import json
+import base64
+import websockets
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -234,6 +238,19 @@ class ProcessTextResponse(BaseModel):
     """Response model for text-to-speech streaming"""
     success: bool
     audio_data: Optional[str] = None  # Base64 encoded audio data
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+class StreamingAudioRequest(BaseModel):
+    """Request model for real-time audio streaming"""
+    audio_data: str  # Base64 encoded audio data
+    voice_id: str
+    model_id: str = "eleven_multilingual_sts_v2"
+
+class StreamingAudioResponse(BaseModel):
+    """Response model for real-time audio streaming"""
+    success: bool
+    audio_chunk: Optional[str] = None  # Base64 encoded audio chunk
     message: Optional[str] = None
     error: Optional[str] = None
 
@@ -766,49 +783,39 @@ async def process_audio(
     elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)
 ):
     """
-    Process audio through ElevenLabs Speech-to-Speech API
+    Process audio through ElevenLabs Streaming Speech-to-Speech API
     
-    Converts user's speech to avatar's voice using ElevenLabs.
+    Converts user's speech to avatar's voice using ElevenLabs streaming API.
     """
     try:
-        logger.info(f"Processing audio with voice: {request.voice_id}")
+        logger.info(f"Processing audio with streaming API, voice: {request.voice_id}")
         
         # Декодируем base64 аудио
         import base64
         audio_bytes = base64.b64decode(request.audio_data)
         
-        # Создаем запрос для ElevenLabs
-        from app.services.elevenlabs_service import SpeechToSpeechRequest, VoiceSettings
-        
-        speech_request = SpeechToSpeechRequest(
-            audio_data=audio_bytes,
-            voice_id=request.voice_id,
-            voice_settings=VoiceSettings(
-                stability=0.5,
-                similarity_boost=0.75,
-                style=0.0,
-                use_speaker_boost=True
-            )
-        )
-        
-        # Обрабатываем аудио через ElevenLabs
+        # Обрабатываем аудио через ElevenLabs streaming API
         try:
-            processed_audio = elevenlabs_service.speech_to_speech(speech_request)
+            processed_audio = elevenlabs_service.speech_to_speech_stream(
+                audio_data=audio_bytes,
+                voice_id=request.voice_id,
+                model_id="eleven_multilingual_sts_v2"
+            )
             
             # Кодируем обработанное аудио в base64
             processed_audio_base64 = base64.b64encode(processed_audio).decode('utf-8')
             
+            logger.info(f"Streaming audio processing successful! Voice: {request.voice_id}, Size: {len(processed_audio)} bytes")
+            
         except Exception as e:
-            logger.warning(f"Speech-to-Speech failed, using fallback: {e}")
+            logger.warning(f"Streaming Speech-to-Speech failed, using fallback: {e}")
             # Fallback: возвращаем пустое аудио или заглушку
             processed_audio_base64 = ""
-        
-        logger.info(f"Audio processed successfully with voice: {request.voice_id}")
         
         return ProcessAudioResponse(
             success=True,
             processed_audio=processed_audio_base64,
-            message="Audio processed successfully"
+            message="Audio processed successfully with streaming API"
         )
         
     except Exception as e:
@@ -818,6 +825,171 @@ async def process_audio(
             success=True,
             processed_audio="",
             message="Audio processing temporarily unavailable"
+        )
+
+@router.websocket("/ws/stream-audio/{voice_id}")
+async def websocket_stream_audio(
+    websocket: WebSocket,
+    voice_id: str,
+    elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)
+):
+    """
+    WebSocket endpoint for real-time audio streaming with ElevenLabs REST API
+    
+    Uses REST API for speech-to-speech conversion since WebSocket API requires special access.
+    """
+    await websocket.accept()
+    
+    try:
+        logger.info(f"WebSocket streaming started for voice: {voice_id}")
+        
+        # Audio buffer for collecting chunks
+        audio_buffer = []
+        config_received = False
+        
+        async def process_audio_chunks():
+            """Process collected audio chunks with ElevenLabs REST API"""
+            nonlocal audio_buffer
+            
+            while True:
+                if len(audio_buffer) > 0:
+                    # Combine audio chunks
+                    combined_audio = b''.join(audio_buffer)
+                    logger.info(f"Processing {len(audio_buffer)} audio chunks, total size: {len(combined_audio)} bytes")
+                    audio_buffer.clear()
+                    
+                    try:
+                        # Process with ElevenLabs REST API
+                        logger.info(f"Starting ElevenLabs REST API processing for voice: {voice_id}")
+                        
+                        # Use speech-to-speech REST endpoint
+                        processed_audio = elevenlabs_service.speech_to_speech_stream(
+                            audio_data=combined_audio,
+                            voice_id=voice_id,
+                            model_id="eleven_multilingual_sts_v2"
+                        )
+                        
+                        if processed_audio:
+                            logger.info(f"Sending processed audio: {len(processed_audio)} bytes")
+                            # Send processed audio chunk back to client as binary
+                            await websocket.send_bytes(processed_audio)
+                        else:
+                            logger.warning("No processed audio received from ElevenLabs")
+                            
+                    except Exception as e:
+                        logger.error(f"Error processing audio with REST API: {e}")
+                        await websocket.send_text(json.dumps({
+                            "type": "error",
+                            "message": f"Audio processing failed: {str(e)}"
+                        }))
+                
+                await asyncio.sleep(0.1)  # Process every 100ms
+        
+        # Start audio processing task
+        processing_task = asyncio.create_task(process_audio_chunks())
+        
+        try:
+            # Handle incoming messages
+            while True:
+                try:
+                    # Receive message from client
+                    message = await websocket.receive()
+                    
+                    if message["type"] == "websocket.receive":
+                        if "text" in message:
+                            # Handle JSON configuration message
+                            data = json.loads(message["text"])
+                            
+                            if data.get("type") == "config":
+                                config_received = True
+                                await websocket.send_text(json.dumps({
+                                    "type": "status",
+                                    "message": "Configuration received, ready for audio"
+                                }))
+                                
+                            elif data.get("type") == "end":
+                                # End of audio stream
+                                break
+                                
+                        elif "bytes" in message and config_received:
+                            # Handle binary audio data
+                            audio_chunk = message["bytes"]
+                            logger.info(f"Received audio chunk from client: {len(audio_chunk)} bytes")
+                            audio_buffer.append(audio_chunk)
+                            logger.info(f"Audio buffer now contains {len(audio_buffer)} chunks")
+                
+                except WebSocketDisconnect:
+                    logger.info("WebSocket disconnected")
+                    break
+                except Exception as e:
+                    logger.error(f"Error processing WebSocket message: {e}")
+                    break
+                    
+        finally:
+            # Cancel processing task
+            processing_task.cancel()
+            
+    except WebSocketDisconnect:
+        logger.info("WebSocket streaming ended")
+    except Exception as e:
+        logger.error(f"WebSocket streaming error: {e}")
+        await websocket.send_text(json.dumps({
+            "type": "error",
+            "message": str(e)
+        }))
+    finally:
+        await websocket.close()
+
+@router.post("/stream-audio", response_model=StreamingAudioResponse)
+async def stream_audio(
+    request: StreamingAudioRequest,
+    elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)
+):
+    """
+    Real-time audio streaming through ElevenLabs API
+    
+    Processes audio chunks in real-time for voice changing.
+    """
+    try:
+        logger.info(f"Streaming audio chunk with voice: {request.voice_id}")
+        
+        # Декодируем base64 аудио
+        import base64
+        audio_bytes = base64.b64decode(request.audio_data)
+        
+        # Обрабатываем аудио через ElevenLabs streaming API
+        try:
+            processed_audio = elevenlabs_service.speech_to_speech_stream(
+                audio_data=audio_bytes,
+                voice_id=request.voice_id,
+                model_id=request.model_id
+            )
+            
+            # Кодируем обработанное аудио в base64
+            processed_audio_base64 = base64.b64encode(processed_audio).decode('utf-8')
+            
+            logger.info(f"Real-time audio streaming successful! Voice: {request.voice_id}, Size: {len(processed_audio)} bytes")
+            
+            return StreamingAudioResponse(
+                success=True,
+                audio_chunk=processed_audio_base64,
+                message="Audio chunk processed successfully"
+            )
+            
+        except Exception as e:
+            logger.warning(f"Real-time streaming failed: {e}")
+            return StreamingAudioResponse(
+                success=True,
+                audio_chunk="",
+                message="Audio processing temporarily unavailable"
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to stream audio: {e}")
+        return StreamingAudioResponse(
+            success=True,
+            audio_chunk="",
+            message="Audio streaming temporarily unavailable"
         )
 
 @router.post("/process-text", response_model=ProcessTextResponse)

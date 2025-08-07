@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
+import VoiceChanger from './components/VoiceChanger';
 
 function App() {
   const [result, setResult] = useState('');
@@ -9,14 +10,12 @@ function App() {
   const [streamData, setStreamData] = useState(null);
   const [sdpData, setSdpData] = useState(null);
   const [sdpLoading, setSdpLoading] = useState(false);
-  const [startingStream, setStartingStream] = useState(false);
   const [streamStarted, setStreamStarted] = useState(false);
   const [connectionState, setConnectionState] = useState('');
   const [iceCandidates, setIceCandidates] = useState([]);
   const [talkText, setTalkText] = useState('Привет! Это тестовое сообщение для аватара.');
   const [creatingTalk, setCreatingTalk] = useState(false);
   const [talkCreated, setTalkCreated] = useState(false);
-  const [videoStream, setVideoStream] = useState(null);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [connectionReady, setConnectionReady] = useState(false);
   const [voices, setVoices] = useState([]);
@@ -28,6 +27,7 @@ function App() {
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [textToProcess, setTextToProcess] = useState('');
   const [processingText, setProcessingText] = useState(false);
+  const [activeTab, setActiveTab] = useState('streaming'); // 'streaming' или 'voice-changer'
   
   const peerConnectionRef = useRef(null);
   const videoRef = useRef(null);
@@ -256,7 +256,6 @@ function App() {
     setConnectionState('');
     setIceCandidates([]);
     setTalkCreated(false);
-    setVideoStream(null);
     setIsVideoPlaying(false);
     
     try {
@@ -412,8 +411,6 @@ function App() {
       return;
     }
 
-    setStartingStream(true);
-    
     try {
       const peerConnection = new RTCPeerConnection({
         iceServers: sdpData.ice_servers || []
@@ -428,7 +425,6 @@ function App() {
         
         if (event.streams && event.streams[0]) {
           const stream = event.streams[0];
-          setVideoStream(stream);
           
           // Привязываем поток к video элементу
           if (videoRef.current) {
@@ -465,20 +461,20 @@ function App() {
         console.log('ICE connection state:', peerConnection.iceConnectionState);
         setConnectionState(`ICE connection: ${peerConnection.iceConnectionState}`);
         
-                 if (peerConnection.iceConnectionState === 'connected' || 
-             peerConnection.iceConnectionState === 'completed') {
-           setConnectionState('🟢 WebRTC connection established!');
-           // Разрешаем создание Talk Stream только после установки соединения
-           setConnectionReady(true);
-           
-           // Автоматически запускаем микрофон после установки соединения
-           if (!isMicrophoneActive) {
-             console.log('🎤 Auto-starting microphone after connection...');
-             startMicrophone().catch(error => {
-               console.error('Error starting microphone:', error);
-             });
-           }
-         }
+        if (peerConnection.iceConnectionState === 'connected' || 
+            peerConnection.iceConnectionState === 'completed') {
+          setConnectionState('🟢 WebRTC connection established!');
+          // Разрешаем создание Talk Stream только после установки соединения
+          setConnectionReady(true);
+          
+          // Автоматически запускаем микрофон после установки соединения
+          if (!isMicrophoneActive) {
+            console.log('🎤 Auto-starting microphone after connection...');
+            startMicrophone().catch(error => {
+              console.error('Error starting microphone:', error);
+            });
+          }
+        }
       });
       
       peerConnection.addEventListener('connectionstatechange', () => {
@@ -529,8 +525,6 @@ function App() {
       
     } catch (error) {
       setResult(`Ошибка запуска стрима: ${error.message}`);
-    } finally {
-      setStartingStream(false);
     }
   };
 
@@ -539,225 +533,251 @@ function App() {
       <header className="App-header">
         <h1>D-ID Stream Test</h1>
         
-        <div className="image-section">
-          <h3>Выберите изображение:</h3>
-          
-          <div className="image-options">
-            <div className="option">
-              <label>
-                <input 
-                  type="radio" 
-                  name="imageSource" 
-                  value="default" 
-                  defaultChecked 
-                  onChange={() => {
-                    setImageUrl('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face');
-                    setUploadedImage(null);
-                  }}
-                />
-                Использовать предустановленное изображение
-              </label>
+        {/* Вкладки */}
+        <div className="tabs">
+          <button 
+            className={`tab ${activeTab === 'streaming' ? 'active' : ''}`}
+            onClick={() => setActiveTab('streaming')}
+          >
+            🎬 D-ID Streaming
+          </button>
+          <button 
+            className={`tab ${activeTab === 'voice-changer' ? 'active' : ''}`}
+            onClick={() => setActiveTab('voice-changer')}
+          >
+            🎤 Voice Changer
+          </button>
+        </div>
+        
+        {/* Контент вкладок */}
+        {activeTab === 'streaming' && (
+          <>
+            <div className="image-section">
+              <h3>Выберите изображение:</h3>
+              
+              <div className="image-options">
+                <div className="option">
+                  <label>
+                    <input 
+                      type="radio" 
+                      name="imageSource" 
+                      value="default" 
+                      defaultChecked 
+                      onChange={() => {
+                        setImageUrl('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face');
+                        setUploadedImage(null);
+                      }}
+                    />
+                    Использовать предустановленное изображение
+                  </label>
+                </div>
+                
+                <div className="option">
+                  <label>
+                    <input 
+                      type="radio" 
+                      name="imageSource" 
+                      value="upload" 
+                      onChange={() => {
+                        if (uploadedImage) {
+                          setImageUrl(uploadedImage);
+                        }
+                      }}
+                    />
+                    Загрузить свое изображение
+                  </label>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleImageUpload}
+                    className="file-input"
+                  />
+                </div>
+              </div>
+              
+              {imageUrl && (
+                <div className="image-preview">
+                  <h4>Предварительный просмотр:</h4>
+                  <img 
+                    src={imageUrl} 
+                    alt="Preview" 
+                    style={{ maxWidth: '200px', maxHeight: '200px', border: '1px solid #ccc' }}
+                  />
+                </div>
+              )}
             </div>
             
-            <div className="option">
-              <label>
-                <input 
-                  type="radio" 
-                  name="imageSource" 
-                  value="upload" 
-                  onChange={() => {
-                    if (uploadedImage) {
-                      setImageUrl(uploadedImage);
-                    }
+            <div className="talk-section">
+              <h3>Создать разговор:</h3>
+              
+              <div className="voice-selection">
+                <label>
+                  Выберите голос:
+                  <select 
+                    value={selectedVoice} 
+                    onChange={(e) => setSelectedVoice(e.target.value)}
+                    disabled={loadingVoices}
+                  >
+                    {loadingVoices ? (
+                      <option>Загрузка голосов...</option>
+                    ) : (
+                      voices.map(voice => (
+                        <option key={voice.voice_id} value={voice.voice_id}>
+                          {voice.name} - {voice.description}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+              </div>
+              
+              <div className="talk-input">
+                <label>
+                  Текст для аватара:
+                  <textarea
+                    value={talkText}
+                    onChange={(e) => setTalkText(e.target.value)}
+                    placeholder="Введите текст для аватара..."
+                    rows={3}
+                  />
+                </label>
+              </div>
+            </div>
+            
+            <div className="button-group">
+              <button 
+                onClick={createStream} 
+                disabled={loading}
+                className="create-button"
+              >
+                {loading ? 'Создание стрима...' : 'Create a new stream'}
+              </button>
+              
+              <button 
+                onClick={getSdpData} 
+                disabled={sdpLoading || !streamData}
+                className="sdp-button"
+              >
+                {sdpLoading ? 'Создание WebRTC...' : 'Start Stream'}
+              </button>
+              
+              <button 
+                onClick={createTalkStream} 
+                disabled={creatingTalk || !connectionReady}
+                className="talk-button"
+              >
+                {creatingTalk ? 'Создание разговора...' : connectionReady ? 'Create Talk Stream' : '⏳ Wait for connection...'}
+              </button>
+            </div>
+            
+            {streamStarted && (
+              <div className="stream-status">
+                <span className="status-indicator">🟢 Стрим запущен</span>
+              </div>
+            )}
+            
+            {connectionReady && (
+              <div className="stream-status">
+                <span className="status-indicator">🟢 WebRTC соединение готово</span>
+              </div>
+            )}
+            
+            {isMicrophoneActive && (
+              <div className="microphone-status">
+                <span className="status-indicator">🎤 Микрофон активен - слушаю...</span>
+                <button 
+                  onClick={stopMicrophone}
+                  className="stop-microphone-button"
+                >
+                  Остановить микрофон
+                </button>
+              </div>
+            )}
+            
+            <div className="text-processing-section">
+              <h4>🎤 Тестирование Streaming Text-to-Speech</h4>
+              <div className="text-input-group">
+                <textarea
+                  value={textToProcess}
+                  onChange={(e) => setTextToProcess(e.target.value)}
+                  placeholder="Введите текст для обработки через ElevenLabs streaming API..."
+                  rows={3}
+                  className="text-input"
+                />
+                <button 
+                  onClick={handleTextProcessing}
+                  disabled={processingText || !textToProcess.trim()}
+                  className="process-text-button"
+                >
+                  {processingText ? 'Обработка...' : 'Обработать текст'}
+                </button>
+              </div>
+            </div>
+            
+            {talkCreated && (
+              <div className="stream-status">
+                <span className="status-indicator">🎤 Разговор создан</span>
+              </div>
+            )}
+            
+            {connectionState && (
+              <div className="connection-status">
+                <h4>Состояние соединения:</h4>
+                <div className="status-text">{connectionState}</div>
+                {iceCandidates.length > 0 && (
+                  <div className="ice-info">
+                    <small>ICE candidates отправлено: {iceCandidates.length}</small>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Video Player */}
+            <div className="video-section">
+              <h3>Видео поток:</h3>
+              <div className="video-container">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted={false}
+                  controls
+                  className="video-player"
+                  style={{
+                    width: '100%',
+                    maxWidth: '640px',
+                    height: 'auto',
+                    border: '2px solid #4CAF50',
+                    borderRadius: '10px',
+                    backgroundColor: '#000'
                   }}
                 />
-                Загрузить свое изображение
-              </label>
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={handleImageUpload}
-                className="file-input"
-              />
-            </div>
-          </div>
-          
-          {imageUrl && (
-            <div className="image-preview">
-              <h4>Предварительный просмотр:</h4>
-              <img 
-                src={imageUrl} 
-                alt="Preview" 
-                style={{ maxWidth: '200px', maxHeight: '200px', border: '1px solid #ccc' }}
-              />
-            </div>
-          )}
-        </div>
-        
-        <div className="talk-section">
-          <h3>Создать разговор:</h3>
-          
-          <div className="voice-selection">
-            <label>
-              Выберите голос:
-              <select 
-                value={selectedVoice} 
-                onChange={(e) => setSelectedVoice(e.target.value)}
-                disabled={loadingVoices}
-              >
-                {loadingVoices ? (
-                  <option>Загрузка голосов...</option>
-                ) : (
-                  voices.map(voice => (
-                    <option key={voice.voice_id} value={voice.voice_id}>
-                      {voice.name} - {voice.description}
-                    </option>
-                  ))
+                {!isVideoPlaying && streamStarted && (
+                  <div className="video-placeholder">
+                    <p>⏳ Ожидание видео потока...</p>
+                    <p>После создания talk stream здесь появится видео аватара</p>
+                  </div>
                 )}
-              </select>
-            </label>
-          </div>
-          
-          <div className="talk-input">
-            <label>
-              Текст для аватара:
-              <textarea
-                value={talkText}
-                onChange={(e) => setTalkText(e.target.value)}
-                placeholder="Введите текст для аватара..."
-                rows={3}
-              />
-            </label>
-          </div>
-        </div>
-        
-        <div className="button-group">
-          <button 
-            onClick={createStream} 
-            disabled={loading}
-            className="create-button"
-          >
-            {loading ? 'Создание стрима...' : 'Create a new stream'}
-          </button>
-          
-          <button 
-            onClick={getSdpData} 
-            disabled={sdpLoading || !streamData}
-            className="sdp-button"
-          >
-            {sdpLoading ? 'Создание WebRTC...' : 'Start Stream'}
-          </button>
-          
-          <button 
-            onClick={createTalkStream} 
-            disabled={creatingTalk || !connectionReady}
-            className="talk-button"
-          >
-            {creatingTalk ? 'Создание разговора...' : connectionReady ? 'Create Talk Stream' : '⏳ Wait for connection...'}
-          </button>
-        </div>
-        
-                       {streamStarted && (
-                 <div className="stream-status">
-                   <span className="status-indicator">🟢 Стрим запущен</span>
-                 </div>
-               )}
-               
-               {connectionReady && (
-                 <div className="stream-status">
-                   <span className="status-indicator">🟢 WebRTC соединение готово</span>
-                 </div>
-               )}
-               
-               {isMicrophoneActive && (
-                 <div className="microphone-status">
-                   <span className="status-indicator">🎤 Микрофон активен - слушаю...</span>
-                   <button 
-                     onClick={stopMicrophone}
-                     className="stop-microphone-button"
-                   >
-                     Остановить микрофон
-                   </button>
-                 </div>
-               )}
-               
-               <div className="text-processing-section">
-                 <h4>🎤 Тестирование Streaming Text-to-Speech</h4>
-                 <div className="text-input-group">
-                   <textarea
-                     value={textToProcess}
-                     onChange={(e) => setTextToProcess(e.target.value)}
-                     placeholder="Введите текст для обработки через ElevenLabs streaming API..."
-                     rows={3}
-                     className="text-input"
-                   />
-                   <button 
-                     onClick={handleTextProcessing}
-                     disabled={processingText || !textToProcess.trim()}
-                     className="process-text-button"
-                   >
-                     {processingText ? 'Обработка...' : 'Обработать текст'}
-                   </button>
-                 </div>
-               </div>
-        
-        {talkCreated && (
-          <div className="stream-status">
-            <span className="status-indicator">🎤 Разговор создан</span>
-          </div>
+                {isVideoPlaying && (
+                  <div className="video-status">
+                    <span className="video-status-indicator">🎬 Видео активно</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {result && (
+              <div className="result">
+                <h3>Результат:</h3>
+                <pre>{result}</pre>
+              </div>
+            )}
+          </>
         )}
         
-        {connectionState && (
-          <div className="connection-status">
-            <h4>Состояние соединения:</h4>
-            <div className="status-text">{connectionState}</div>
-            {iceCandidates.length > 0 && (
-              <div className="ice-info">
-                <small>ICE candidates отправлено: {iceCandidates.length}</small>
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* Video Player */}
-        <div className="video-section">
-          <h3>Видео поток:</h3>
-          <div className="video-container">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted={false}
-              controls
-              className="video-player"
-              style={{
-                width: '100%',
-                maxWidth: '640px',
-                height: 'auto',
-                border: '2px solid #4CAF50',
-                borderRadius: '10px',
-                backgroundColor: '#000'
-              }}
-            />
-            {!isVideoPlaying && streamStarted && (
-              <div className="video-placeholder">
-                <p>⏳ Ожидание видео потока...</p>
-                <p>После создания talk stream здесь появится видео аватара</p>
-              </div>
-            )}
-            {isVideoPlaying && (
-              <div className="video-status">
-                <span className="video-status-indicator">🎬 Видео активно</span>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {result && (
-          <div className="result">
-            <h3>Результат:</h3>
-            <pre>{result}</pre>
-          </div>
+        {/* Voice Changer Tab */}
+        {activeTab === 'voice-changer' && (
+          <VoiceChanger />
         )}
       </header>
     </div>
