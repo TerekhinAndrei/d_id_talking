@@ -316,26 +316,17 @@ async def create_talk_stream(
         response = await services["webrtc_service"].create_talk_stream(
             stream_id,
             request.session_id,
-            request.script,
-            request.config,
-            request.audio_optimization,
-            request.result_url
+            request.script
         )
         
-        if response.success:
-            logger.info(f"Talk stream created successfully: {stream_id}")
-            return TalkStreamResponse(
-                success=True,
-                talk_id=response.data.get('id') if response.data else None,
-                status=response.data.get('status') if response.data else None,
-                message="Talk stream created successfully"
-            )
-        else:
-            logger.error(f"Talk stream creation failed: {response.error}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to create talk stream: {response.error}"
-            )
+        # WebRTC service returns raw data, not a response object
+        logger.info(f"Talk stream created successfully: {stream_id}")
+        return TalkStreamResponse(
+            success=True,
+            talk_id=response.get('id') if response else None,
+            status=response.get('status') if response else None,
+            message="Talk stream created successfully"
+        )
             
     except Exception as e:
         logger.error(f"Talk stream operation error: {e}")

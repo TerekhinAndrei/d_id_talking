@@ -195,7 +195,7 @@ class ApiService {
 
   // Streaming API
   async createStream(imageUrl, description = 'D-ID streaming session') {
-    return this.request('/streaming/sessions', {
+    return this.request('/streaming/start', {
       method: 'POST',
       body: JSON.stringify({
         image_url: imageUrl,
@@ -249,21 +249,7 @@ class ApiService {
     return this.request(`/streaming/${streamId}/status`);
   }
 
-  // Voice Changer
-  async voiceChangerStream(audioData, voiceId, modelId = 'eleven_multilingual_sts_v2', outputFormat = 'mp3_44100_128', optimizeLatency = 3) {
-    const formData = new FormData();
-    formData.append('audio_data', audioData);
-    formData.append('voice_id', voiceId);
-    formData.append('model_id', modelId);
-    formData.append('output_format', outputFormat);
-    formData.append('optimize_latency', optimizeLatency);
 
-    return this.request('/tts/voice-changer-stream', {
-      method: 'POST',
-      headers: {}, // Let browser set Content-Type for FormData
-      body: formData,
-    });
-  }
 
   // Real-time Audio Streaming
   async streamAudioRealtime(audioData, voiceId, modelId = 'eleven_multilingual_sts_v2') {

@@ -141,16 +141,30 @@ class WebRTCService:
                 "session_id": session_id
             }
             
+            logger.info(f"Creating talk stream for stream: {stream_id}")
+            logger.info(f"Request URL: {url}")
+            logger.info(f"Request payload: {payload}")
+            logger.info(f"Request headers: {self.headers}")
+            
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=self.headers, json=payload) as response:
-                    response.raise_for_status()
+                    logger.info(f"D-ID API Response Status: {response.status}")
+                    logger.info(f"D-ID API Response Headers: {dict(response.headers)}")
+                    
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(f"D-ID API Error Response: {error_text}")
+                        response.raise_for_status()
+                    
                     data = await response.json()
+                    logger.info(f"D-ID API Success Response: {data}")
                     
                     logger.info(f"Talk stream created for stream: {stream_id}")
                     return data
                     
         except Exception as e:
             logger.error(f"Error creating talk stream: {e}")
+            logger.error(f"Exception type: {type(e)}")
             raise
     
     async def delete_stream(self, stream_id: str, session_id: str) -> Dict[str, Any]:

@@ -224,21 +224,25 @@ const DIdStreamingTester = () => {
     try {
       addLog('🎤 Step 4: Creating talk stream...', 'info');
       
-      // Use audio script format that works with D-ID API
-      const audioScript = {
-        type: "audio",
-        audio_url: "https://www.soundjay.com/misc/sounds/bell-ringing-05.wav"
+      // Use text script format that works with D-ID API
+      const textScript = {
+        type: "text",
+        input: "Hello! This is a test message from D-ID streaming.",
+        provider: {
+          type: "microsoft",
+          voice_id: "en-US-JennyNeural"
+        }
       };
 
       const response = await apiService.createDIdTalk(
         testState.streamId,
         testState.sessionId,
-        audioScript
+        textScript
       );
 
       if (response.success) {
         addLog('✅ Talk stream created successfully!', 'success');
-        addLog(`🎵 Audio URL: ${audioScript.audio_url}`, 'info');
+        addLog(`📝 Text: ${textScript.input}`, 'info');
         addLog(`📋 Talk ID: ${response.talk_id || 'N/A'}`, 'info');
         setTestState(prev => ({ ...prev, step: 4, error: null }));
       } else {
