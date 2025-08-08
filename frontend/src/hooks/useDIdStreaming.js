@@ -139,9 +139,13 @@ export const useDIdStreaming = () => {
       });
 
       // Set remote description (SDP offer from stream creation)
+      // Fix SDP format - replace \r\n with \n
+      const cleanSdp = streamState.sdpOffer.replace(/\\r\\n/g, '\n');
+      console.log('📝 Cleaned SDP offer:', cleanSdp.substring(0, 100) + '...');
+      
       await peerConnection.setRemoteDescription({
         type: 'offer',
-        sdp: streamState.sdpOffer
+        sdp: cleanSdp
       });
 
       // Create answer
