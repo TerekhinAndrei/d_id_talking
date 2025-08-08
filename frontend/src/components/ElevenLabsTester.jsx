@@ -23,17 +23,15 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
   const {
     isRecording,
     isProcessing: isProcessingMicrophone,
+    isPlaying,
     error: microphoneError,
-    audioBlob,
-    audioUrl,
-    processedAudioUrl,
-    startRecording,
-    stopRecording,
-    processWithElevenLabs,
-    playOriginalAudio,
-    playProcessedAudio,
-    clearAudio,
-    getRecordingDuration
+    audioChunks,
+    processedChunks,
+    startStreaming,
+    stopStreaming,
+    stopPlayback,
+    clearData,
+    getStats
   } = useMicrophoneRecording();
 
   const addTestResult = (testName, success, message, data = null) => {
@@ -148,49 +146,30 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
     }
   };
 
-  // New microphone recording functions
-  const handleStartMicrophoneRecording = async () => {
-    try {
-      await startRecording();
-      addTestResult('Запись с микрофона', 'pending', 'Запись начата...');
-    } catch (error) {
-      addTestResult('Запись с микрофона', 'error', error.message);
-    }
-  };
-
-  const handleStopMicrophoneRecording = () => {
-    stopRecording();
-    addTestResult('Запись с микрофона', 'success', 'Запись завершена');
-  };
-
-  const handleProcessMicrophoneAudio = async () => {
+  // Real-time streaming functions
+  const handleStartStreaming = async () => {
     if (!selectedVoiceForTest) {
-      alert('Выберите голос для обработки');
-      return;
-    }
-
-    if (!audioBlob) {
-      alert('Сначала запишите аудио с микрофона');
+      alert('Выберите голос для стриминга');
       return;
     }
 
     try {
-      addTestResult('Обработка микрофона', 'pending', 'Обработка аудио через ElevenLabs...');
-      
-      const response = await processWithElevenLabs(selectedVoiceForTest);
-      
-      if (response.success) {
-        addTestResult('Обработка микрофона', 'success', 'Аудио успешно обработано', {
-          format: response.format,
-          sampleRate: response.sampleRate,
-          bitrate: response.bitrate
-        });
-      } else {
-        addTestResult('Обработка микрофона', 'error', response.message || 'Ошибка обработки');
-      }
+      addTestResult('Потоковый стриминг', 'pending', 'Запуск стриминга в реальном времени...');
+      await startStreaming(selectedVoiceForTest);
+      addTestResult('Потоковый стриминг', 'success', 'Стриминг запущен - говорите в микрофон');
     } catch (error) {
-      addTestResult('Обработка микрофона', 'error', error.message);
+      addTestResult('Потоковый стриминг', 'error', error.message);
     }
+  };
+
+  const handleStopStreaming = () => {
+    stopStreaming();
+    addTestResult('Потоковый стриминг', 'success', 'Стриминг остановлен');
+  };
+
+  const handleStopPlayback = () => {
+    stopPlayback();
+    addTestResult('Воспроизведение', 'success', 'Воспроизведение остановлено');
   };
 
   const handleFileChange = (event) => {
@@ -205,8 +184,11 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
   const clearResults = () => {
     setTestResults([]);
     clearState();
-    clearAudio();
+    clearData();
   };
+
+  // Get streaming statistics
+  const stats = getStats();
 
   return (
     <div className="elevenlabs-tester">
@@ -263,78 +245,106 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
           )}
         </div>
 
-        {/* Microphone Recording Section */}
+        {/* Real-time Streaming Section */}
         <div className="microphone-section">
-          <h4>🎤 Запись с микрофона</h4>
+          <h4>🎤 Потоковый стриминг в реальном времени</h4>
           
+          <div className="streaming-info">
+            <p className="streaming-description">
+              Говорите в микрофон - ваша речь будет обрабатываться чанками по 2 секунды 
+              и воспроизводиться измененным голосом в реальном времени.
+            </p>
+          </div>
+
           <div className="microphone-controls">
             <button 
-              onClick={handleStartMicrophoneRecording}
-              disabled={isRecording || isProcessingMicrophone}
-              className="test-btn microphone-btn record-btn"
+              onClick={handleStartStreaming}
+              disabled={isRecording || isProcessingMicrophone || !selectedVoiceForTest}
+              className="test-btn microphone-btn stream-btn"
             >
-              {isRecording ? '⏳' : '🎤'} {isRecording ? 'Запись...' : 'Начать запись'}
+              {isRecording ? '⏳' : '🎤'} {isRecording ? 'Стриминг...' : 'Начать стриминг'}
             </button>
 
             <button 
-              onClick={handleStopMicrophoneRecording}
+              onClick={handleStopStreaming}
               disabled={!isRecording}
               className="test-btn microphone-btn stop-btn"
             >
-              ⏹️ Остановить запись
+              ⏹️ Остановить стриминг
             </button>
 
             <button 
-              onClick={handleProcessMicrophoneAudio}
-              disabled={!audioBlob || !selectedVoiceForTest || isProcessingMicrophone}
-              className="test-btn microphone-btn process-btn"
+              onClick={handleStopPlayback}
+              disabled={!isPlaying}
+              className="test-btn microphone-btn stop-playback-btn"
             >
-              {isProcessingMicrophone ? '⏳' : '🔄'} Обработать через ElevenLabs
+              🔇 Остановить воспроизведение
             </button>
           </div>
 
-          {/* Audio Playback Controls */}
-          {(audioUrl || processedAudioUrl) && (
-            <div className="audio-playback">
-              <h5>Воспроизведение:</h5>
+          {/* Streaming Statistics */}
+          {(isRecording || audioChunks.length > 0) && (
+            <div className="streaming-stats">
+              <h5>📊 Статистика стриминга:</h5>
               
-              {audioUrl && (
-                <button 
-                  onClick={playOriginalAudio}
-                  className="test-btn playback-btn original-btn"
-                >
-                  🔊 Воспроизвести оригинал
-                </button>
-              )}
+              <div className="stats-grid">
+                <div className="stat-item">
+                  <span className="stat-label">Статус записи:</span>
+                  <span className={`stat-value ${isRecording ? 'recording' : 'stopped'}`}>
+                    {isRecording ? '🔴 Запись' : '⏹️ Остановлено'}
+                  </span>
+                </div>
 
-              {processedAudioUrl && (
-                <button 
-                  onClick={playProcessedAudio}
-                  className="test-btn playback-btn processed-btn"
-                >
-                  🎵 Воспроизвести обработанное
-                </button>
-              )}
+                <div className="stat-item">
+                  <span className="stat-label">Статус обработки:</span>
+                  <span className={`stat-value ${isProcessingMicrophone ? 'processing' : 'idle'}`}>
+                    {isProcessingMicrophone ? '🔄 Обработка' : '⏸️ Ожидание'}
+                  </span>
+                </div>
 
-              <button 
-                onClick={clearAudio}
-                className="test-btn clear-btn"
-              >
-                🗑️ Очистить аудио
-              </button>
+                <div className="stat-item">
+                  <span className="stat-label">Статус воспроизведения:</span>
+                  <span className={`stat-value ${isPlaying ? 'playing' : 'stopped'}`}>
+                    {isPlaying ? '🔊 Воспроизведение' : '🔇 Остановлено'}
+                  </span>
+                </div>
+
+                <div className="stat-item">
+                  <span className="stat-label">Всего чанков:</span>
+                  <span className="stat-value">{stats.totalChunks}</span>
+                </div>
+
+                <div className="stat-item">
+                  <span className="stat-label">Обработано чанков:</span>
+                  <span className="stat-value">{stats.processedChunks}</span>
+                </div>
+
+                <div className="stat-item">
+                  <span className="stat-label">Последний чанк:</span>
+                  <span className="stat-value">
+                    {audioChunks.length > 0 ? 
+                      `${audioChunks[audioChunks.length - 1].size} байт` : 
+                      'Нет данных'
+                    }
+                  </span>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Recording Status */}
-          {isRecording && (
-            <div className="recording-status">
-              <span className="recording-indicator">🔴 Запись...</span>
-            </div>
-          )}
-
-          {audioBlob && (
-            <div className="recording-info">
-              <span>✅ Записано: {getRecordingDuration()} сек</span>
+          {/* Chunk History */}
+          {audioChunks.length > 0 && (
+            <div className="chunk-history">
+              <h5>📦 История чанков:</h5>
+              <div className="chunks-list">
+                {audioChunks.slice(-5).reverse().map((chunk, index) => (
+                  <div key={chunk.id} className="chunk-item">
+                    <span className="chunk-number">#{chunk.counter}</span>
+                    <span className="chunk-size">{chunk.size} байт</span>
+                    <span className="chunk-time">{chunk.timestamp.toLocaleTimeString()}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -395,7 +405,7 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
           message={`Ошибка ElevenLabs: ${error || microphoneError}`} 
           onRetry={() => {
             clearState();
-            clearAudio();
+            clearData();
           }}
         />
       )}

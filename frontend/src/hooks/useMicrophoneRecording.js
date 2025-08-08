@@ -1,24 +1,147 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { apiService } from '../services/api';
 
 export const useMicrophoneRecording = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
-  const [audioBlob, setAudioBlob] = useState(null);
-  const [audioUrl, setAudioUrl] = useState(null);
-  const [processedAudioUrl, setProcessedAudioUrl] = useState(null);
+  const [audioChunks, setAudioChunks] = useState([]);
+  const [processedChunks, setProcessedChunks] = useState([]);
+  const [isPlaying, setIsPlaying] = useState(false);
   
   const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
+  const audioContextRef = useRef(null);
+  const audioQueueRef = useRef([]);
+  const isPlayingRef = useRef(false);
+  const streamRef = useRef(null);
+  const chunkIntervalRef = useRef(null);
 
-  // Start recording
-  const startRecording = useCallback(async () => {
+  // Initialize audio context for playback
+  const initAudioContext = useCallback(() => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  }, []);
+
+  // Convert base64 to audio buffer for playback
+  const base64ToAudioBuffer = useCallback(async (base64Data) => {
+    try {
+      // Remove data URL prefix if present
+      let cleanBase64 = base64Data;
+      if (base64Data.includes(',')) {
+        cleanBase64 = base64Data.split(',')[1];
+      }
+
+      // Convert base64 to array buffer
+      const byteCharacters = atob(cleanBase64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const arrayBuffer = byteArray.buffer;
+
+      // Decode audio data
+      const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+      return audioBuffer;
+    } catch (error) {
+      console.error('Ошибка декодирования аудио:', error);
+      throw error;
+    }
+  }, []);
+
+  // Play audio buffer
+  const playAudioBuffer = useCallback(async (audioBuffer) => {
+    try {
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContextRef.current.destination);
+      
+      // Add to queue for sequential playback
+      audioQueueRef.current.push(source);
+      
+      // Start playing if not already playing
+      if (!isPlayingRef.current) {
+        playNextInQueue();
+      }
+    } catch (error) {
+      console.error('Ошибка воспроизведения аудио:', error);
+    }
+  }, []);
+
+  // Play next audio in queue
+  const playNextInQueue = useCallback(() => {
+    if (audioQueueRef.current.length === 0) {
+      isPlayingRef.current = false;
+      setIsPlaying(false);
+      return;
+    }
+
+    isPlayingRef.current = true;
+    setIsPlaying(true);
+    
+    const source = audioQueueRef.current.shift();
+    source.onended = () => {
+      playNextInQueue();
+    };
+    
+    source.start();
+  }, []);
+
+  // Process audio chunk through ElevenLabs
+  const processAudioChunk = useCallback(async (audioBlob, voiceId) => {
+    try {
+      console.log('🔄 Обработка аудио чанка...', { size: audioBlob.size });
+      
+      // Convert blob to file
+      const audioFile = new File([audioBlob], 'chunk.webm', {
+        type: 'audio/webm'
+      });
+
+      // Send to ElevenLabs API
+      const response = await apiService.speechToSpeech(audioFile, voiceId);
+      
+      if (response.success) {
+        console.log('✅ Чанк обработан успешно');
+        
+        // Convert response to audio buffer and play
+        const audioBuffer = await base64ToAudioBuffer(response.audio_data);
+        await playAudioBuffer(audioBuffer);
+        
+        // Store processed chunk
+        setProcessedChunks(prev => [...prev, {
+          id: Date.now(),
+          originalSize: audioBlob.size,
+          processedSize: response.audio_data.length,
+          timestamp: new Date()
+        }]);
+        
+        return response;
+      } else {
+        throw new Error(response.message || 'Ошибка обработки чанка');
+      }
+    } catch (error) {
+      console.error('❌ Ошибка обработки чанка:', error);
+      setError(error.message);
+      throw error;
+    }
+  }, [base64ToAudioBuffer, playAudioBuffer]);
+
+  // Start real-time streaming
+  const startStreaming = useCallback(async (voiceId) => {
     try {
       setError(null);
-      audioChunksRef.current = [];
+      setAudioChunks([]);
+      setProcessedChunks([]);
+      audioQueueRef.current = [];
+      isPlayingRef.current = false;
+      setIsPlaying(false);
 
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      // Initialize audio context
+      initAudioContext();
+
+      // Get microphone stream
+      streamRef.current = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           sampleRate: 44100,
           channelCount: 1,
@@ -27,160 +150,132 @@ export const useMicrophoneRecording = () => {
         } 
       });
 
-      mediaRecorderRef.current = new MediaRecorder(stream, {
+      // Create MediaRecorder for chunked recording
+      mediaRecorderRef.current = new MediaRecorder(streamRef.current, {
         mimeType: 'audio/webm;codecs=opus'
       });
 
-      mediaRecorderRef.current.ondataavailable = (event) => {
+      let chunkCounter = 0;
+      const CHUNK_DURATION = 2000; // 2 seconds per chunk
+
+      mediaRecorderRef.current.ondataavailable = async (event) => {
         if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
+          const chunk = event.data;
+          chunkCounter++;
+          
+          console.log(`📦 Получен аудио чанк #${chunkCounter}`, { size: chunk.size });
+          
+          // Store original chunk
+          setAudioChunks(prev => [...prev, {
+            id: Date.now(),
+            size: chunk.size,
+            counter: chunkCounter,
+            timestamp: new Date()
+          }]);
+
+          // Process chunk through ElevenLabs
+          try {
+            setIsProcessing(true);
+            await processAudioChunk(chunk, voiceId);
+          } catch (error) {
+            console.error(`❌ Ошибка обработки чанка #${chunkCounter}:`, error);
+          } finally {
+            setIsProcessing(false);
+          }
         }
       };
 
-      mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        setAudioBlob(blob);
-        setAudioUrl(URL.createObjectURL(blob));
-        
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      mediaRecorderRef.current.start(1000); // Collect data every second
+      mediaRecorderRef.current.start(CHUNK_DURATION);
       setIsRecording(true);
       
-      console.log('🎤 Запись с микрофона начата');
+      console.log('🎤 Стриминг начат - обработка в реальном времени');
     } catch (error) {
-      console.error('❌ Ошибка начала записи:', error);
+      console.error('❌ Ошибка начала стриминга:', error);
       setError(error.message);
     }
-  }, []);
+  }, [processAudioChunk, initAudioContext]);
 
-  // Stop recording
-  const stopRecording = useCallback(() => {
+  // Stop streaming
+  const stopStreaming = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      console.log('⏹️ Запись с микрофона остановлена');
+      
+      // Stop all tracks
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      
+      console.log('⏹️ Стриминг остановлен');
     }
   }, [isRecording]);
 
-  // Process recorded audio with ElevenLabs
-  const processWithElevenLabs = useCallback(async (voiceId, settings = null) => {
-    if (!audioBlob) {
-      setError('Нет записанного аудио для обработки');
-      return;
-    }
-
-    try {
-      setIsProcessing(true);
-      setError(null);
-
-      console.log('🔄 Обработка аудио через ElevenLabs...', { voiceId });
-
-      // Convert blob to file
-      const audioFile = new File([audioBlob], 'microphone_recording.webm', {
-        type: 'audio/webm'
-      });
-
-      // Send to ElevenLabs API
-      const response = await apiService.speechToSpeech(audioFile, voiceId, settings);
-
-      if (response.success) {
-        console.log('✅ Аудио успешно обработано через ElevenLabs');
-        
-        // Convert base64 to blob for playback
-        const base64Data = response.audio_data;
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        
-        const byteArray = new Uint8Array(byteNumbers);
-        const processedBlob = new Blob([byteArray], { type: `audio/${response.format || 'mp3'}` });
-        const processedUrl = URL.createObjectURL(processedBlob);
-        
-        setProcessedAudioUrl(processedUrl);
-        
-        return {
-          success: true,
-          audioUrl: processedUrl,
-          format: response.format,
-          sampleRate: response.sample_rate,
-          bitrate: response.bitrate
-        };
-      } else {
-        throw new Error(response.message || 'Ошибка обработки аудио');
+  // Stop playback
+  const stopPlayback = useCallback(() => {
+    // Stop all queued audio
+    audioQueueRef.current.forEach(source => {
+      try {
+        source.stop();
+      } catch (error) {
+        // Ignore errors for already stopped sources
       }
-    } catch (error) {
-      console.error('❌ Ошибка обработки аудио:', error);
-      setError(error.message);
-      throw error;
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [audioBlob]);
-
-  // Play original audio
-  const playOriginalAudio = useCallback(() => {
-    if (audioUrl) {
-      const audio = new Audio(audioUrl);
-      audio.play().catch(error => {
-        console.error('Ошибка воспроизведения оригинального аудио:', error);
-        setError('Ошибка воспроизведения оригинального аудио');
-      });
-    }
-  }, [audioUrl]);
-
-  // Play processed audio
-  const playProcessedAudio = useCallback(() => {
-    if (processedAudioUrl) {
-      const audio = new Audio(processedAudioUrl);
-      audio.play().catch(error => {
-        console.error('Ошибка воспроизведения обработанного аудио:', error);
-        setError('Ошибка воспроизведения обработанного аудио');
-      });
-    }
-  }, [processedAudioUrl]);
-
-  // Clear all audio data
-  const clearAudio = useCallback(() => {
-    setAudioBlob(null);
-    setAudioUrl(null);
-    setProcessedAudioUrl(null);
-    setError(null);
+    });
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+    setIsPlaying(false);
     
-    // Clean up URLs
-    if (audioUrl) URL.revokeObjectURL(audioUrl);
-    if (processedAudioUrl) URL.revokeObjectURL(processedAudioUrl);
-  }, [audioUrl, processedAudioUrl]);
+    console.log('🔇 Воспроизведение остановлено');
+  }, []);
 
-  // Get recording duration
-  const getRecordingDuration = useCallback(() => {
-    if (audioBlob) {
-      return Math.round(audioBlob.size / 16000); // Rough estimate based on file size
-    }
-    return 0;
-  }, [audioBlob]);
+  // Clear all data
+  const clearData = useCallback(() => {
+    setAudioChunks([]);
+    setProcessedChunks([]);
+    setError(null);
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+    setIsPlaying(false);
+  }, []);
+
+  // Get statistics
+  const getStats = useCallback(() => {
+    return {
+      totalChunks: audioChunks.length,
+      processedChunks: processedChunks.length,
+      isRecording,
+      isProcessing,
+      isPlaying,
+      error
+    };
+  }, [audioChunks.length, processedChunks.length, isRecording, isProcessing, isPlaying, error]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, []);
 
   return {
     // State
     isRecording,
     isProcessing,
+    isPlaying,
     error,
-    audioBlob,
-    audioUrl,
-    processedAudioUrl,
+    audioChunks,
+    processedChunks,
     
     // Functions
-    startRecording,
-    stopRecording,
-    processWithElevenLabs,
-    playOriginalAudio,
-    playProcessedAudio,
-    clearAudio,
-    getRecordingDuration
+    startStreaming,
+    stopStreaming,
+    stopPlayback,
+    clearData,
+    getStats
   };
 };
