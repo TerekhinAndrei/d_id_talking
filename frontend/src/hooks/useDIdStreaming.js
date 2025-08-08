@@ -218,6 +218,11 @@ export const useDIdStreaming = () => {
         sdpMLineIndex: candidate.sdpMLineIndex
       });
       
+      if (!streamState.streamId || !streamState.sessionId) {
+        console.error('❌ Missing streamId or sessionId for ICE candidate');
+        return;
+      }
+      
       const response = await apiService.submitDIdIceCandidate(
         streamState.streamId,
         streamState.sessionId,
@@ -241,6 +246,11 @@ export const useDIdStreaming = () => {
     try {
       console.log('🎤 Step 4: Creating talk stream...');
       
+      if (!streamState.streamId || !streamState.sessionId) {
+        console.error('❌ Missing streamId or sessionId for talk creation');
+        return { success: false, error: 'Missing stream data' };
+      }
+      
       // Use text script format that works with D-ID API - EXACT SAME AS DIdStreamingTester
       const textScript = {
         type: "text",
@@ -250,6 +260,10 @@ export const useDIdStreaming = () => {
           voice_id: "en-US-JennyNeural"
         }
       };
+
+      console.log('🎤 Using streamId:', streamState.streamId);
+      console.log('🎤 Using sessionId:', streamState.sessionId);
+      console.log('🎤 Using script:', textScript);
 
       const response = await apiService.createDIdTalk(
         streamState.streamId,
