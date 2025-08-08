@@ -170,7 +170,7 @@ function App() {
       
       console.log('📸 Используем изображение:', selectedImage ? 'загруженное пользователем' : 'по умолчанию');
       
-      // Step 1: Create stream
+      // Step 1: Create stream - EXACT SAME AS DIdStreamingTester
       console.log('📸 Создание стрима с изображением:', imageUrl);
       const streamResult = await createStream(imageUrl);
       console.log('📥 Результат создания стрима:', streamResult);
@@ -181,10 +181,9 @@ function App() {
       
       console.log('✅ Стрим создан:', streamResult.streamId);
       
-      // Step 2: Start stream (simplified SDP answer)
+      // Step 2: Start stream - EXACT SAME AS DIdStreamingTester
       console.log('🔗 Запуск стрима');
-      const sdpAnswer = streamResult.sdpOffer.replace(/a=sendonly/g, 'a=recvonly');
-      const startResult = await startStream(sdpAnswer, streamResult.streamId, streamResult.sessionId);
+      const startResult = await startStream();
       
       if (!startResult.success) {
         throw new Error('Не удалось запустить стрим');
@@ -192,44 +191,18 @@ function App() {
       
       console.log('✅ Стрим запущен');
       
-      // Use updated session ID from start result
-      const currentSessionId = startResult.sessionId || streamResult.sessionId;
+      // Step 3: ICE candidates are handled automatically by WebRTC
+      console.log('🌐 ICE candidates обрабатываются автоматически WebRTC');
       
-      // Step 3: Submit ICE candidate (simplified)
-      console.log('🌐 Отправка ICE candidate');
-      const iceResult = await submitIceCandidate(
-        'candidate:1 1 UDP 2122252543 192.168.1.1 12345 typ host',
-        '0',
-        0,
-        streamResult.streamId,
-        currentSessionId
-      );
-      
-      if (!iceResult.success) {
-        console.warn('⚠️ ICE candidate не отправлен, но продолжаем');
-      } else {
-        console.log('✅ ICE candidate отправлен');
-      }
-      
-      // Use latest session ID
-      const latestSessionId = (iceResult && iceResult.sessionId) || currentSessionId;
-      
-      // Step 4: Create talk stream
+      // Step 4: Create talk stream - EXACT SAME AS DIdStreamingTester
       console.log('🎤 Создание talk стрима');
-      
-      // Use audio script format like in the working test panel
-      const audioScript = {
-        type: "audio",
-        audio_url: "https://www.soundjay.com/misc/sounds/bell-ringing-05.wav"
-      };
-      
-      const talkResult = await createTalk(audioScript, selectedVoice, streamResult.streamId, latestSessionId);
+      const talkResult = await createTalk();
       
       if (!talkResult.success) {
         throw new Error('Не удалось создать talk стрим');
       }
       
-      console.log('✅ Talk стрим создан:', talkResult.talk_id || talkResult.talkId);
+      console.log('✅ Talk стрим создан!');
       console.log('✅ Полный процесс D-ID стриминга завершен успешно!');
       
       // Initialize microphone after successful stream creation

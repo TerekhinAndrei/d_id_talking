@@ -56,6 +56,12 @@ export const useDIdStreaming = () => {
           isCreating: false
         }));
         
+        console.log('📝 After setStreamState - checking what was saved:');
+        console.log('📝 response.sdp_offer type:', typeof response.sdp_offer);
+        console.log('📝 response.sdp_offer length:', response.sdp_offer ? response.sdp_offer.length : 'null');
+        console.log('📝 response.ice_servers type:', typeof response.ice_servers);
+        console.log('📝 response.ice_servers length:', response.ice_servers ? response.ice_servers.length : 'null');
+        
         return {
           success: true,
           streamId: response.stream_id,
@@ -97,40 +103,36 @@ export const useDIdStreaming = () => {
     }
   }, []);
 
-  // Step 2: Start the stream
-  const startStream = useCallback(async (sdpAnswer, streamId, sessionId) => {
-    // Use passed parameters if provided, otherwise use state
-    const currentStreamId = streamId || streamState.streamId;
-    const currentSessionId = sessionId || streamState.sessionId;
+  // Step 2: Start the stream (WebRTC setup) - EXACT SAME FLOW AS DIdStreamingTester
+  const startStream = useCallback(async () => {
+    console.log('🔗 Step 2: Starting D-ID stream with WebRTC setup');
     
-    if (!currentStreamId || !currentSessionId) {
-      console.error('❌ Missing stream data:', { 
-        currentStreamId, 
-        currentSessionId,
-        stateStreamId: streamState.streamId,
-        stateSessionId: streamState.sessionId 
-      });
-      throw new Error('Stream not created yet');
+    if (!streamState.sdpOffer || !streamState.iceServers) {
+      console.error('❌ Missing SDP offer or ICE servers');
+      throw new Error('Missing SDP offer or ICE servers');
     }
+
+    console.log('🔗 Using streamId:', streamState.streamId);
+    console.log('🔗 Using sessionId:', streamState.sessionId);
+    console.log('🔗 streamState.sdpOffer type:', typeof streamState.sdpOffer);
+    console.log('🔗 streamState.sdpOffer length:', streamState.sdpOffer ? streamState.sdpOffer.length : 'null');
+    console.log('🔗 streamState.iceServers type:', typeof streamState.iceServers);
+    console.log('🔗 streamState.iceServers length:', streamState.iceServers ? streamState.iceServers.length : 'null');
     
     setStreamState(prev => ({ ...prev, status: 'connecting', error: null }));
     
     try {
-      console.log('🔗 Step 2: Starting D-ID stream with WebRTC setup');
-      console.log('🔗 Using streamId:', currentStreamId);
-      console.log('🔗 Using sessionId:', currentSessionId);
-      
-      // Create WebRTC peer connection using ICE servers from stream creation
+      // Create WebRTC peer connection - EXACT SAME AS DIdStreamingTester
       const peerConnection = new RTCPeerConnection({ 
-        iceServers: streamState.iceServers || [] 
+        iceServers: streamState.iceServers 
       });
 
-      // Set up event listeners
+      // Set up event listeners - EXACT SAME AS DIdStreamingTester
       peerConnection.addEventListener('icecandidate', (event) => {
         if (event.candidate) {
           console.log('🧊 ICE candidate generated');
           // Submit ICE candidate
-          submitIceCandidate(event.candidate, currentStreamId, currentSessionId);
+          submitIceCandidate(event.candidate);
         }
       });
 
@@ -144,39 +146,30 @@ export const useDIdStreaming = () => {
 
       peerConnection.addEventListener('track', (event) => {
         console.log('🎬 Received video track!');
-        // Handle video stream - this will be handled by the video player component
+        // Handle video stream
+        const videoElement = document.getElementById('video-player');
+        if (videoElement && event.streams[0]) {
+          videoElement.srcObject = event.streams[0];
+        }
       });
 
-      // Set remote description (SDP offer from stream creation)
-      console.log('🔍 Checking streamState.sdpOffer:', {
-        exists: !!streamState.sdpOffer,
-        type: typeof streamState.sdpOffer,
-        value: streamState.sdpOffer ? streamState.sdpOffer.substring(0, 50) + '...' : 'null'
-      });
-      
-      if (!streamState.sdpOffer) {
-        throw new Error('SDP offer not available in stream state');
-      }
-      
-      // Fix SDP format - replace \r\n with \n
-      const cleanSdp = streamState.sdpOffer.replace(/\\r\\n/g, '\n');
-      console.log('📝 Cleaned SDP offer:', cleanSdp.substring(0, 100) + '...');
-      
+      // Set remote description (SDP offer) - EXACT SAME AS DIdStreamingTester
       await peerConnection.setRemoteDescription({
         type: 'offer',
-        sdp: cleanSdp
+        sdp: streamState.sdpOffer
       });
 
-      // Create answer
+      // Create answer - EXACT SAME AS DIdStreamingTester
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
 
       console.log('📝 SDP answer created');
 
-      // Submit SDP answer using D-ID Tester's working format
+      // Submit SDP answer - EXACT SAME AS DIdStreamingTester
+      console.log('📝 Submitting SDP answer object:', answer);
       const response = await apiService.startDIdStream(
-        currentStreamId,
-        currentSessionId,
+        streamState.streamId,
+        streamState.sessionId,
         answer
       );
       
@@ -206,111 +199,68 @@ export const useDIdStreaming = () => {
     }
   }, [streamState.streamId, streamState.sessionId, streamState.sdpOffer, streamState.iceServers]);
 
-  // Step 3: Submit ICE candidate
-  const submitIceCandidate = useCallback(async (candidate, sdpMid, sdpMLineIndex, streamId, sessionId) => {
-    // Use passed parameters if provided, otherwise use state
-    const currentStreamId = streamId || streamState.streamId;
-    const currentSessionId = sessionId || streamState.sessionId;
-    
-    if (!currentStreamId || !currentSessionId) {
-      console.error('❌ Missing stream data for ICE candidate:', { 
-        currentStreamId, 
-        currentSessionId,
-        stateStreamId: streamState.streamId,
-        stateSessionId: streamState.sessionId 
-      });
-      throw new Error('Stream not connected yet');
-    }
-    
+  // Submit ICE candidate - EXACT SAME AS DIdStreamingTester
+  const submitIceCandidate = useCallback(async (candidate) => {
     try {
-      console.log('🌐 Step 3: Submitting ICE candidate:', { candidate, sdpMid, sdpMLineIndex });
-      console.log('🌐 Using streamId:', currentStreamId);
-      console.log('🌐 Using sessionId:', currentSessionId);
+      console.log('🎬 submitIceCandidate called with:', {
+        streamId: streamState.streamId,
+        sessionId: streamState.sessionId,
+        candidate: candidate.candidate,
+        sdpMid: candidate.sdpMid,
+        sdpMLineIndex: candidate.sdpMLineIndex
+      });
       
       const response = await apiService.submitDIdIceCandidate(
-        currentStreamId,
-        currentSessionId,
-        candidate,
-        sdpMid,
-        sdpMLineIndex
+        streamState.streamId,
+        streamState.sessionId,
+        candidate.candidate,
+        candidate.sdpMid,
+        candidate.sdpMLineIndex
       );
-      
+
       if (response.success) {
-        console.log('✅ ICE candidate submitted successfully');
-        
-        setStreamState(prev => ({
-          ...prev,
-          sessionId: response.session_id // Updated session ID
-        }));
-        
-        return { success: true, sessionId: response.session_id };
+        console.log('✅ ICE candidate submitted');
       } else {
-        throw new Error(response.message || 'Failed to submit ICE candidate');
+        console.error('❌ Failed to submit ICE candidate:', response.error);
       }
     } catch (error) {
       console.error('❌ Error submitting ICE candidate:', error);
-      setStreamState(prev => ({
-        ...prev,
-        error: error.message,
-        status: 'error'
-      }));
-      throw error;
     }
-  }, [streamState.streamId, streamState.sessionId]);
+  }, [streamState, apiService]);
 
-  // Step 4: Create talk stream
-  const createTalk = useCallback(async (script, voiceId, streamId, sessionId) => {
-    // Use passed parameters if provided, otherwise use state
-    const currentStreamId = streamId || streamState.streamId;
-    const currentSessionId = sessionId || streamState.sessionId;
-    
-    if (!currentStreamId || !currentSessionId) {
-      console.error('❌ Missing stream data for talk creation:', { 
-        currentStreamId, 
-        currentSessionId,
-        stateStreamId: streamState.streamId,
-        stateSessionId: streamState.sessionId 
-      });
-      throw new Error('Stream not connected yet');
-    }
-    
-    setStreamState(prev => ({ ...prev, status: 'talking', error: null }));
-    
+  // Step 4: Create talk stream - EXACT SAME AS DIdStreamingTester
+  const createTalk = useCallback(async () => {
     try {
-      console.log('🎤 Step 4: Creating talk stream:', { script, voiceId });
-      console.log('🎤 Using streamId:', currentStreamId);
-      console.log('🎤 Using sessionId:', currentSessionId);
+      console.log('🎤 Step 4: Creating talk stream...');
       
-      const response = await apiService.createTalk(
-        currentStreamId,
-        currentSessionId,
-        script
+      // Use text script format that works with D-ID API - EXACT SAME AS DIdStreamingTester
+      const textScript = {
+        type: "text",
+        input: "Hello! This is a test message from D-ID streaming.",
+        provider: {
+          type: "microsoft",
+          voice_id: "en-US-JennyNeural"
+        }
+      };
+
+      const response = await apiService.createDIdTalk(
+        streamState.streamId,
+        streamState.sessionId,
+        textScript
       );
-      
+
       if (response.success) {
-        console.log('✅ Talk stream created successfully:', {
-          talkId: response.talk_id,
-          status: response.status
-        });
-        
-        return {
-          success: true,
-          talkId: response.talk_id,
-          status: response.status
-        };
+        console.log('✅ Talk stream created successfully!');
+        return { success: true };
       } else {
-        throw new Error(response.message || 'Failed to create talk stream');
+        console.error('❌ Failed to create talk stream:', response.error);
+        return { success: false, error: response.error };
       }
     } catch (error) {
       console.error('❌ Error creating talk stream:', error);
-      setStreamState(prev => ({
-        ...prev,
-        error: error.message,
-        status: 'error'
-      }));
-      throw error;
+      return { success: false, error: error.message };
     }
-  }, [streamState.streamId, streamState.sessionId]);
+  }, [streamState, apiService]);
 
   // Step 5: Close stream
   const closeStream = useCallback(async () => {
