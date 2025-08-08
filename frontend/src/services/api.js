@@ -208,7 +208,7 @@ class ApiService {
     return this.request(`/streaming/${streamId}/sdp`, {
       method: 'POST',
       body: JSON.stringify({
-        answer: sdpAnswer,
+        answer: { sdp: sdpAnswer },
         session_id: sessionId
       }),
     });

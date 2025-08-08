@@ -121,11 +121,20 @@ async def exchange_sdp(
                 detail="Missing SDP answer in request"
             )
         
+        # Extract SDP string from the answer object
+        sdp_answer = request.answer.get('sdp') if isinstance(request.answer, dict) else str(request.answer)
+        
+        if not sdp_answer:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing SDP string in answer object"
+            )
+        
         # Submit SDP answer to D-ID according to documentation
         response = await services["webrtc_service"].start_webrtc_connection(
             stream_id,
             request.session_id,
-            request.answer
+            sdp_answer
         )
         
         # WebRTC service returns raw data, not a response object
