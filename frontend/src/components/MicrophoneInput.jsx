@@ -77,6 +77,17 @@ const MicrophoneInput = forwardRef(({
 
   // Process audio chunk
   const processAudioChunk = useCallback(async (audioBlob) => {
+    // Disable audio processing for D-ID streaming
+    console.log(`🎤 Audio chunk recorded (${audioBlob.size} bytes) - skipping ElevenLabs processing for D-ID streaming`);
+    
+    // Just pass the audio to parent component without processing
+    onAudioReceived?.(audioBlob);
+    
+    // Don't process through ElevenLabs API for D-ID streaming
+    return;
+    
+    // Original code commented out:
+    /*
     if (!voiceId) {
       throw new Error('Voice ID is required for audio processing');
     }
@@ -98,16 +109,19 @@ const MicrophoneInput = forwardRef(({
         const processedAudio = base64ToBlob(audioData, 'audio/mp3');
         onAudioReceived?.(processedAudio);
         
-        if (autoPlay) {
-          playAudio(processedAudio);
-        }
+        // Disable auto-play for D-ID streaming
+        // if (autoPlay) {
+        //   playAudio(processedAudio);
+        // }
       } else {
         console.warn('⚠️ No audio received from ElevenLabs:', response.message);
       }
     } catch (error) {
       console.error('❌ Error processing audio chunk:', error);
-      throw error;
+      // Don't throw error for D-ID streaming - just log it
+      console.warn('⚠️ Audio processing failed, but continuing for D-ID streaming');
     }
+    */
   }, [voiceId, onAudioReceived, autoPlay]);
 
   // Convert blob to base64
@@ -136,6 +150,12 @@ const MicrophoneInput = forwardRef(({
 
   // Play audio
   const playAudio = useCallback((audioBlob) => {
+    // Disable audio playback for D-ID streaming
+    console.log('🔇 Audio playback disabled for D-ID streaming');
+    return;
+    
+    // Original code commented out:
+    /*
     try {
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
@@ -150,6 +170,7 @@ const MicrophoneInput = forwardRef(({
     } catch (error) {
       console.error('❌ Error playing audio:', error);
     }
+    */
   }, []);
 
   // Start recording
@@ -206,6 +227,16 @@ const MicrophoneInput = forwardRef(({
       if (event.data.size > 0) {
         chunksRef.current.push(event.data);
         
+        // Disable automatic audio processing for D-ID streaming
+        console.log('🎤 Audio data available - skipping automatic processing for D-ID streaming');
+        
+        // Just clear chunks and set status to ready
+        chunksRef.current = [];
+        setStatus('ready');
+        onStatusChange?.('ready');
+        
+        // Original processing code commented out:
+        /*
         try {
           // Combine chunks into single blob
           const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
@@ -223,6 +254,7 @@ const MicrophoneInput = forwardRef(({
           console.error('❌ Error processing audio chunk:', error);
           handleError(error);
         }
+        */
       }
     };
 

@@ -1,15 +1,36 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { apiService } from '../services/api';
 
 export const useDIdStreaming = () => {
   const [streamState, setStreamState] = useState({
     isCreating: false,
     isConnected: false,
+    isActive: false,
     streamId: null,
     sessionId: null,
+    sdpOffer: null,
+    iceServers: null,
+    peerConnection: null,
+    audioStream: null,
+    videoStream: null,
     error: null,
-    status: 'idle' // idle, creating, connecting, connected, talking, error
+    status: 'idle'
   });
+
+  // Log all streamState changes
+  useEffect(() => {
+    console.log('🔄 streamState changed:', {
+      isCreating: streamState.isCreating,
+      isConnected: streamState.isConnected,
+      isActive: streamState.isActive,
+      streamId: streamState.streamId,
+      hasVideoStream: !!streamState.videoStream,
+      hasAudioStream: !!streamState.audioStream,
+      videoStreamId: streamState.videoStream?.id || 'null',
+      videoStreamActive: streamState.videoStream?.active || false,
+      status: streamState.status
+    });
+  }, [streamState]);
 
   // Step 1: Create a new stream
   const createStream = useCallback(async (imageUrl) => {
@@ -103,30 +124,58 @@ export const useDIdStreaming = () => {
     }
   }, []);
 
-  // Step 2: Start the stream (WebRTC setup) - EXACT SAME FLOW AS DIdStreamingTester
-  const startStream = useCallback(async (sdpOffer, iceServers, streamId, sessionId) => {
-    console.log('🔗 Step 2: Starting D-ID stream with WebRTC setup');
-    
+  // Add audio track to peer connection
+  const addAudioTrack = useCallback(async (peerConnection) => {
+    try {
+      console.log('🎤 Getting microphone access...');
+      
+      // Get microphone stream
+      const audioStream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000
+        } 
+      });
+      
+      console.log('✅ Microphone access granted');
+      
+      // Get audio track from stream
+      const audioTrack = audioStream.getAudioTracks()[0];
+      console.log('🎤 Audio track:', audioTrack);
+      
+      // Add audio track to peer connection
+      peerConnection.addTrack(audioTrack, audioStream);
+      console.log('✅ Audio track added to peer connection');
+      
+      return audioStream;
+    } catch (error) {
+      console.error('❌ Error getting microphone access:', error);
+      throw error;
+    }
+  }, []);
+
+  // Start D-ID stream with WebRTC setup
+  const startStream = useCallback(async (streamId, sessionId, sdpOffer, iceServers) => {
     // Use passed parameters if provided, otherwise use state
-    const currentSdpOffer = sdpOffer || streamState.sdpOffer;
-    const currentIceServers = iceServers || streamState.iceServers;
     const currentStreamId = streamId || streamState.streamId;
     const currentSessionId = sessionId || streamState.sessionId;
-    
-    if (!currentSdpOffer || !currentIceServers) {
-      console.error('❌ Missing SDP offer or ICE servers');
-      console.error('❌ sdpOffer:', currentSdpOffer ? 'present' : 'missing');
-      console.error('❌ iceServers:', currentIceServers ? 'present' : 'missing');
-      throw new Error('Missing SDP offer or ICE servers');
+    const currentSdpOffer = sdpOffer || streamState.sdpOffer;
+    const currentIceServers = iceServers || streamState.iceServers;
+
+    if (!currentStreamId || !currentSessionId || !currentSdpOffer || !currentIceServers) {
+      throw new Error('Missing required stream data');
     }
 
+    console.log('🔗 Step 2: Starting D-ID stream with WebRTC setup');
     console.log('🔗 Using streamId:', currentStreamId);
     console.log('🔗 Using sessionId:', currentSessionId);
     console.log('🔗 sdpOffer type:', typeof currentSdpOffer);
-    console.log('🔗 sdpOffer length:', currentSdpOffer ? currentSdpOffer.length : 'null');
+    console.log('🔗 sdpOffer length:', currentSdpOffer.length);
     console.log('🔗 iceServers type:', typeof currentIceServers);
-    console.log('🔗 iceServers length:', currentIceServers ? currentIceServers.length : 'null');
-    
+    console.log('🔗 iceServers length:', currentIceServers.length);
+
     setStreamState(prev => ({ ...prev, status: 'connecting', error: null }));
     
     try {
@@ -134,6 +183,15 @@ export const useDIdStreaming = () => {
       const peerConnection = new RTCPeerConnection({ 
         iceServers: currentIceServers 
       });
+
+      // Add audio track from microphone
+      let audioStream = null;
+      try {
+        audioStream = await addAudioTrack(peerConnection);
+      } catch (audioError) {
+        console.warn('⚠️ Could not add audio track:', audioError);
+        // Continue without audio - stream will still work
+      }
 
       // Set up event listeners - EXACT SAME AS DIdStreamingTester
       peerConnection.addEventListener('icecandidate', (event) => {
@@ -144,16 +202,31 @@ export const useDIdStreaming = () => {
         }
       });
 
+      // ICE connection state change handler - EXACT SAME AS DIdStreamingTester
       peerConnection.addEventListener('iceconnectionstatechange', () => {
-        console.log(`🔗 ICE connection state: ${peerConnection.iceConnectionState}`);
+        console.log('🔗 ICE connection state:', peerConnection.iceConnectionState);
+        
         if (peerConnection.iceConnectionState === 'connected') {
           console.log('✅ WebRTC connection established!');
-          setStreamState(prev => ({ ...prev, isConnected: true }));
+          // Set connected state immediately when WebRTC is connected
+          setStreamState(prev => ({
+            ...prev,
+            isConnected: true,
+            isActive: true,
+            status: 'connected'
+          }));
         }
       });
 
       peerConnection.addEventListener('track', (event) => {
         console.log('🎬 Received video track!');
+        console.log('🎬 Video track details:', {
+          kind: event.track.kind,
+          id: event.track.id,
+          enabled: event.track.enabled,
+          streams: event.streams.length
+        });
+        
         // Handle video stream
         const videoElement = document.getElementById('video-player');
         if (videoElement && event.streams[0]) {
@@ -162,10 +235,14 @@ export const useDIdStreaming = () => {
         
         // Update stream state with video stream
         console.log('🎬 Setting video stream in state:', event.streams[0]);
-        setStreamState(prev => ({
-          ...prev,
-          videoStream: event.streams[0]
-        }));
+        setStreamState(prev => {
+          const newState = {
+            ...prev,
+            videoStream: event.streams[0]
+          };
+          console.log('🎬 Updated stream state with video:', newState);
+          return newState;
+        });
       });
 
       // Set remote description (SDP offer) - EXACT SAME AS DIdStreamingTester
@@ -192,23 +269,29 @@ export const useDIdStreaming = () => {
         console.log('✅ Stream started successfully');
         console.log('🔍 Response object:', response);
         
-        const newState = {
-          ...streamState,
-          streamId: currentStreamId, // Keep the original streamId
-          sessionId: response.session_id || currentSessionId, // Use response session_id or keep current
-          status: 'connected',
-          isConnected: true,
-          isActive: true,
-          peerConnection
-        };
-        
-        console.log('🔄 Updating stream state to:', newState);
-        console.log('🔍 Current values:', {
-          currentStreamId,
-          currentSessionId,
-          responseSessionId: response.session_id
+        setStreamState(prev => {
+          const newState = {
+            ...prev,
+            streamId: currentStreamId, // Keep the original streamId
+            sessionId: response.session_id || currentSessionId, // Use response session_id or keep current
+            status: 'connected',
+            isConnected: true,
+            isActive: true,
+            peerConnection,
+            audioStream, // Store audio stream for later use
+            videoStream: prev.videoStream // Preserve video stream from previous state
+          };
+          
+          console.log('🔄 Updating stream state to:', newState);
+          console.log('🔍 Current values:', {
+            currentStreamId,
+            currentSessionId,
+            responseSessionId: response.session_id,
+            hasVideoStream: !!prev.videoStream,
+            videoStreamId: prev.videoStream?.id || 'null'
+          });
+          return newState;
         });
-        setStreamState(newState);
         
         return { success: true, sessionId: response.session_id };
       } else {
@@ -223,7 +306,7 @@ export const useDIdStreaming = () => {
       }));
       throw error;
     }
-  }, [streamState.streamId, streamState.sessionId, streamState.sdpOffer, streamState.iceServers]);
+  }, [streamState.streamId, streamState.sessionId, streamState.sdpOffer, streamState.iceServers, addAudioTrack]);
 
   // Submit ICE candidate - EXACT SAME AS DIdStreamingTester
   const submitIceCandidate = useCallback(async (candidate, streamId, sessionId) => {
@@ -260,7 +343,7 @@ export const useDIdStreaming = () => {
   }, [apiService]);
 
   // Step 4: Create talk stream - EXACT SAME AS DIdStreamingTester
-  const createTalk = useCallback(async (streamId, sessionId) => {
+  const createTalk = useCallback(async (streamId, sessionId, voice) => {
     try {
       console.log('🎤 Step 4: Creating talk stream...');
       
@@ -269,24 +352,30 @@ export const useDIdStreaming = () => {
         return { success: false, error: 'Missing stream data' };
       }
       
-      // Use text script format that works with D-ID API - EXACT SAME AS DIdStreamingTester
-      const textScript = {
+      if (!voice) {
+        console.error('❌ Missing voice for talk creation');
+        return { success: false, error: 'Missing voice data' };
+      }
+
+      // Create script with voice for D-ID API
+      const script = {
         type: "text",
         input: "Hello! This is a test message from D-ID streaming.",
         provider: {
-          type: "microsoft",
-          voice_id: "en-US-JennyNeural"
+          type: "elevenlabs",
+          voice_id: voice.voice_id || voice.id || voice
         }
       };
 
       console.log('🎤 Using streamId:', streamId);
       console.log('🎤 Using sessionId:', sessionId);
-      console.log('🎤 Using script:', textScript);
+      console.log('🎤 Using voice:', voice);
+      console.log('🎤 Using script:', script);
 
       const response = await apiService.createDIdTalk(
         streamId,
         sessionId,
-        textScript
+        script
       );
 
       if (response.success) {
@@ -302,6 +391,18 @@ export const useDIdStreaming = () => {
     }
   }, [apiService]);
 
+  // Stop audio track
+  const stopAudioTrack = useCallback(() => {
+    if (streamState.audioStream) {
+      console.log('🔇 Stopping audio track...');
+      const tracks = streamState.audioStream.getTracks();
+      tracks.forEach(track => {
+        track.stop();
+        console.log('🔇 Audio track stopped:', track);
+      });
+    }
+  }, [streamState.audioStream]);
+
   // Step 5: Close stream
   const closeStream = useCallback(async () => {
     if (!streamState.streamId || !streamState.sessionId) {
@@ -311,6 +412,15 @@ export const useDIdStreaming = () => {
     
     try {
       console.log('🔚 Step 5: Closing D-ID stream');
+      
+      // Stop audio track first
+      stopAudioTrack();
+      
+      // Close peer connection if exists
+      if (streamState.peerConnection) {
+        console.log('🔌 Closing peer connection...');
+        streamState.peerConnection.close();
+      }
       
       const response = await apiService.closeStream(
         streamState.streamId,
@@ -329,13 +439,19 @@ export const useDIdStreaming = () => {
       setStreamState({
         isCreating: false,
         isConnected: false,
+        isActive: false,
         streamId: null,
         sessionId: null,
+        sdpOffer: null,
+        iceServers: null,
+        peerConnection: null,
+        audioStream: null,
+        videoStream: null,
         error: null,
         status: 'idle'
       });
     }
-  }, [streamState.streamId, streamState.sessionId]);
+  }, [streamState.streamId, streamState.sessionId, streamState.peerConnection, stopAudioTrack]);
 
   // Get stream status
   const getStreamStatus = useCallback(async () => {
@@ -354,15 +470,24 @@ export const useDIdStreaming = () => {
 
   // Reset state
   const resetState = useCallback(() => {
+    // Stop audio track if exists
+    stopAudioTrack();
+    
     setStreamState({
       isCreating: false,
       isConnected: false,
+      isActive: false,
       streamId: null,
       sessionId: null,
+      sdpOffer: null,
+      iceServers: null,
+      peerConnection: null,
+      audioStream: null,
+      videoStream: null,
       error: null,
       status: 'idle'
     });
-  }, []);
+  }, [stopAudioTrack]);
 
   return {
     // State

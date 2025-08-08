@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import './VideoPlayer.css';
 
 const VideoPlayer = ({ 
@@ -9,18 +9,10 @@ const VideoPlayer = ({
   className = "",
   isStreamActive = false
 }) => {
-  console.log('🎬 VideoPlayer props:', {
-    hasStream: !!stream,
-    isConnected,
-    connectionStatus,
-    isStreamActive
-  });
   const videoRef = useRef(null);
   const [isLoading, setIsLoading] = useState(false);
   const [videoError, setVideoError] = useState(null);
   const [isWaitingVideoLoaded, setIsWaitingVideoLoaded] = useState(false);
-  
-  // Message overlay state
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('info');
   const [showOverlay, setShowOverlay] = useState(false);
@@ -35,17 +27,30 @@ const VideoPlayer = ({
     'error': 'Ошибка подключения'
   };
 
+  console.log('🎬 VideoPlayer props:', {
+    hasStream: !!stream,
+    isConnected,
+    connectionStatus,
+    isStreamActive
+  });
+
   // Initialize waiting video
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    
+    // Only initialize waiting video if we don't have a stream
+    if (stream || isConnected) return;
 
     const initializeWaitingVideo = () => {
       console.log('🎬 Initializing waiting video...');
+      
+      // Reset video element
+      video.srcObject = null;
       video.src = '/Waiting.mp4'; // Vite serves public files from root
       video.loop = true;
       video.muted = true;
-      video.autoplay = true;
+      video.controls = false;
       
       // Add event listeners for debugging
       video.addEventListener('loadstart', () => console.log('📥 Video load started'));
@@ -86,9 +91,23 @@ const VideoPlayer = ({
     if (!video) return;
     
     // Only transition to stream if we have both stream and connection
-    if (!stream || !isConnected) return;
+    if (!stream || !isConnected) {
+      console.log('🎬 Skipping stream transition - missing stream or connection:', {
+        hasStream: !!stream,
+        isConnected,
+        streamType: stream ? typeof stream : 'null'
+      });
+      return;
+    }
 
     console.log('🎬 Setting up video stream:', stream);
+    console.log('🎬 Stream details:', {
+      id: stream.id,
+      active: stream.active,
+      tracks: stream.getTracks().length,
+      videoTracks: stream.getVideoTracks().length,
+      audioTracks: stream.getAudioTracks().length
+    });
     setIsLoading(true);
     setVideoError(null);
 
@@ -115,7 +134,7 @@ const VideoPlayer = ({
         video.srcObject = stream;
         video.src = '';
         video.loop = false;
-        video.muted = false;
+        // muted will be set by the useEffect above
         
         // Wait for video to be ready
         video.addEventListener('loadedmetadata', handleStreamReady);
@@ -189,8 +208,8 @@ const VideoPlayer = ({
     const video = videoRef.current;
     if (!video) return;
 
-    if (isStreamActive && stream) {
-      // Unmute when stream is active
+    if (stream && isConnected) {
+      // Unmute when we have stream and connection
       video.muted = false;
       console.log('🔊 Unmuted video for active stream');
     } else {
@@ -198,7 +217,7 @@ const VideoPlayer = ({
       video.muted = true;
       console.log('🔇 Muted video for waiting state');
     }
-  }, [isStreamActive, stream]);
+  }, [stream, isConnected]);
 
   // Removed handleVideoClick as user doesn't want click interaction
 

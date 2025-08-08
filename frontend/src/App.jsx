@@ -7,7 +7,7 @@ import ImageUpload from './components/ImageUpload';
 import VoiceSelector from './components/VoiceSelector';
 import CreateStreamButton from './components/CreateStreamButton';
 import VideoPlayer from './components/VideoPlayer';
-import MicrophoneInput from './components/MicrophoneInput';
+// import MicrophoneInput from './components/MicrophoneInput';
 import Features from './components/Features';
 import Technologies from './components/Technologies';
 import StatusGrid from './components/StatusGrid';
@@ -30,6 +30,7 @@ function App() {
   const [previewUrl, setPreviewUrl] = useState(DEFAULT_AVATAR_URL);
   const [selectedVoice, setSelectedVoice] = useState(DEFAULT_VOICE_ID);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [showElevenLabsTester, setShowElevenLabsTester] = useState(false);
   const [showDIdStreamingTester, setShowDIdStreamingTester] = useState(false);
   
@@ -37,12 +38,12 @@ function App() {
   const [videoStream, setVideoStream] = useState(null);
   const [isVideoReady, setIsVideoReady] = useState(false);
   
-  // Microphone streaming state
-  const [microphoneStatus, setMicrophoneStatus] = useState('idle');
-  const [processedAudio, setProcessedAudio] = useState(null);
+  // Microphone streaming state (disabled for D-ID streaming)
+  // const [microphoneStatus, setMicrophoneStatus] = useState('idle');
+  // const [processedAudio, setProcessedAudio] = useState(null);
   
-  // Microphone ref
-  const microphoneRef = useRef(null);
+  // Microphone ref (disabled for D-ID streaming)
+  // const microphoneRef = useRef(null);
 
   const { voices, loadingVoices, voicesError, retryFetchVoices } = useVoices();
   const { 
@@ -79,7 +80,7 @@ function App() {
   // Microphone handlers
   const handleAudioReceived = (audioBlob) => {
     console.log('🔊 Processed audio received:', audioBlob.size, 'bytes');
-    setProcessedAudio(audioBlob);
+    // setProcessedAudio(audioBlob);
     // Here you could integrate with D-ID streaming or other systems
   };
 
@@ -90,7 +91,7 @@ function App() {
 
   const handleMicrophoneStatusChange = (status) => {
     console.log('🎤 Microphone status changed:', status);
-    setMicrophoneStatus(status);
+    // setMicrophoneStatus(status);
   };
 
   const uploadDefaultImage = async () => {
@@ -132,48 +133,21 @@ function App() {
   };
 
   const handleCreateStream = async () => {
-    if (!selectedVoice) {
-      alert('Сначала выберите голос');
-      return;
-    }
-
     try {
+      setIsCreating(true);
       console.log('🚀 Начинаем флоу D-ID стриминга (до Step 3 включительно)');
       
-      let imageUrl;
+      // Upload default image to Cloudinary
+      console.log('📸 Загружаем дефолтное изображение в Cloudinary...');
+      const imageUrl = await uploadDefaultImage();
       
-      // ВСЕГДА загружаем изображение в Cloudinary
-      if (selectedImage) {
-        console.log('📸 Загружаем локальное изображение пользователя в Cloudinary...');
-        const formData = new FormData();
-        formData.append('file', selectedImage);
-        
-        try {
-          console.log('📤 Отправляем пользовательское изображение в Cloudinary...');
-          const uploadResponse = await apiService.uploadToCloudinary(formData);
-          console.log('📥 Получен ответ от Cloudinary:', uploadResponse);
-          
-          if (uploadResponse.success && uploadResponse.url) {
-            imageUrl = uploadResponse.url;
-            console.log('✅ Пользовательское изображение загружено в Cloudinary:', imageUrl);
-          } else {
-            throw new Error('Не удалось загрузить пользовательское изображение');
-          }
-        } catch (uploadError) {
-          console.warn('⚠️ Ошибка загрузки пользовательского изображения, загружаем дефолтное:', uploadError);
-          imageUrl = await uploadDefaultImage();
-        }
-      } else {
-        console.log('📸 Загружаем дефолтное изображение в Cloudinary...');
-        imageUrl = await uploadDefaultImage();
-      }
-      
-      console.log('📸 Используем изображение:', selectedImage ? 'загруженное пользователем' : 'по умолчанию');
+      console.log('📸 Используем изображение:', selectedImage ? 'загруженное' : 'по умолчанию');
+      console.log('📸 Создание стрима с изображением:', imageUrl);
       
       // Step 1: Create stream - EXACT SAME AS DIdStreamingTester
-      console.log('📸 Создание стрима с изображением:', imageUrl);
+      console.log('🎬 Step 1: Creating D-ID stream with image:', imageUrl);
       const streamResult = await createStream(imageUrl);
-      console.log('📥 Результат создания стрима:', streamResult);
+      console.log(' Результат создания стрима:', streamResult);
       
       if (!streamResult.success) {
         throw new Error('Не удалось создать стрим');
@@ -184,10 +158,10 @@ function App() {
       // Step 2: Start stream - EXACT SAME AS DIdStreamingTester
       console.log('🔗 Запуск стрима');
       const startResult = await startStream(
-        streamResult.sdpOffer,
-        streamResult.iceServers,
         streamResult.streamId,
-        streamResult.sessionId
+        streamResult.sessionId,
+        streamResult.sdpOffer,
+        streamResult.iceServers
       );
       
       if (!startResult.success) {
@@ -196,55 +170,55 @@ function App() {
       
       console.log('✅ Стрим запущен');
       
-      // Step 3: SDP exchange completed - STOP HERE
+      // Step 3: SDP exchange completed
       console.log('🌐 SDP exchange завершен - стрим готов к работе');
-      
-      // Force update stream state to show it's active
       console.log('✅ Stream state updated to connected');
-      console.log('🔍 Current streamState:', {
-        isConnected: streamState.isConnected,
-        isActive: streamState.isActive,
-        status: streamState.status,
-        hasVideoStream: !!streamState.videoStream,
-        streamId: streamState.streamId,
-        sessionId: streamState.sessionId
-      });
+      console.log('🔍 Current streamState:', streamState);
+      console.log('🔍 streamState.videoStream:', streamState.videoStream);
+      console.log('🔍 streamState.isConnected:', streamState.isConnected);
       
-      // Force re-render by updating a local state
+      // Step 4: Create Talk for avatar animation
+      console.log('🎤 Создание talk стрима для анимации аватара');
+      const talkResult = await createTalk(
+        streamResult.streamId,
+        streamResult.sessionId,
+        selectedVoice // Передаем выбранный голос
+      );
+      
+      if (!talkResult.success) {
+        throw new Error('Не удалось создать talk стрим');
+      }
+      
+      console.log('✅ Talk стрим создан - аватар готов к анимации');
+      console.log('🔍 streamState after talk creation:', streamState);
+      console.log('🔍 streamState.videoStream after talk:', streamState.videoStream);
+      
+      // Force video re-render
       setIsVideoReady(true);
       
-      // Simple success notification without technical details
-      const imageInfo = selectedImage ? 'с загруженным изображением' : 'с изображением по умолчанию';
-      console.log(`🎉 Стрим успешно создан ${imageInfo} и готов к использованию!`);
+      console.log('🎉 Стрим успешно создан с изображением по умолчанию и готов к использованию!');
+      console.log('🎤 Говорите в микрофон - аватар будет анимироваться с синтезированной речью');
       
     } catch (error) {
       console.error('❌ Ошибка создания стрима:', error);
-      
-      // Показываем понятную ошибку пользователю
-      let errorMessage = error.message;
-      
-      if (error.message.includes('Ошибка подключения к D-ID API')) {
-        errorMessage = 'D-ID API временно недоступен. Попробуйте позже.';
-      } else if (error.message.includes('Authentication failed')) {
-        errorMessage = 'Ошибка аутентификации D-ID. Проверьте настройки API.';
-      } else if (error.message.includes('Failed to create stream')) {
-        errorMessage = 'Не удалось создать стрим. Попробуйте еще раз.';
-      }
-      
-      alert(`Ошибка: ${errorMessage}`);
+      setStreamState(prev => ({
+        ...prev,
+        error: error.message,
+        status: 'error'
+      }));
     } finally {
-      // Don't reset state automatically - let user control it
+      setIsCreating(false);
       console.log('✅ Stream creation completed');
     }
   };
 
   const handleCloseStream = async () => {
     try {
-      // Stop microphone if it's active
-      if (microphoneRef.current) {
-        console.log('🎤 Останавливаем микрофон...');
-        microphoneRef.current.stopMicrophone();
-      }
+      // Stop microphone if it's active (now handled by WebRTC)
+      // if (microphoneRef.current) {
+      //   console.log('🎤 Останавливаем микрофон...');
+      //   microphoneRef.current.stopMicrophone();
+      // }
       
       await closeStream();
       console.log('✅ Стрим закрыт');
@@ -306,8 +280,9 @@ function App() {
                 <CreateStreamButton
                   selectedImage={selectedImage}
                   selectedVoice={selectedVoice}
-                  isCreating={streamState.isCreating}
+                  isCreating={isCreating}
                   isStreamActive={streamState.isConnected && streamState.isActive}
+                  hasAudioTrack={!!streamState.audioStream}
                   onCreateStream={handleCreateStream}
                   onCloseStream={handleCloseStream}
                 />
@@ -328,8 +303,8 @@ function App() {
                 />
               </div>
 
-              {/* Микрофон */}
-              <div className="control-item microphone-item">
+              {/* Микрофон - скрыт для D-ID стриминга */}
+              {/* <div className="control-item microphone-item">
                 <label>Микрофон:</label>
                 <MicrophoneInput
                   ref={microphoneRef}
@@ -338,14 +313,17 @@ function App() {
                   onAudioReceived={handleAudioReceived}
                   onError={handleMicrophoneError}
                   onStatusChange={handleMicrophoneStatusChange}
-                  autoPlay={true}
+                  autoPlay={false}
                   autoInitialize={false}
                   chunkDuration={2000}
                 />
-              </div>
+                <p className="text-muted mt-2">
+                  ℹ️ Микрофон будет автоматически активирован при создании стрима
+                </p>
+              </div> */}
 
               {/* Статус микрофона */}
-              {microphoneStatus !== 'idle' && (
+              {/* {microphoneStatus !== 'idle' && (
                 <div className="control-item status-item">
                   <span className="status-label">Статус:</span>
                   <span className={`status-value ${microphoneStatus}`}>
@@ -357,7 +335,7 @@ function App() {
                     </span>
                   )}
                 </div>
-              )}
+              )} */}
             </div>
           </div>
         </div>

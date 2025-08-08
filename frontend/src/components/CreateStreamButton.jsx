@@ -5,13 +5,15 @@ const CreateStreamButton = ({
   selectedVoice, 
   isCreating, 
   isStreamActive,
+  hasAudioTrack,
   onCreateStream,
   onCloseStream
 }) => {
   console.log('🔘 CreateStreamButton props:', {
     isCreating,
     isStreamActive,
-    hasSelectedVoice: !!selectedVoice
+    hasSelectedVoice: !!selectedVoice,
+    hasAudioTrack
   });
   
   const isDisabled = !selectedVoice || isCreating;
@@ -22,6 +24,7 @@ const CreateStreamButton = ({
       <p className="text-muted mb-3">
         Нажмите кнопку ниже, чтобы создать интерактивный видео-стрим с выбранным голосом. 
         {!selectedImage && ' Будет использовано изображение по умолчанию.'}
+        {isStreamActive && hasAudioTrack && ' 🎤 Микрофон активен - говорите!'}
       </p>
       
       <button 
@@ -35,7 +38,10 @@ const CreateStreamButton = ({
             Создание стрима...
           </>
         ) : isStreamActive ? (
-          'Остановить стрим'
+          <>
+            {hasAudioTrack && <span className="audio-indicator">🎤</span>}
+            Остановить стрим
+          </>
         ) : (
           'Создать стрим'
         )}
@@ -50,6 +56,12 @@ const CreateStreamButton = ({
       {!selectedImage && selectedVoice && (
         <p className="text-muted mt-2">
           ℹ️ Будет использовано изображение по умолчанию
+        </p>
+      )}
+      
+      {isStreamActive && hasAudioTrack && (
+        <p className="text-success mt-2">
+          🎤 Микрофон активен - ваш голос передается в D-ID
         </p>
       )}
     </div>

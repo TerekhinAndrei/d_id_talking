@@ -2591,3 +2591,20 @@ body {
   font-size: 0.8rem;
   margin-top: 4px;
 }
+
+/* Audio indicator styles */
+.audio-indicator {
+  display: inline-block;
+  margin-right: 8px;
+  animation: pulse-audio 2s infinite;
+}
+
+@keyframes pulse-audio {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+.text-success {
+  color: var(--success) !important;
+}
