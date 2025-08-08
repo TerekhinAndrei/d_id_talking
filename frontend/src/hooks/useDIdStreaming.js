@@ -242,11 +242,11 @@ export const useDIdStreaming = () => {
   }, [streamState, apiService]);
 
   // Step 4: Create talk stream - EXACT SAME AS DIdStreamingTester
-  const createTalk = useCallback(async () => {
+  const createTalk = useCallback(async (streamId, sessionId) => {
     try {
       console.log('🎤 Step 4: Creating talk stream...');
       
-      if (!streamState.streamId || !streamState.sessionId) {
+      if (!streamId || !sessionId) {
         console.error('❌ Missing streamId or sessionId for talk creation');
         return { success: false, error: 'Missing stream data' };
       }
@@ -261,13 +261,13 @@ export const useDIdStreaming = () => {
         }
       };
 
-      console.log('🎤 Using streamId:', streamState.streamId);
-      console.log('🎤 Using sessionId:', streamState.sessionId);
+      console.log('🎤 Using streamId:', streamId);
+      console.log('🎤 Using sessionId:', sessionId);
       console.log('🎤 Using script:', textScript);
 
       const response = await apiService.createDIdTalk(
-        streamState.streamId,
-        streamState.sessionId,
+        streamId,
+        sessionId,
         textScript
       );
 
@@ -282,7 +282,7 @@ export const useDIdStreaming = () => {
       console.error('❌ Error creating talk stream:', error);
       return { success: false, error: error.message };
     }
-  }, [streamState, apiService]);
+  }, [apiService]);
 
   // Step 5: Close stream
   const closeStream = useCallback(async () => {

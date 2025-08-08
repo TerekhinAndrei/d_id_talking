@@ -201,7 +201,7 @@ function App() {
       
       // Step 4: Create talk stream - EXACT SAME AS DIdStreamingTester
       console.log('🎤 Создание talk стрима');
-      const talkResult = await createTalk();
+      const talkResult = await createTalk(streamResult.streamId, streamResult.sessionId);
       
       if (!talkResult.success) {
         throw new Error('Не удалось создать talk стрим');
