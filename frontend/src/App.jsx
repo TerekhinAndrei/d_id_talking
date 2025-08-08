@@ -183,7 +183,12 @@ function App() {
       
       // Step 2: Start stream - EXACT SAME AS DIdStreamingTester
       console.log('🔗 Запуск стрима');
-      const startResult = await startStream();
+      const startResult = await startStream(
+        streamResult.sdpOffer,
+        streamResult.iceServers,
+        streamResult.streamId,
+        streamResult.sessionId
+      );
       
       if (!startResult.success) {
         throw new Error('Не удалось запустить стрим');

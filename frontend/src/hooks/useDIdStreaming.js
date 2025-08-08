@@ -104,27 +104,35 @@ export const useDIdStreaming = () => {
   }, []);
 
   // Step 2: Start the stream (WebRTC setup) - EXACT SAME FLOW AS DIdStreamingTester
-  const startStream = useCallback(async () => {
+  const startStream = useCallback(async (sdpOffer, iceServers, streamId, sessionId) => {
     console.log('🔗 Step 2: Starting D-ID stream with WebRTC setup');
     
-    if (!streamState.sdpOffer || !streamState.iceServers) {
+    // Use passed parameters if provided, otherwise use state
+    const currentSdpOffer = sdpOffer || streamState.sdpOffer;
+    const currentIceServers = iceServers || streamState.iceServers;
+    const currentStreamId = streamId || streamState.streamId;
+    const currentSessionId = sessionId || streamState.sessionId;
+    
+    if (!currentSdpOffer || !currentIceServers) {
       console.error('❌ Missing SDP offer or ICE servers');
+      console.error('❌ sdpOffer:', currentSdpOffer ? 'present' : 'missing');
+      console.error('❌ iceServers:', currentIceServers ? 'present' : 'missing');
       throw new Error('Missing SDP offer or ICE servers');
     }
 
-    console.log('🔗 Using streamId:', streamState.streamId);
-    console.log('🔗 Using sessionId:', streamState.sessionId);
-    console.log('🔗 streamState.sdpOffer type:', typeof streamState.sdpOffer);
-    console.log('🔗 streamState.sdpOffer length:', streamState.sdpOffer ? streamState.sdpOffer.length : 'null');
-    console.log('🔗 streamState.iceServers type:', typeof streamState.iceServers);
-    console.log('🔗 streamState.iceServers length:', streamState.iceServers ? streamState.iceServers.length : 'null');
+    console.log('🔗 Using streamId:', currentStreamId);
+    console.log('🔗 Using sessionId:', currentSessionId);
+    console.log('🔗 sdpOffer type:', typeof currentSdpOffer);
+    console.log('🔗 sdpOffer length:', currentSdpOffer ? currentSdpOffer.length : 'null');
+    console.log('🔗 iceServers type:', typeof currentIceServers);
+    console.log('🔗 iceServers length:', currentIceServers ? currentIceServers.length : 'null');
     
     setStreamState(prev => ({ ...prev, status: 'connecting', error: null }));
     
     try {
       // Create WebRTC peer connection - EXACT SAME AS DIdStreamingTester
       const peerConnection = new RTCPeerConnection({ 
-        iceServers: streamState.iceServers 
+        iceServers: currentIceServers 
       });
 
       // Set up event listeners - EXACT SAME AS DIdStreamingTester
@@ -156,7 +164,7 @@ export const useDIdStreaming = () => {
       // Set remote description (SDP offer) - EXACT SAME AS DIdStreamingTester
       await peerConnection.setRemoteDescription({
         type: 'offer',
-        sdp: streamState.sdpOffer
+        sdp: currentSdpOffer
       });
 
       // Create answer - EXACT SAME AS DIdStreamingTester
@@ -168,8 +176,8 @@ export const useDIdStreaming = () => {
       // Submit SDP answer - EXACT SAME AS DIdStreamingTester
       console.log('📝 Submitting SDP answer object:', answer);
       const response = await apiService.startDIdStream(
-        streamState.streamId,
-        streamState.sessionId,
+        currentStreamId,
+        currentSessionId,
         answer
       );
       
