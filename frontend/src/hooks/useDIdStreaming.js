@@ -41,6 +41,8 @@ export const useDIdStreaming = () => {
           ...prev,
           streamId: response.stream_id,
           sessionId: response.session_id,
+          sdpOffer: response.sdp_offer,
+          iceServers: response.ice_servers,
           status: 'created',
           isCreating: false
         }));
@@ -105,14 +107,54 @@ export const useDIdStreaming = () => {
     setStreamState(prev => ({ ...prev, status: 'connecting', error: null }));
     
     try {
-      console.log('🔗 Step 2: Starting D-ID stream with SDP answer');
+      console.log('🔗 Step 2: Starting D-ID stream with WebRTC setup');
       console.log('🔗 Using streamId:', currentStreamId);
       console.log('🔗 Using sessionId:', currentSessionId);
       
-      const response = await apiService.startStream(
+      // Create WebRTC peer connection using ICE servers from stream creation
+      const peerConnection = new RTCPeerConnection({ 
+        iceServers: streamState.iceServers || [] 
+      });
+
+      // Set up event listeners
+      peerConnection.addEventListener('icecandidate', (event) => {
+        if (event.candidate) {
+          console.log('🧊 ICE candidate generated');
+          // Submit ICE candidate
+          submitIceCandidate(event.candidate, currentStreamId, currentSessionId);
+        }
+      });
+
+      peerConnection.addEventListener('iceconnectionstatechange', () => {
+        console.log(`🔗 ICE connection state: ${peerConnection.iceConnectionState}`);
+        if (peerConnection.iceConnectionState === 'connected') {
+          console.log('✅ WebRTC connection established!');
+          setStreamState(prev => ({ ...prev, isConnected: true }));
+        }
+      });
+
+      peerConnection.addEventListener('track', (event) => {
+        console.log('🎬 Received video track!');
+        // Handle video stream - this will be handled by the video player component
+      });
+
+      // Set remote description (SDP offer from stream creation)
+      await peerConnection.setRemoteDescription({
+        type: 'offer',
+        sdp: streamState.sdpOffer
+      });
+
+      // Create answer
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+
+      console.log('📝 SDP answer created');
+
+      // Submit SDP answer using D-ID Tester's working format
+      const response = await apiService.startDIdStream(
         currentStreamId,
         currentSessionId,
-        sdpAnswer
+        answer
       );
       
       if (response.success) {
@@ -122,7 +164,8 @@ export const useDIdStreaming = () => {
           ...prev,
           sessionId: response.session_id, // Updated session ID
           status: 'connected',
-          isConnected: true
+          isConnected: true,
+          peerConnection
         }));
         
         return { success: true, sessionId: response.session_id };
@@ -138,7 +181,7 @@ export const useDIdStreaming = () => {
       }));
       throw error;
     }
-  }, [streamState.streamId, streamState.sessionId]);
+  }, [streamState.streamId, streamState.sessionId, streamState.sdpOffer, streamState.iceServers]);
 
   // Step 3: Submit ICE candidate
   const submitIceCandidate = useCallback(async (candidate, sdpMid, sdpMLineIndex, streamId, sessionId) => {
@@ -161,7 +204,7 @@ export const useDIdStreaming = () => {
       console.log('🌐 Using streamId:', currentStreamId);
       console.log('🌐 Using sessionId:', currentSessionId);
       
-      const response = await apiService.submitIceCandidate(
+      const response = await apiService.submitDIdIceCandidate(
         currentStreamId,
         currentSessionId,
         candidate,
