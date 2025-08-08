@@ -2028,3 +2028,322 @@ body {
     width: 100%;
   }
 }
+
+/* УЛУЧШЕННЫЕ СТИЛИ ДЛЯ СТАТИСТИКИ СТРИМИНГА */
+.stat-value.success {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.stat-value.error {
+  color: var(--error);
+  font-weight: 600;
+}
+
+/* Прогресс-бар обработки */
+.processing-progress {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--border-secondary);
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--success), var(--accent-primary));
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.progress-text {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  text-align: center;
+  display: block;
+}
+
+/* Обработанные чанки */
+.processed-chunks {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--border-secondary);
+}
+
+.processed-chunks h5 {
+  color: var(--success);
+  margin-bottom: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.chunk-item.processed {
+  background: rgba(var(--success-rgb), 0.1);
+  border-left: 3px solid var(--success);
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.chunk-item.processed .chunk-size {
+  color: var(--success);
+  font-weight: 500;
+}
+
+.chunk-item.processed .chunk-time {
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+
+/* Улучшенные стили для статистики */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.stat-item {
+  background: var(--bg-tertiary);
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-secondary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Анимации для статусов */
+.stat-value.recording {
+  animation: pulse-recording 2s infinite;
+}
+
+.stat-value.processing {
+  animation: pulse-processing 1.5s infinite;
+}
+
+.stat-value.playing {
+  animation: pulse-playing 2s infinite;
+}
+
+@keyframes pulse-playing {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .stat-item {
+    padding: 10px;
+  }
+  
+  .chunk-item.processed {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .processing-progress {
+    margin-top: 12px;
+    padding: 10px;
+  }
+  
+  .progress-text {
+    font-size: 0.8rem;
+  }
+}
+
+/* СТИЛИ ДЛЯ АУДИО ВИЗУАЛИЗАТОРА */
+.audio-visualizer {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--border-secondary);
+}
+
+.visualizer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.visualizer-header h5 {
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.visualizer-status {
+  display: flex;
+  gap: 8px;
+}
+
+.visualizer-status .status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.visualizer-status .status.recording {
+  background: rgba(var(--error-rgb), 0.2);
+  color: var(--error);
+  animation: pulse-recording 2s infinite;
+}
+
+.visualizer-status .status.playing {
+  background: rgba(var(--success-rgb), 0.2);
+  color: var(--success);
+  animation: pulse-playing 2s infinite;
+}
+
+.visualizer-status .status.idle {
+  background: rgba(var(--text-muted), 0.2);
+  color: var(--text-muted);
+}
+
+.visualizer-container {
+  margin-bottom: 12px;
+}
+
+.visualizer-canvas {
+  display: block;
+  width: 100%;
+  height: 100px;
+}
+
+.visualizer-info {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.info-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.info-value.recording {
+  color: var(--error);
+}
+
+.info-value.playing {
+  color: var(--success);
+}
+
+.info-value.idle {
+  color: var(--text-muted);
+}
+
+/* Адаптивность для визуализатора */
+@media (max-width: 768px) {
+  .audio-visualizer {
+    padding: 12px;
+  }
+  
+  .visualizer-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .visualizer-info {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .visualizer-canvas {
+    height: 80px;
+  }
+}
+
+/* СТИЛИ ДЛЯ ОШИБОК ВИЗУАЛИЗАТОРА */
+.visualizer-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-secondary);
+  padding: 16px;
+  text-align: center;
+}
+
+.visualizer-error p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.visualizer-error .error-details {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-top: 4px;
+}

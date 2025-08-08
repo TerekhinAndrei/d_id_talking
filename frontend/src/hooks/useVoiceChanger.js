@@ -7,7 +7,7 @@ export const useVoiceChanger = () => {
   const [error, setError] = useState(null);
   const [audioChunks, setAudioChunks] = useState([]);
   const [totalProcessedAudio, setTotalProcessedAudio] = useState(null);
-  const [selectedVoice, setSelectedVoice] = useState('21m00Tcm4TlvDq8ikWAM'); // Default voice
+  const [selectedVoice, setSelectedVoice] = useState('9BWtsMINqrJLrRacOk9x'); // Default voice
   const mediaRecorderRef = useRef(null);
   const audioContextRef = useRef(null);
 

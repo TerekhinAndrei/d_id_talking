@@ -141,6 +141,9 @@ class ElevenLabsService(ITTSService, BaseService):
                 mime_type = "audio/ogg"
                 file_name = "audio.ogg"
             
+            # Log the format detection for debugging
+            self.logger.info(f"Audio format detected: {audio_data.format}, file: {file_name}, mime: {mime_type}")
+            
             files = {
                 "audio": (file_name, wav_data, mime_type)
             }

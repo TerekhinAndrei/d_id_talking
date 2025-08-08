@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Fix Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .success {
+            color: #28a745;
+        }
+        .warning {
+            color: #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎤 Audio Fix Test</h1>
+    
+    <div class="test-section">
+        <h2>Тест записи микрофона</h2>
+        <button id="startRecording">🎤 Начать запись</button>
+        <button id="stopRecording" disabled>⏹️ Остановить запись</button>
+        <button id="clearLogs">🗑️ Очистить логи</button>
+        
+        <div class="log" id="logs"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Статистика</h2>
+        <div id="stats">Ожидание данных...</div>
+    </div>
+
+    <script>
+        class AudioTest {
+            constructor() {
+                this.mediaRecorder = null;
+                this.stream = null;
+                this.chunks = [];
+                this.isRecording = false;
+                this.isStopping = false; // Flag to track if recording is being stopped
+                this.logs = [];
+                
+                this.setupEventListeners();
+            }
+            
+            setupEventListeners() {
+                document.getElementById('startRecording').addEventListener('click', () => this.startRecording());
+                document.getElementById('stopRecording').addEventListener('click', () => this.stopRecording());
+                document.getElementById('clearLogs').addEventListener('click', () => this.clearLogs());
+            }
+            
+            log(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = `[${timestamp}] ${message}`;
+                this.logs.push({ message: logEntry, type });
+                
+                const logsDiv = document.getElementById('logs');
+                const logElement = document.createElement('div');
+                logElement.className = type;
+                logElement.textContent = logEntry;
+                logsDiv.appendChild(logElement);
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+                
+                console.log(logEntry);
+            }
+            
+            clearLogs() {
+                document.getElementById('logs').innerHTML = '';
+                this.logs = [];
+            }
+            
+            async startRecording() {
+                try {
+                    this.log('🎤 Запуск записи...', 'info');
+                    
+                    // Get microphone stream with improved settings
+                    this.stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            sampleRate: 44100,
+                            channelCount: 1,
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        } 
+                    });
+                    
+                    this.log('🎤 Используемый формат записи: AudioContext (WAV)', 'info');
+                    
+                    // Use AudioContext for recording instead of MediaRecorder
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const source = audioContext.createMediaStreamSource(this.stream);
+                    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+                    
+                    let chunkCounter = 0;
+                    const CHUNK_DURATION = 2000; // 2 seconds per chunk
+                    this.isStopping = false;
+                    let isProcessing = false;
+                    let audioBuffer = [];
+                    let startTime = Date.now();
+
+                    processor.onaudioprocess = async (event) => {
+                        if (this.isStopping) return;
+
+                        const inputData = event.inputBuffer.getChannelData(0);
+                        audioBuffer.push(...inputData);
+
+                        // Check if we have enough data for a chunk
+                        const elapsed = Date.now() - startTime;
+                        if (elapsed >= CHUNK_DURATION && audioBuffer.length > 0) {
+                            chunkCounter++;
+                            
+                            this.log(`📦 Получен аудио чанк #${chunkCounter}`, { size: audioBuffer.length }, 'info');
+                            
+                            // Skip if already processing
+                            if (isProcessing) {
+                                this.log(`⚠️ Пропускаем чанк #${chunkCounter} (уже обрабатывается)`, 'warning');
+                                audioBuffer = [];
+                                startTime = Date.now();
+                                return;
+                            }
+
+                            // Convert audio data to WAV format
+                            const wavBlob = this.audioBufferToWav(audioBuffer, audioContext.sampleRate);
+                            
+                            // Basic validation
+                            try {
+                                isProcessing = true;
+                                
+                                if (wavBlob.size < 2048) {
+                                    this.log(`⚠️ Чанк #${chunkCounter} слишком маленький (${wavBlob.size} bytes), пропускаем`, 'warning');
+                                    audioBuffer = [];
+                                    startTime = Date.now();
+                                    return;
+                                }
+                                
+                                this.log(`✅ Чанк #${chunkCounter} прошел валидацию`, 'success');
+                                
+                                // Test sending to API
+                                await this.testChunkWithAPI(wavBlob, chunkCounter);
+                                
+                            } catch (error) {
+                                this.log(`❌ Ошибка валидации чанка #${chunkCounter}: ${error.message}`, 'error');
+                            } finally {
+                                isProcessing = false;
+                            }
+
+                            // Reset for next chunk
+                            audioBuffer = [];
+                            startTime = Date.now();
+                        }
+                    };
+
+                    // Connect the audio nodes
+                    source.connect(processor);
+                    processor.connect(audioContext.destination);
+
+                    this.audioContext = audioContext;
+                    this.processor = processor;
+                    this.isRecording = true;
+                    
+                    document.getElementById('startRecording').disabled = true;
+                    document.getElementById('stopRecording').disabled = false;
+                    
+                    this.log('✅ Стриминг начат - обработка в реальном времени (AudioContext)', 'success');
+                    
+                } catch (error) {
+                    this.log(`❌ Ошибка начала записи: ${error.message}`, 'error');
+                }
+            }
+            
+            async testChunkWithAPI(chunk, chunkNumber) {
+                try {
+                    this.log(`🌐 Тестирование чанка #${chunkNumber} с API...`, 'info');
+                    
+                    // Create file from chunk (now WAV format)
+                    const fileName = `chunk_${chunkNumber}.wav`;
+                    const audioFile = new File([chunk], fileName, { type: 'audio/wav' });
+                    
+                    // Send to API
+                    const formData = new FormData();
+                    formData.append('audio', audioFile);
+                    formData.append('voice_id', '9BWtsMINqrJLrRacOk9x'); // Valid voice ID from API
+                    
+                    const response = await fetch('/api/v1/tts/speech-to-speech', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.log(`✅ Чанк #${chunkNumber} успешно обработан API`, 'success');
+                    } else {
+                        const errorData = await response.json();
+                        this.log(`❌ Ошибка API для чанка #${chunkNumber}: ${errorData.detail}`, 'error');
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Ошибка отправки чанка #${chunkNumber}: ${error.message}`, 'error');
+                }
+            }
+            
+            stopRecording() {
+                if (this.stream && this.isRecording) {
+                    this.isStopping = true; // Set flag to stop processing
+                    
+                    // Stop all tracks
+                    if (this.stream) {
+                        this.stream.getTracks().forEach(track => track.stop());
+                        this.stream = null;
+                    }
+                    
+                    // Disconnect audio nodes
+                    if (this.audioContext) {
+                        this.audioContext.close();
+                    }
+                    
+                    this.isRecording = false;
+                    
+                    document.getElementById('startRecording').disabled = false;
+                    document.getElementById('stopRecording').disabled = true;
+                    
+                    this.log('⏹️ Стриминг остановлен (AudioContext)', 'info');
+                }
+            }
+            
+            updateStats() {
+                const statsDiv = document.getElementById('stats');
+                statsDiv.innerHTML = `
+                    <p><strong>Статус записи:</strong> ${this.isRecording ? '🟢 Активна' : '🔴 Остановлена'}</p>
+                    <p><strong>Всего логов:</strong> ${this.logs.length}</p>
+                    <p><strong>Ошибок:</strong> ${this.logs.filter(log => log.type === 'error').length}</p>
+                    <p><strong>Предупреждений:</strong> ${this.logs.filter(log => log.type === 'warning').length}</p>
+                `;
+            }
+
+            // Helper function to convert audio buffer to WAV
+            audioBufferToWav(audioBuffer, sampleRate) {
+                const buffer = new ArrayBuffer(44 + audioBuffer.length * 2);
+                const view = new DataView(buffer);
+                
+                // WAV header
+                const writeString = (offset, string) => {
+                    for (let i = 0; i < string.length; i++) {
+                        view.setUint8(offset + i, string.charCodeAt(i));
+                    }
+                };
+                
+                writeString(0, 'RIFF');
+                view.setUint32(4, 36 + audioBuffer.length * 2, true);
+                writeString(8, 'WAVE');
+                writeString(12, 'fmt ');
+                view.setUint32(16, 16, true);
+                view.setUint16(20, 1, true);
+                view.setUint16(22, 1, true);
+                view.setUint32(24, sampleRate, true);
+                view.setUint32(28, sampleRate * 2, true);
+                view.setUint16(32, 2, true);
+                view.setUint16(34, 16, true);
+                writeString(36, 'data');
+                view.setUint32(40, audioBuffer.length * 2, true);
+                
+                // Audio data
+                let offset = 44;
+                for (let i = 0; i < audioBuffer.length; i++) {
+                    view.setInt16(offset, audioBuffer[i] * 0x7FFF, true);
+                    offset += 2;
+                }
+                
+                return new Blob([buffer], { type: 'audio/wav' });
+            }
+        }
+        
+        // Initialize test
+        const audioTest = new AudioTest();
+        
+        // Update stats every second
+        setInterval(() => {
+            audioTest.updateStats();
+        }, 1000);
+    </script>
+</body>
+</html>

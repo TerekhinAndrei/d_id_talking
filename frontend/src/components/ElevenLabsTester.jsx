@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useElevenLabs } from '../hooks/useElevenLabs';
 import { useMicrophoneRecording } from '../hooks/useMicrophoneRecording';
 import ErrorMessage from './ErrorMessage';
+import AudioVisualizer from './AudioVisualizer';
 
 const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
   const [testText, setTestText] = useState('Привет! Это тест ElevenLabs API.');
@@ -23,15 +24,12 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
   const {
     isRecording,
     isProcessing: isProcessingMicrophone,
-    isPlaying,
-    error: microphoneError,
+    streamStats,
     audioChunks,
     processedChunks,
-    startStreaming,
-    stopStreaming,
-    stopPlayback,
-    clearData,
-    getStats
+    error: microphoneError,
+    startRecording,
+    stopRecording
   } = useMicrophoneRecording();
 
   const addTestResult = (testName, success, message, data = null) => {
@@ -155,7 +153,7 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
 
     try {
       addTestResult('Потоковый стриминг', 'pending', 'Запуск стриминга в реальном времени...');
-      await startStreaming(selectedVoiceForTest);
+      await startRecording(selectedVoiceForTest);
       addTestResult('Потоковый стриминг', 'success', 'Стриминг запущен - говорите в микрофон');
     } catch (error) {
       addTestResult('Потоковый стриминг', 'error', error.message);
@@ -163,13 +161,13 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
   };
 
   const handleStopStreaming = () => {
-    stopStreaming();
+    stopRecording();
     addTestResult('Потоковый стриминг', 'success', 'Стриминг остановлен');
   };
 
   const handleStopPlayback = () => {
-    stopPlayback();
-    addTestResult('Воспроизведение', 'success', 'Воспроизведение остановлено');
+    // Воспроизведение теперь обрабатывается автоматически в AudioWorklet
+    addTestResult('Воспроизведение', 'info', 'Воспроизведение обрабатывается автоматически');
   };
 
   const handleFileChange = (event) => {
@@ -184,11 +182,11 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
   const clearResults = () => {
     setTestResults([]);
     clearState();
-    clearData();
+    // clearData(); // clearData is not in the new useMicrophoneRecording hook
   };
 
   // Get streaming statistics
-  const stats = getStats();
+  const stats = streamStats;
 
   return (
     <div className="elevenlabs-tester">
@@ -251,10 +249,17 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
           
           <div className="streaming-info">
             <p className="streaming-description">
-              Говорите в микрофон - ваша речь будет обрабатываться чанками по 2 секунды 
-              и воспроизводиться измененным голосом в реальном времени.
+              <strong>🎯 WEBSOCKET СТРИМИНГ:</strong> Говорите в микрофон - ваша речь будет 
+              передаваться через WebSocket чанками по 0.2 секунды и воспроизводиться измененным голосом 
+              в реальном времени с минимальной задержкой.
             </p>
           </div>
+
+          {/* АУДИО ВИЗУАЛИЗАТОР */}
+          <AudioVisualizer 
+            isRecording={isRecording}
+            audioData={audioChunks}
+          />
 
           <div className="microphone-controls">
             <button 
@@ -275,17 +280,16 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
 
             <button 
               onClick={handleStopPlayback}
-              disabled={!isPlaying}
               className="test-btn microphone-btn stop-playback-btn"
             >
-              🔇 Остановить воспроизведение
+              Остановить воспроизведение
             </button>
           </div>
 
-          {/* Streaming Statistics */}
-          {(isRecording || audioChunks.length > 0) && (
+          {/* УЛУЧШЕННАЯ СТАТИСТИКА СТРИМИНГА */}
+          {(isRecording || streamStats.totalChunks > 0) && (
             <div className="streaming-stats">
-              <h5>📊 Статистика стриминга:</h5>
+              <h5>📊 Расширенная статистика стриминга:</h5>
               
               <div className="stats-grid">
                 <div className="stat-item">
@@ -304,31 +308,67 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
 
                 <div className="stat-item">
                   <span className="stat-label">Статус воспроизведения:</span>
-                  <span className={`stat-value ${isPlaying ? 'playing' : 'stopped'}`}>
-                    {isPlaying ? '🔊 Воспроизведение' : '🔇 Остановлено'}
+                  <span className="stat-value stopped">
+                    🔇 Автоматическое
                   </span>
                 </div>
 
                 <div className="stat-item">
                   <span className="stat-label">Всего чанков:</span>
-                  <span className="stat-value">{stats.totalChunks}</span>
+                  <span className="stat-value">{streamStats.totalChunks}</span>
                 </div>
 
                 <div className="stat-item">
                   <span className="stat-label">Обработано чанков:</span>
-                  <span className="stat-value">{stats.processedChunks}</span>
+                  <span className="stat-value success">{streamStats.processedChunks}</span>
                 </div>
 
                 <div className="stat-item">
-                  <span className="stat-label">Последний чанк:</span>
+                  <span className="stat-label">Ошибок обработки:</span>
+                  <span className="stat-value error">{streamStats.failedChunks}</span>
+                </div>
+
+                <div className="stat-item">
+                  <span className="stat-label">Текущая задержка:</span>
                   <span className="stat-value">
-                    {audioChunks.length > 0 ? 
-                      `${audioChunks[audioChunks.length - 1].size} байт` : 
-                      'Нет данных'
+                    {streamStats.currentLatency > 0 ? `${streamStats.currentLatency}ms` : 'Н/Д'}
+                  </span>
+                </div>
+
+                <div className="stat-item">
+                  <span className="stat-label">Средняя задержка:</span>
+                  <span className="stat-value">
+                    {streamStats.averageLatency > 0 ? `${Math.round(streamStats.averageLatency)}ms` : 'Н/Д'}
+                  </span>
+                </div>
+
+                <div className="stat-item">
+                  <span className="stat-label">Процент успеха:</span>
+                  <span className="stat-value">
+                    {streamStats.totalChunks > 0 ? 
+                      `${Math.round((streamStats.processedChunks / streamStats.totalChunks) * 100)}%` : 
+                      '0%'
                     }
                   </span>
                 </div>
               </div>
+
+              {/* Прогресс-бар обработки */}
+              {streamStats.totalChunks > 0 && (
+                <div className="processing-progress">
+                  <div className="progress-bar">
+                    <div 
+                      className="progress-fill"
+                      style={{ 
+                        width: `${(streamStats.processedChunks / streamStats.totalChunks) * 100}%` 
+                      }}
+                    ></div>
+                  </div>
+                  <span className="progress-text">
+                    {streamStats.processedChunks} / {streamStats.totalChunks} чанков обработано
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -342,6 +382,26 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
                     <span className="chunk-number">#{chunk.counter}</span>
                     <span className="chunk-size">{chunk.size} байт</span>
                     <span className="chunk-time">{chunk.timestamp.toLocaleTimeString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Обработанные чанки */}
+          {processedChunks.length > 0 && (
+            <div className="processed-chunks">
+              <h5>✅ Обработанные чанки:</h5>
+              <div className="chunks-list">
+                {processedChunks.slice(-5).reverse().map((chunk, index) => (
+                  <div key={chunk.id} className="chunk-item processed">
+                    <span className="chunk-number">#{index + 1}</span>
+                    <span className="chunk-size">
+                      {chunk.originalSize} → {chunk.processedSize} байт
+                    </span>
+                    <span className="chunk-time">
+                      {chunk.processingTime}ms
+                    </span>
                   </div>
                 ))}
               </div>
@@ -405,7 +465,7 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
           message={`Ошибка ElevenLabs: ${error || microphoneError}`} 
           onRetry={() => {
             clearState();
-            clearData();
+            // clearData(); // clearData is not in the new useMicrophoneRecording hook
           }}
         />
       )}

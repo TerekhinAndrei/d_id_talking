@@ -272,6 +272,10 @@ class ApplicationManager:
                 # Get TTS service for streaming
                 tts_service = service_container.get_tts_service()
                 
+                # Audio buffer for better quality
+                audio_buffer = []
+                buffer_size = 3  # Process 3 chunks at once
+                
                 await websocket.send_text(json.dumps({
                     "type": "connection_status", 
                     "status": "connected",
@@ -321,9 +325,11 @@ class ApplicationManager:
                                 }))
                         
                         elif message_type == "speech_to_speech":
-                            # Handle speech-to-speech
-                            audio_data_base64 = message.get("audio_data", "")
+                            # Handle speech-to-speech with WAV audio data
+                            audio_data_base64 = message.get("audio_data", "")  # WAV data in base64
                             voice_id = message.get("voice_id", "21m00Tcm4TlvDq8ikWAM")
+                            sample_rate = message.get("sample_rate", 48000)
+                            is_phrase = message.get("is_phrase", False)
                             
                             if not audio_data_base64:
                                 await websocket.send_text(json.dumps({
@@ -333,16 +339,16 @@ class ApplicationManager:
                                 continue
                             
                             try:
-                                # Decode base64 audio data
+                                # Decode base64 WAV data
                                 import base64
-                                audio_bytes = base64.b64decode(audio_data_base64)
+                                wav_data = base64.b64decode(audio_data_base64)
                                 
                                 # Create audio data object
                                 from app.core.interfaces import AudioData, AudioFormat
                                 audio_data = AudioData(
-                                    data=audio_bytes,
+                                    data=wav_data,
                                     format=AudioFormat.WAV,
-                                    sample_rate=44100,
+                                    sample_rate=sample_rate,
                                     bitrate="128k"
                                 )
                                 
@@ -355,7 +361,8 @@ class ApplicationManager:
                                 await websocket.send_text(json.dumps({
                                     "type": "audio_data",
                                     "data": processed_audio_base64,
-                                    "timestamp": self._get_current_timestamp()
+                                    "timestamp": self._get_current_timestamp(),
+                                    "is_phrase": is_phrase
                                 }))
                                 
                             except Exception as e:
@@ -428,9 +435,52 @@ class ApplicationManager:
             logger.error(f"❌ Service cleanup failed: {e}")
     
     def _get_current_timestamp(self) -> str:
-        """Get current timestamp"""
-        from datetime import datetime, timezone
-        return datetime.now(timezone.utc).isoformat()
+        """Get current timestamp in ISO format"""
+        from datetime import datetime
+        return datetime.utcnow().isoformat() + "Z"
+    
+    def _combine_wav_chunks(self, wav_chunks_base64):
+        """Combine multiple WAV chunks into one"""
+        try:
+            import base64
+            import wave
+            from io import BytesIO
+            
+            # Decode all chunks
+            wav_chunks = []
+            for chunk_base64 in wav_chunks_base64:
+                chunk_data = base64.b64decode(chunk_base64)
+                wav_chunks.append(chunk_data)
+            
+            # Combine audio data
+            combined_audio_data = b''
+            sample_rate = 48000
+            
+            for i, chunk_data in enumerate(wav_chunks):
+                # Read WAV header for first chunk
+                if i == 0:
+                    with wave.open(BytesIO(chunk_data), 'rb') as wav_file:
+                        sample_rate = wav_file.getframerate()
+                        combined_audio_data = wav_file.readframes(wav_file.getnframes())
+                else:
+                    # For subsequent chunks, skip header and read only audio data
+                    with wave.open(BytesIO(chunk_data), 'rb') as wav_file:
+                        combined_audio_data += wav_file.readframes(wav_file.getnframes())
+            
+            # Create new WAV file
+            output_buffer = BytesIO()
+            with wave.open(output_buffer, 'wb') as output_wav:
+                output_wav.setnchannels(1)  # Mono
+                output_wav.setsampwidth(2)  # 16-bit
+                output_wav.setframerate(sample_rate)
+                output_wav.writeframes(combined_audio_data)
+            
+            return output_buffer.getvalue()
+            
+        except Exception as e:
+            logger.error(f"Error combining WAV chunks: {e}")
+            # Fallback: return first chunk
+            return base64.b64decode(wav_chunks_base64[0])
 
 
 # Load environment variables

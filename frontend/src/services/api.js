@@ -72,18 +72,52 @@ class ApiService {
 
   // STS (Speech-to-Speech)
   async speechToSpeech(audioFile, voiceId, settings = null) {
-    const formData = new FormData();
-    formData.append('audio', audioFile);
-    formData.append('voice_id', voiceId);
-    if (settings !== null) {
-      formData.append('voice_settings', JSON.stringify(settings));
-    }
+    try {
+      // Validate audio file
+      if (!audioFile || audioFile.size === 0) {
+        throw new Error('Аудио файл пустой или отсутствует');
+      }
+      
+      if (audioFile.size < 2048) {
+        throw new Error('Аудио файл слишком маленький (меньше 2KB)');
+      }
+      
+      // Additional validation for WebM files
+      if (audioFile.type.includes('webm')) {
+        // Check if file has proper WebM headers
+        const arrayBuffer = await audioFile.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        
+        // WebM files should start with EBML header
+        if (uint8Array.length < 4 || 
+            (uint8Array[0] !== 0x1A || uint8Array[1] !== 0x45 || 
+             uint8Array[2] !== 0xDF || uint8Array[3] !== 0xA3)) {
+          throw new Error('Невалидный WebM файл (отсутствуют заголовки)');
+        }
+      }
+      
+      console.log('📁 Отправка аудио файла:', {
+        name: audioFile.name,
+        size: audioFile.size,
+        type: audioFile.type
+      });
+      
+      const formData = new FormData();
+      formData.append('audio', audioFile);
+      formData.append('voice_id', voiceId);
+      if (settings !== null) {
+        formData.append('voice_settings', JSON.stringify(settings));
+      }
 
-    return this.request('/tts/speech-to-speech', {
-      method: 'POST',
-      headers: {}, // Let browser set Content-Type for FormData
-      body: formData,
-    });
+      return this.request('/tts/speech-to-speech', {
+        method: 'POST',
+        headers: {}, // Let browser set Content-Type for FormData
+        body: formData,
+      });
+    } catch (error) {
+      console.error('❌ Ошибка в speechToSpeech:', error);
+      throw error;
+    }
   }
 
   // Voice Preview/Play

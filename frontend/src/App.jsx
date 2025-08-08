@@ -100,7 +100,7 @@ function App() {
       console.log('📤 Загружаем дефолтное изображение в Cloudinary...');
       
       // Получаем дефолтное изображение как файл
-      const defaultImageUrl = `${window.location.origin}${DEFAULT_AVATAR_URL}`;
+      const defaultImageUrl = `http://localhost:5177${DEFAULT_AVATAR_URL}`;
       console.log('📸 Загружаем дефолтное изображение с URL:', defaultImageUrl);
       console.log('📸 window.location.origin:', window.location.origin);
       console.log('📸 DEFAULT_AVATAR_URL:', DEFAULT_AVATAR_URL);

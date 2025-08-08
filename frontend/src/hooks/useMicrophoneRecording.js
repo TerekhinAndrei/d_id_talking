@@ -1,310 +1,390 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { apiService } from '../services/api';
 
 export const useMicrophoneRecording = () => {
+  // Состояния
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState(null);
+  const [streamStats, setStreamStats] = useState({
+    totalChunks: 0,
+    sentChunks: 0,
+    processedChunks: 0,
+    totalBytes: 0,
+    totalSentData: 0,
+    processingTime: 0
+  });
   const [audioChunks, setAudioChunks] = useState([]);
   const [processedChunks, setProcessedChunks] = useState([]);
-  const [isPlaying, setIsPlaying] = useState(false);
-  
-  const mediaRecorderRef = useRef(null);
+  const [error, setError] = useState(null);
+
+  // Refs
   const audioContextRef = useRef(null);
-  const audioQueueRef = useRef([]);
-  const isPlayingRef = useRef(false);
   const streamRef = useRef(null);
-  const chunkIntervalRef = useRef(null);
+  const websocketRef = useRef(null);
+  const selectedVoiceRef = useRef(null);
+  const isRecordingRef = useRef(false);
+  
+  // Буфер для фраз
+  const audioBufferRef = useRef([]);
+  const silenceTimerRef = useRef(null);
+  const isSpeakingRef = useRef(false);
 
-  // Initialize audio context for playback
-  const initAudioContext = useCallback(() => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    }
-  }, []);
-
-  // Convert base64 to audio buffer for playback
-  const base64ToAudioBuffer = useCallback(async (base64Data) => {
+  // Подключение к WebSocket
+  const connectWebSocket = useCallback(() => {
     try {
-      // Remove data URL prefix if present
-      let cleanBase64 = base64Data;
-      if (base64Data.includes(',')) {
-        cleanBase64 = base64Data.split(',')[1];
-      }
-
-      // Convert base64 to array buffer
-      const byteCharacters = atob(cleanBase64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const arrayBuffer = byteArray.buffer;
-
-      // Decode audio data
-      const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
-      return audioBuffer;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//localhost:8000/ws/stream`;
+      
+      websocketRef.current = new WebSocket(wsUrl);
+      
+      websocketRef.current.onopen = () => {
+        console.log('✅ WebSocket соединение установлено');
+      };
+      
+      websocketRef.current.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          console.log('📨 Получено WebSocket сообщение:', message);
+          
+          if (message.type === 'audio_data') {
+            playAudioChunk(message.data);
+          } else if (message.type === 'error') {
+            console.error('❌ WebSocket ошибка:', message.message);
+            setError(message.message);
+          }
+        } catch (error) {
+          console.error('❌ Ошибка парсинга WebSocket сообщения:', error);
+        }
+      };
+      
+      websocketRef.current.onerror = (error) => {
+        console.error('❌ WebSocket ошибка:', error);
+        setError('Ошибка WebSocket соединения');
+      };
+      
+      websocketRef.current.onclose = () => {
+        console.log('🔌 WebSocket соединение закрыто');
+      };
+      
     } catch (error) {
-      console.error('Ошибка декодирования аудио:', error);
-      throw error;
+      console.error('❌ Ошибка подключения к WebSocket:', error);
+      setError('Ошибка подключения к WebSocket');
     }
   }, []);
 
-  // Play audio buffer
-  const playAudioBuffer = useCallback(async (audioBuffer) => {
+  // Конвертация Float32Array в WAV формат
+  const convertFloat32ToWav = useCallback((float32Array, sampleRate) => {
     try {
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContextRef.current.destination);
+      // Создаем WAV файл в памяти
+      const wavBuffer = new ArrayBuffer(44 + float32Array.length * 2);
+      const view = new DataView(wavBuffer);
       
-      // Add to queue for sequential playback
-      audioQueueRef.current.push(source);
+      // WAV заголовок
+      const writeString = (offset, string) => {
+        for (let i = 0; i < string.length; i++) {
+          view.setUint8(offset + i, string.charCodeAt(i));
+        }
+      };
       
-      // Start playing if not already playing
-      if (!isPlayingRef.current) {
-        playNextInQueue();
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + float32Array.length * 2, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true); // PCM
+      view.setUint16(22, 1, true); // Mono
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeString(36, 'data');
+      view.setUint32(40, float32Array.length * 2, true);
+      
+      // Конвертируем Float32 в Int16
+      let offset = 44;
+      for (let i = 0; i < float32Array.length; i++) {
+        const sample = Math.max(-1, Math.min(1, float32Array[i]));
+        view.setInt16(offset, sample * 0x7FFF, true);
+        offset += 2;
       }
+      
+      // Конвертируем в base64
+      const uint8Array = new Uint8Array(wavBuffer);
+      let binary = '';
+      for (let i = 0; i < uint8Array.length; i++) {
+        binary += String.fromCharCode(uint8Array[i]);
+      }
+      return btoa(binary);
+      
     } catch (error) {
-      console.error('Ошибка воспроизведения аудио:', error);
+      console.error('❌ Ошибка конвертации в WAV:', error);
+      return '';
     }
   }, []);
 
-  // Play next audio in queue
-  const playNextInQueue = useCallback(() => {
-    if (audioQueueRef.current.length === 0) {
-      isPlayingRef.current = false;
-      setIsPlaying(false);
+  // Отправка аудио чанка через WebSocket
+  const sendAudioChunk = useCallback((audioData) => {
+    if (!websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) {
       return;
     }
 
-    isPlayingRef.current = true;
-    setIsPlaying(true);
-    
-    const source = audioQueueRef.current.shift();
-    source.onended = () => {
-      playNextInQueue();
-    };
-    
-    source.start();
-  }, []);
-
-  // Process audio chunk through ElevenLabs
-  const processAudioChunk = useCallback(async (audioBlob, voiceId) => {
     try {
-      console.log('🔄 Обработка аудио чанка...', { size: audioBlob.size });
+      // Конвертируем Float32Array в WAV формат
+      const wavData = convertFloat32ToWav(audioData, 48000);
       
-      // Determine file extension based on blob type
-      let fileName = 'chunk.webm';
-      let fileType = 'audio/webm';
+      const message = {
+        type: "speech_to_speech",
+        voice_id: selectedVoiceRef.current,
+        sample_rate: 48000,
+        audio_data: wavData, // WAV данные в base64
+        data_length: wavData.length
+      };
       
-      if (audioBlob.type.includes('mp3')) {
-        fileName = 'chunk.mp3';
-        fileType = 'audio/mp3';
-      } else if (audioBlob.type.includes('wav')) {
-        fileName = 'chunk.wav';
-        fileType = 'audio/wav';
-      } else if (audioBlob.type.includes('ogg')) {
-        fileName = 'chunk.ogg';
-        fileType = 'audio/ogg';
-      }
+      console.log('📤 Отправляем WebSocket сообщение:', message);
+      websocketRef.current.send(JSON.stringify(message));
+      console.log('📤 Аудио чанк отправлен через WebSocket');
       
-      // Convert blob to file with correct format
-      const audioFile = new File([audioBlob], fileName, {
-        type: fileType
-      });
-
-      // Send to ElevenLabs API
-      const response = await apiService.speechToSpeech(audioFile, voiceId);
+      // Обновляем статистику
+      setStreamStats(prev => ({
+        ...prev,
+        sentChunks: prev.sentChunks + 1,
+        totalSentData: prev.totalSentData + wavData.length
+      }));
       
-      if (response.success) {
-        console.log('✅ Чанк обработан успешно');
-        
-        // Convert response to audio buffer and play
-        const audioBuffer = await base64ToAudioBuffer(response.audio_data);
-        await playAudioBuffer(audioBuffer);
-        
-        // Store processed chunk
-        setProcessedChunks(prev => [...prev, {
-          id: Date.now(),
-          originalSize: audioBlob.size,
-          processedSize: response.audio_data.length,
-          timestamp: new Date()
-        }]);
-        
-        return response;
-      } else {
-        throw new Error(response.message || 'Ошибка обработки чанка');
-      }
+      // Добавляем в историю отправленных чанков
+      setAudioChunks(prev => [...prev, {
+        id: Date.now(),
+        counter: streamStats.sentChunks + 1,
+        size: wavData.length,
+        timestamp: new Date()
+      }]);
+      
+      // Небольшая задержка между чанками
+      setTimeout(() => {}, 100);
+      
     } catch (error) {
-      console.error('❌ Ошибка обработки чанка:', error);
-      setError(error.message);
-      throw error;
+      console.error('❌ Ошибка отправки аудио чанка:', error);
     }
-  }, [base64ToAudioBuffer, playAudioBuffer]);
+  }, [streamStats.sentChunks, convertFloat32ToWav]);
 
-  // Start real-time streaming
-  const startStreaming = useCallback(async (voiceId) => {
+  // Воспроизведение полученного аудио
+  const playAudioChunk = useCallback(async (audioData) => {
+    try {
+      console.log('🎵 Получен аудио чанк через WebSocket');
+      
+      // Конвертируем base64 в ArrayBuffer
+      const binaryString = atob(audioData);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      // Используем Web Audio API для лучшего качества
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      
+      // Декодируем аудио данные
+      const audioBuffer = await audioContextRef.current.decodeAudioData(bytes.buffer);
+      
+      // Создаем источник и воспроизводим
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContextRef.current.destination);
+      source.start();
+      
+      console.log('🎵 Аудио воспроизведено через Web Audio API');
+      
+      // Обновляем статистику
+      setStreamStats(prev => ({
+        ...prev,
+        processedChunks: prev.processedChunks + 1
+      }));
+      
+      // Добавляем в историю обработанных чанков
+      setProcessedChunks(prev => [...prev, {
+        id: Date.now(),
+        counter: streamStats.processedChunks + 1,
+        size: audioData.length,
+        timestamp: new Date()
+      }]);
+      
+    } catch (error) {
+      console.error('❌ Ошибка воспроизведения аудио чанка:', error);
+    }
+  }, [streamStats.processedChunks]);
+
+  // Начало записи
+  const startRecording = useCallback(async (voiceId) => {
     try {
       setError(null);
-      setAudioChunks([]);
-      setProcessedChunks([]);
-      audioQueueRef.current = [];
-      isPlayingRef.current = false;
-      setIsPlaying(false);
-
-      // Initialize audio context
-      initAudioContext();
-
-      // Get microphone stream
-      streamRef.current = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          sampleRate: 44100,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true
-        } 
-      });
-
-      // Try different MIME types for better compatibility
-      let mimeType = 'audio/mp3';
-      if (!MediaRecorder.isTypeSupported('audio/mp3')) {
-        mimeType = 'audio/webm;codecs=opus';
-      }
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/webm';
-      }
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/wav';
+      setIsProcessing(true);
+      selectedVoiceRef.current = voiceId;
+      isRecordingRef.current = true;
+      
+      connectWebSocket();
+      
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
       }
 
-      console.log('🎤 Используемый формат записи:', mimeType);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const source = audioContextRef.current.createMediaStreamSource(stream);
 
-      // Create MediaRecorder for chunked recording
-      mediaRecorderRef.current = new MediaRecorder(streamRef.current, {
-        mimeType: mimeType
-      });
-
-      let chunkCounter = 0;
-      const CHUNK_DURATION = 2000; // 2 seconds per chunk
-
-      mediaRecorderRef.current.ondataavailable = async (event) => {
-        if (event.data.size > 0) {
-          const chunk = event.data;
-          chunkCounter++;
-          
-          console.log(`📦 Получен аудио чанк #${chunkCounter}`, { size: chunk.size });
-          
-          // Store original chunk
-          setAudioChunks(prev => [...prev, {
-            id: Date.now(),
-            size: chunk.size,
-            counter: chunkCounter,
-            timestamp: new Date()
-          }]);
-
-          // Process chunk through ElevenLabs
-          try {
-            setIsProcessing(true);
-            await processAudioChunk(chunk, voiceId);
-          } catch (error) {
-            console.error(`❌ Ошибка обработки чанка #${chunkCounter}:`, error);
-          } finally {
-            setIsProcessing(false);
-          }
+      // Используем ScriptProcessor для надежности
+      console.log('🔄 Создаю ScriptProcessor...');
+      const processor = audioContextRef.current.createScriptProcessor(16384, 1, 1); // Увеличиваем размер буфера
+      
+      processor.onaudioprocess = (event) => {
+        const inputData = event.inputBuffer.getChannelData(0);
+        if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+          // Обрабатываем чанк с детекцией речи
+          processAudioChunk(Array.from(inputData));
         }
       };
-
-      mediaRecorderRef.current.start(CHUNK_DURATION);
+      
+      source.connect(processor);
+      processor.connect(audioContextRef.current.destination);
+      
       setIsRecording(true);
+      console.log('🎤 Запись начата с ScriptProcessor');
       
-      console.log('🎤 Стриминг начат - обработка в реальном времени');
     } catch (error) {
-      console.error('❌ Ошибка начала стриминга:', error);
-      setError(error.message);
+      console.error('❌ Ошибка начала записи:', error);
+      setError('Ошибка доступа к микрофону');
+      setIsProcessing(false);
     }
-  }, [processAudioChunk, initAudioContext]);
+  }, [connectWebSocket, sendAudioChunk]);
 
-  // Stop streaming
-  const stopStreaming = useCallback(() => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      
-      // Stop all tracks
+  // Остановка записи
+  const stopRecording = useCallback(() => {
+    try {
+      // Останавливаем поток
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
       }
       
-      console.log('⏹️ Стриминг остановлен');
-    }
-  }, [isRecording]);
-
-  // Stop playback
-  const stopPlayback = useCallback(() => {
-    // Stop all queued audio
-    audioQueueRef.current.forEach(source => {
-      try {
-        source.stop();
-      } catch (error) {
-        // Ignore errors for already stopped sources
+      // Закрываем WebSocket
+      if (websocketRef.current) {
+        websocketRef.current.close();
       }
-    });
-    audioQueueRef.current = [];
-    isPlayingRef.current = false;
-    setIsPlaying(false);
+      
+      isRecordingRef.current = false;
+      setIsRecording(false);
+      setIsProcessing(false);
+      
+      console.log('⏹️ Запись остановлена');
+      
+    } catch (error) {
+      console.error('❌ Ошибка остановки записи:', error);
+    }
+  }, []);
+
+  // Детекция речи
+  const detectSpeech = useCallback((audioData) => {
+    // Простая детекция по громкости
+    const volume = Math.sqrt(audioData.reduce((sum, sample) => sum + sample * sample, 0) / audioData.length);
+    const threshold = 0.01; // Порог громкости
     
-    console.log('🔇 Воспроизведение остановлено');
+    return volume > threshold;
   }, []);
 
-  // Clear all data
-  const clearData = useCallback(() => {
-    setAudioChunks([]);
-    setProcessedChunks([]);
-    setError(null);
-    audioQueueRef.current = [];
-    isPlayingRef.current = false;
-    setIsPlaying(false);
-  }, []);
+  // Отправка фразы
+  const sendPhrase = useCallback(async (audioBuffer) => {
+    if (!websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) {
+      return;
+    }
 
-  // Get statistics
-  const getStats = useCallback(() => {
-    return {
-      totalChunks: audioChunks.length,
-      processedChunks: processedChunks.length,
-      isRecording,
-      isProcessing,
-      isPlaying,
-      error
-    };
-  }, [audioChunks.length, processedChunks.length, isRecording, isProcessing, isPlaying, error]);
+    try {
+      // Объединяем все чанки в одну фразу
+      const combinedAudio = audioBuffer.flat();
+      
+      // Конвертируем в WAV
+      const wavData = convertFloat32ToWav(combinedAudio, 48000);
+      
+      const message = {
+        type: "speech_to_speech",
+        voice_id: selectedVoiceRef.current,
+        sample_rate: 48000,
+        audio_data: wavData,
+        data_length: wavData.length,
+        is_phrase: true
+      };
+      
+      console.log('📤 Отправляем фразу:', {
+        chunks: audioBuffer.length,
+        totalSamples: combinedAudio.length,
+        wavSize: wavData.length
+      });
+      
+      websocketRef.current.send(JSON.stringify(message));
+      
+      // Обновляем статистику
+      setStreamStats(prev => ({
+        ...prev,
+        sentChunks: prev.sentChunks + 1,
+        totalSentData: prev.totalSentData + wavData.length
+      }));
+      
+      // Добавляем в историю
+      setAudioChunks(prev => [...prev, {
+        id: Date.now(),
+        counter: streamStats.sentChunks + 1,
+        size: wavData.length,
+        type: 'phrase',
+        timestamp: new Date()
+      }]);
+      
+    } catch (error) {
+      console.error('❌ Ошибка отправки фразы:', error);
+    }
+  }, [streamStats.sentChunks, convertFloat32ToWav]);
 
-  // Cleanup on unmount
+  // Обработка аудио чанка с детекцией речи
+  const processAudioChunk = useCallback((audioData) => {
+    const hasSpeech = detectSpeech(audioData);
+    
+    if (hasSpeech) {
+      // Есть речь - добавляем в буфер
+      audioBufferRef.current.push(audioData);
+      isSpeakingRef.current = true;
+      
+      // Сбрасываем таймер тишины
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+      
+      // Устанавливаем таймер для отправки фразы
+      silenceTimerRef.current = setTimeout(() => {
+        if (audioBufferRef.current.length > 0) {
+          sendPhrase([...audioBufferRef.current]);
+          audioBufferRef.current = [];
+          isSpeakingRef.current = false;
+        }
+      }, 1000); // Отправляем через 1 секунду тишины
+      
+    } else if (isSpeakingRef.current) {
+      // Тишина после речи - добавляем в буфер
+      audioBufferRef.current.push(audioData);
+    }
+  }, [detectSpeech, sendPhrase]);
+
+  // Очистка при размонтировании
   useEffect(() => {
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
+      stopRecording();
     };
-  }, []);
+  }, [stopRecording]);
 
   return {
-    // State
     isRecording,
     isProcessing,
-    isPlaying,
-    error,
+    streamStats,
     audioChunks,
     processedChunks,
-    
-    // Functions
-    startStreaming,
-    stopStreaming,
-    stopPlayback,
-    clearData,
-    getStats
+    error,
+    startRecording,
+    stopRecording
   };
 };
