@@ -139,8 +139,8 @@ export const useDIdStreaming = () => {
       peerConnection.addEventListener('icecandidate', (event) => {
         if (event.candidate) {
           console.log('🧊 ICE candidate generated');
-          // Submit ICE candidate
-          submitIceCandidate(event.candidate);
+          // Submit ICE candidate with current stream data
+          submitIceCandidate(event.candidate, currentStreamId, currentSessionId);
         }
       });
 
@@ -159,6 +159,13 @@ export const useDIdStreaming = () => {
         if (videoElement && event.streams[0]) {
           videoElement.srcObject = event.streams[0];
         }
+        
+        // Update stream state with video stream
+        console.log('🎬 Setting video stream in state:', event.streams[0]);
+        setStreamState(prev => ({
+          ...prev,
+          videoStream: event.streams[0]
+        }));
       });
 
       // Set remote description (SDP offer) - EXACT SAME AS DIdStreamingTester
@@ -183,14 +190,25 @@ export const useDIdStreaming = () => {
       
       if (response.success) {
         console.log('✅ Stream started successfully');
+        console.log('🔍 Response object:', response);
         
-        setStreamState(prev => ({
-          ...prev,
-          sessionId: response.session_id, // Updated session ID
+        const newState = {
+          ...streamState,
+          streamId: currentStreamId, // Keep the original streamId
+          sessionId: response.session_id || currentSessionId, // Use response session_id or keep current
           status: 'connected',
           isConnected: true,
+          isActive: true,
           peerConnection
-        }));
+        };
+        
+        console.log('🔄 Updating stream state to:', newState);
+        console.log('🔍 Current values:', {
+          currentStreamId,
+          currentSessionId,
+          responseSessionId: response.session_id
+        });
+        setStreamState(newState);
         
         return { success: true, sessionId: response.session_id };
       } else {
@@ -208,24 +226,24 @@ export const useDIdStreaming = () => {
   }, [streamState.streamId, streamState.sessionId, streamState.sdpOffer, streamState.iceServers]);
 
   // Submit ICE candidate - EXACT SAME AS DIdStreamingTester
-  const submitIceCandidate = useCallback(async (candidate) => {
+  const submitIceCandidate = useCallback(async (candidate, streamId, sessionId) => {
     try {
       console.log('🎬 submitIceCandidate called with:', {
-        streamId: streamState.streamId,
-        sessionId: streamState.sessionId,
+        streamId: streamId,
+        sessionId: sessionId,
         candidate: candidate.candidate,
         sdpMid: candidate.sdpMid,
         sdpMLineIndex: candidate.sdpMLineIndex
       });
       
-      if (!streamState.streamId || !streamState.sessionId) {
+      if (!streamId || !sessionId) {
         console.error('❌ Missing streamId or sessionId for ICE candidate');
         return;
       }
       
       const response = await apiService.submitDIdIceCandidate(
-        streamState.streamId,
-        streamState.sessionId,
+        streamId,
+        sessionId,
         candidate.candidate,
         candidate.sdpMid,
         candidate.sdpMLineIndex
@@ -239,7 +257,7 @@ export const useDIdStreaming = () => {
     } catch (error) {
       console.error('❌ Error submitting ICE candidate:', error);
     }
-  }, [streamState, apiService]);
+  }, [apiService]);
 
   // Step 4: Create talk stream - EXACT SAME AS DIdStreamingTester
   const createTalk = useCallback(async (streamId, sessionId) => {

@@ -9,6 +9,12 @@ const VideoPlayer = ({
   className = "",
   isStreamActive = false
 }) => {
+  console.log('🎬 VideoPlayer props:', {
+    hasStream: !!stream,
+    isConnected,
+    connectionStatus,
+    isStreamActive
+  });
   const videoRef = useRef(null);
   const [isLoading, setIsLoading] = useState(false);
   const [videoError, setVideoError] = useState(null);
@@ -77,7 +83,10 @@ const VideoPlayer = ({
   // Handle stream changes
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !stream) return;
+    if (!video) return;
+    
+    // Only transition to stream if we have both stream and connection
+    if (!stream || !isConnected) return;
 
     console.log('🎬 Setting up video stream:', stream);
     setIsLoading(true);
@@ -97,14 +106,10 @@ const VideoPlayer = ({
       setVideoError('Ошибка воспроизведения видео');
     };
 
-    // Smooth transition from waiting video to live stream
+    // Simple transition to live stream
     const transitionToStream = async () => {
       try {
-        // Fade out current video
-        video.style.opacity = '0.5';
-        
-        // Wait for fade effect
-        await new Promise(resolve => setTimeout(resolve, 300));
+        console.log('🎬 Transitioning to live stream...');
         
         // Set new stream
         video.srcObject = stream;
@@ -116,19 +121,17 @@ const VideoPlayer = ({
         video.addEventListener('loadedmetadata', handleStreamReady);
         video.addEventListener('error', handleStreamError);
         
-        // Play the stream
-        const playPromise = video.play();
-        if (playPromise !== undefined) {
-          await playPromise;
-          // Fade in new video
-          video.style.opacity = '1';
+        // Try to play the stream
+        try {
+          await video.play();
           console.log('✅ Successfully transitioned to live stream');
+        } catch (playError) {
+          console.warn('⚠️ Auto-play failed, but stream is ready:', playError);
+          handleStreamReady();
         }
       } catch (error) {
         console.error('❌ Error transitioning to stream:', error);
         handleStreamError(error);
-        // Restore opacity on error
-        video.style.opacity = '1';
       }
     };
 
@@ -146,7 +149,8 @@ const VideoPlayer = ({
     const video = videoRef.current;
     if (!video) return;
 
-    if (!stream && !isConnected && isWaitingVideoLoaded) {
+    // Return to waiting video if no stream or not connected
+    if ((!stream || !isConnected) && isWaitingVideoLoaded) {
       console.log('🔄 Returning to waiting video');
       
       // Smooth transition back to waiting video

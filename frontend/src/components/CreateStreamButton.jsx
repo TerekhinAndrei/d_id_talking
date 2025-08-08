@@ -4,8 +4,16 @@ const CreateStreamButton = ({
   selectedImage, 
   selectedVoice, 
   isCreating, 
-  onCreateStream 
+  isStreamActive,
+  onCreateStream,
+  onCloseStream
 }) => {
+  console.log('🔘 CreateStreamButton props:', {
+    isCreating,
+    isStreamActive,
+    hasSelectedVoice: !!selectedVoice
+  });
+  
   const isDisabled = !selectedVoice || isCreating;
 
   return (
@@ -17,15 +25,17 @@ const CreateStreamButton = ({
       </p>
       
       <button 
-        className={`btn btn-primary ${isCreating ? 'creating' : ''}`}
-        onClick={onCreateStream}
-        disabled={isDisabled}
+        className={`btn ${isStreamActive ? 'btn-danger' : 'btn-primary'} ${isCreating ? 'creating' : ''}`}
+        onClick={isStreamActive ? onCloseStream : onCreateStream}
+        disabled={isDisabled && !isStreamActive}
       >
         {isCreating ? (
           <>
             <span className="loading-spinner">⏳</span>
             Создание стрима...
           </>
+        ) : isStreamActive ? (
+          'Остановить стрим'
         ) : (
           'Создать стрим'
         )}

@@ -138,7 +138,7 @@ function App() {
     }
 
     try {
-      console.log('🚀 Начинаем полный флоу D-ID стриминга');
+      console.log('🚀 Начинаем флоу D-ID стриминга (до Step 3 включительно)');
       
       let imageUrl;
       
@@ -196,30 +196,22 @@ function App() {
       
       console.log('✅ Стрим запущен');
       
-      // Step 3: ICE candidates are handled automatically by WebRTC
-      console.log('🌐 ICE candidates обрабатываются автоматически WebRTC');
+      // Step 3: SDP exchange completed - STOP HERE
+      console.log('🌐 SDP exchange завершен - стрим готов к работе');
       
-      // Step 4: Create talk stream - EXACT SAME AS DIdStreamingTester
-      console.log('🎤 Создание talk стрима');
-      const talkResult = await createTalk(streamResult.streamId, streamResult.sessionId);
+      // Force update stream state to show it's active
+      console.log('✅ Stream state updated to connected');
+      console.log('🔍 Current streamState:', {
+        isConnected: streamState.isConnected,
+        isActive: streamState.isActive,
+        status: streamState.status,
+        hasVideoStream: !!streamState.videoStream,
+        streamId: streamState.streamId,
+        sessionId: streamState.sessionId
+      });
       
-      if (!talkResult.success) {
-        throw new Error('Не удалось создать talk стрим');
-      }
-      
-      console.log('✅ Talk стрим создан!');
-      console.log('✅ Полный процесс D-ID стриминга завершен успешно!');
-      
-      // Initialize microphone after successful stream creation
-      if (microphoneRef.current) {
-        console.log('🎤 Инициализируем микрофон для стриминга...');
-        try {
-          await microphoneRef.current.startMicrophone();
-          console.log('✅ Микрофон инициализирован и готов к стримингу');
-        } catch (error) {
-          console.warn('⚠️ Не удалось инициализировать микрофон:', error);
-        }
-      }
+      // Force re-render by updating a local state
+      setIsVideoReady(true);
       
       // Simple success notification without technical details
       const imageInfo = selectedImage ? 'с загруженным изображением' : 'с изображением по умолчанию';
@@ -241,10 +233,8 @@ function App() {
       
       alert(`Ошибка: ${errorMessage}`);
     } finally {
-      // Reset state after some time
-      setTimeout(() => {
-        resetState();
-      }, 5000);
+      // Don't reset state automatically - let user control it
+      console.log('✅ Stream creation completed');
     }
   };
 
@@ -258,6 +248,10 @@ function App() {
       
       await closeStream();
       console.log('✅ Стрим закрыт');
+      
+      // Reset video stream state
+      setVideoStream(null);
+      setIsVideoReady(false);
     } catch (error) {
       console.error('❌ Ошибка закрытия стрима:', error);
     }
@@ -288,12 +282,12 @@ function App() {
             {/* Video Player */}
             <div className="video-section">
               <VideoPlayer
-                stream={videoStream}
-                isConnected={streamState.isConnected}
+                stream={streamState.videoStream}
+                isConnected={streamState.isConnected && streamState.isActive}
                 connectionStatus={streamState.status}
                 onVideoReady={() => setIsVideoReady(true)}
                 className="main-video-player"
-                isStreamActive={streamState.isConnected && videoStream}
+                isStreamActive={streamState.isConnected && streamState.isActive && streamState.videoStream}
               />
             </div>
           </div>
@@ -313,7 +307,9 @@ function App() {
                   selectedImage={selectedImage}
                   selectedVoice={selectedVoice}
                   isCreating={streamState.isCreating}
+                  isStreamActive={streamState.isConnected && streamState.isActive}
                   onCreateStream={handleCreateStream}
+                  onCloseStream={handleCloseStream}
                 />
               </div>
 
