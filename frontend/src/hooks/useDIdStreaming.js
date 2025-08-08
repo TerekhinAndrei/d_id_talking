@@ -44,6 +44,8 @@ export const useDIdStreaming = () => {
           iceServers: response.ice_servers ? 'present' : 'missing'
         });
         
+        console.log('📝 Actual SDP offer:', response.sdp_offer ? response.sdp_offer.substring(0, 100) + '...' : 'null');
+        
         setStreamState(prev => ({
           ...prev,
           streamId: response.stream_id,
@@ -146,6 +148,12 @@ export const useDIdStreaming = () => {
       });
 
       // Set remote description (SDP offer from stream creation)
+      console.log('🔍 Checking streamState.sdpOffer:', {
+        exists: !!streamState.sdpOffer,
+        type: typeof streamState.sdpOffer,
+        value: streamState.sdpOffer ? streamState.sdpOffer.substring(0, 50) + '...' : 'null'
+      });
+      
       if (!streamState.sdpOffer) {
         throw new Error('SDP offer not available in stream state');
       }
