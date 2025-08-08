@@ -1716,3 +1716,149 @@ body {
 .mic-status-info strong {
   color: var(--text-primary);
 }
+
+/* Microphone Recording Styles */
+.microphone-section {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
+  padding: 20px;
+  margin: 16px 0;
+}
+
+.microphone-section h4 {
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.microphone-controls {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.microphone-btn {
+  composes: test-btn;
+  min-width: 140px;
+  font-size: 0.9rem;
+  padding: 10px 16px;
+}
+
+.record-btn {
+  background: var(--error);
+  border-color: var(--error);
+}
+
+.record-btn:hover:not(:disabled) {
+  background: #c82333;
+  border-color: #c82333;
+}
+
+.record-btn:disabled {
+  background: var(--bg-secondary);
+  border-color: var(--border-secondary);
+  color: var(--text-muted);
+}
+
+.stop-btn {
+  background: var(--warning);
+  border-color: var(--warning);
+  color: #000;
+}
+
+.stop-btn:hover:not(:disabled) {
+  background: #e0a800;
+  border-color: #e0a800;
+}
+
+.process-btn {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.process-btn:hover:not(:disabled) {
+  background: var(--accent-secondary);
+  border-color: var(--accent-secondary);
+}
+
+.audio-playback {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.audio-playback h5 {
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.playback-btn {
+  composes: test-btn;
+  margin-right: 8px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  padding: 8px 12px;
+}
+
+.original-btn {
+  background: var(--info);
+  border-color: var(--info);
+}
+
+.original-btn:hover:not(:disabled) {
+  background: #138496;
+  border-color: #138496;
+}
+
+.processed-btn {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.processed-btn:hover:not(:disabled) {
+  background: #218838;
+  border-color: #218838;
+}
+
+.recording-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.recording-indicator {
+  color: var(--error);
+  font-weight: 600;
+  animation: pulse-recording 1.5s infinite;
+}
+
+.recording-info {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+/* Responsive adjustments for microphone controls */
+@media (max-width: 768px) {
+  .microphone-controls {
+    flex-direction: column;
+  }
+  
+  .microphone-btn {
+    width: 100%;
+    min-width: auto;
+  }
+  
+  .playback-btn {
+    width: 100%;
+    margin-right: 0;
+  }
+}

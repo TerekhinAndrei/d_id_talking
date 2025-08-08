@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useElevenLabs } from '../hooks/useElevenLabs';
+import { useMicrophoneRecording } from '../hooks/useMicrophoneRecording';
 import ErrorMessage from './ErrorMessage';
 
 const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
@@ -18,6 +19,22 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
     error,
     clearState
   } = useElevenLabs();
+
+  const {
+    isRecording,
+    isProcessing: isProcessingMicrophone,
+    error: microphoneError,
+    audioBlob,
+    audioUrl,
+    processedAudioUrl,
+    startRecording,
+    stopRecording,
+    processWithElevenLabs,
+    playOriginalAudio,
+    playProcessedAudio,
+    clearAudio,
+    getRecordingDuration
+  } = useMicrophoneRecording();
 
   const addTestResult = (testName, success, message, data = null) => {
     setTestResults(prev => [...prev, {
@@ -131,6 +148,51 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
     }
   };
 
+  // New microphone recording functions
+  const handleStartMicrophoneRecording = async () => {
+    try {
+      await startRecording();
+      addTestResult('Запись с микрофона', 'pending', 'Запись начата...');
+    } catch (error) {
+      addTestResult('Запись с микрофона', 'error', error.message);
+    }
+  };
+
+  const handleStopMicrophoneRecording = () => {
+    stopRecording();
+    addTestResult('Запись с микрофона', 'success', 'Запись завершена');
+  };
+
+  const handleProcessMicrophoneAudio = async () => {
+    if (!selectedVoiceForTest) {
+      alert('Выберите голос для обработки');
+      return;
+    }
+
+    if (!audioBlob) {
+      alert('Сначала запишите аудио с микрофона');
+      return;
+    }
+
+    try {
+      addTestResult('Обработка микрофона', 'pending', 'Обработка аудио через ElevenLabs...');
+      
+      const response = await processWithElevenLabs(selectedVoiceForTest);
+      
+      if (response.success) {
+        addTestResult('Обработка микрофона', 'success', 'Аудио успешно обработано', {
+          format: response.format,
+          sampleRate: response.sampleRate,
+          bitrate: response.bitrate
+        });
+      } else {
+        addTestResult('Обработка микрофона', 'error', response.message || 'Ошибка обработки');
+      }
+    } catch (error) {
+      addTestResult('Обработка микрофона', 'error', error.message);
+    }
+  };
+
   const handleFileChange = (event) => {
     const file = event.target.files[0];
     if (file && file.type.startsWith('audio/')) {
@@ -143,6 +205,7 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
   const clearResults = () => {
     setTestResults([]);
     clearState();
+    clearAudio();
   };
 
   return (
@@ -200,6 +263,82 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
           )}
         </div>
 
+        {/* Microphone Recording Section */}
+        <div className="microphone-section">
+          <h4>🎤 Запись с микрофона</h4>
+          
+          <div className="microphone-controls">
+            <button 
+              onClick={handleStartMicrophoneRecording}
+              disabled={isRecording || isProcessingMicrophone}
+              className="test-btn microphone-btn record-btn"
+            >
+              {isRecording ? '⏳' : '🎤'} {isRecording ? 'Запись...' : 'Начать запись'}
+            </button>
+
+            <button 
+              onClick={handleStopMicrophoneRecording}
+              disabled={!isRecording}
+              className="test-btn microphone-btn stop-btn"
+            >
+              ⏹️ Остановить запись
+            </button>
+
+            <button 
+              onClick={handleProcessMicrophoneAudio}
+              disabled={!audioBlob || !selectedVoiceForTest || isProcessingMicrophone}
+              className="test-btn microphone-btn process-btn"
+            >
+              {isProcessingMicrophone ? '⏳' : '🔄'} Обработать через ElevenLabs
+            </button>
+          </div>
+
+          {/* Audio Playback Controls */}
+          {(audioUrl || processedAudioUrl) && (
+            <div className="audio-playback">
+              <h5>Воспроизведение:</h5>
+              
+              {audioUrl && (
+                <button 
+                  onClick={playOriginalAudio}
+                  className="test-btn playback-btn original-btn"
+                >
+                  🔊 Воспроизвести оригинал
+                </button>
+              )}
+
+              {processedAudioUrl && (
+                <button 
+                  onClick={playProcessedAudio}
+                  className="test-btn playback-btn processed-btn"
+                >
+                  🎵 Воспроизвести обработанное
+                </button>
+              )}
+
+              <button 
+                onClick={clearAudio}
+                className="test-btn clear-btn"
+              >
+                🗑️ Очистить аудио
+              </button>
+            </div>
+          )}
+
+          {/* Recording Status */}
+          {isRecording && (
+            <div className="recording-status">
+              <span className="recording-indicator">🔴 Запись...</span>
+            </div>
+          )}
+
+          {audioBlob && (
+            <div className="recording-info">
+              <span>✅ Записано: {getRecordingDuration()} сек</span>
+            </div>
+          )}
+        </div>
+
         <div className="test-buttons">
           <button 
             onClick={handleTestAuth}
@@ -251,10 +390,13 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
         </div>
       )}
 
-      {error && (
+      {(error || microphoneError) && (
         <ErrorMessage 
-          message={`Ошибка ElevenLabs: ${error}`} 
-          onRetry={() => clearState()}
+          message={`Ошибка ElevenLabs: ${error || microphoneError}`} 
+          onRetry={() => {
+            clearState();
+            clearAudio();
+          }}
         />
       )}
 
@@ -286,8 +428,6 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
           </div>
         )}
       </div>
-      
-
     </div>
   );
 };
