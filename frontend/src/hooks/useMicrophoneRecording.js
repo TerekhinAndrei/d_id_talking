@@ -93,9 +93,24 @@ export const useMicrophoneRecording = () => {
     try {
       console.log('🔄 Обработка аудио чанка...', { size: audioBlob.size });
       
-      // Convert blob to file
-      const audioFile = new File([audioBlob], 'chunk.webm', {
-        type: 'audio/webm'
+      // Determine file extension based on blob type
+      let fileName = 'chunk.webm';
+      let fileType = 'audio/webm';
+      
+      if (audioBlob.type.includes('mp3')) {
+        fileName = 'chunk.mp3';
+        fileType = 'audio/mp3';
+      } else if (audioBlob.type.includes('wav')) {
+        fileName = 'chunk.wav';
+        fileType = 'audio/wav';
+      } else if (audioBlob.type.includes('ogg')) {
+        fileName = 'chunk.ogg';
+        fileType = 'audio/ogg';
+      }
+      
+      // Convert blob to file with correct format
+      const audioFile = new File([audioBlob], fileName, {
+        type: fileType
       });
 
       // Send to ElevenLabs API
@@ -150,9 +165,23 @@ export const useMicrophoneRecording = () => {
         } 
       });
 
+      // Try different MIME types for better compatibility
+      let mimeType = 'audio/mp3';
+      if (!MediaRecorder.isTypeSupported('audio/mp3')) {
+        mimeType = 'audio/webm;codecs=opus';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/wav';
+      }
+
+      console.log('🎤 Используемый формат записи:', mimeType);
+
       // Create MediaRecorder for chunked recording
       mediaRecorderRef.current = new MediaRecorder(streamRef.current, {
-        mimeType: 'audio/webm;codecs=opus'
+        mimeType: mimeType
       });
 
       let chunkCounter = 0;

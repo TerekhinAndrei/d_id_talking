@@ -115,26 +115,11 @@ class ElevenLabsService(ITTSService, BaseService):
         try:
             self.logger.info(f"Speech-to-speech with voice: {voice_id}, audio size: {len(audio_data.data)} bytes")
             
-            # Convert audio to WAV if needed
-            if audio_data.format != AudioFormat.WAV:
-                # Convert using ffmpeg
-                import subprocess
-                process = subprocess.Popen([
-                    'ffmpeg',
-                    '-i', 'pipe:0',
-                    '-f', 'wav',
-                    '-acodec', 'pcm_s16le',
-                    '-ar', '44100',
-                    '-ac', '1',
-                    'pipe:1'
-                ], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                
-                wav_data, stderr = process.communicate(input=audio_data.data)
-                
-                if process.returncode != 0:
-                    stderr_text = stderr.decode() if stderr else "Unknown error"
-                    raise Exception(f"FFmpeg conversion failed: {stderr_text}")
+            # Use original audio data for WebM/MP3, convert only if needed
+            if audio_data.format == AudioFormat.WAV:
+                wav_data = audio_data.data
             else:
+                # For WebM, MP3, and other formats, use as-is
                 wav_data = audio_data.data
             
             # Use direct API call for speech-to-speech
@@ -142,8 +127,22 @@ class ElevenLabsService(ITTSService, BaseService):
             headers = self._get_headers()
             headers.pop("Content-Type", None)  # Let aiohttp set the correct content type
             
+            # Determine correct MIME type based on audio format
+            mime_type = "audio/wav"
+            file_name = "audio.wav"
+            
+            if audio_data.format == AudioFormat.WEBM:
+                mime_type = "audio/webm"
+                file_name = "audio.webm"
+            elif audio_data.format == AudioFormat.MP3:
+                mime_type = "audio/mp3"
+                file_name = "audio.mp3"
+            elif audio_data.format == AudioFormat.OGG:
+                mime_type = "audio/ogg"
+                file_name = "audio.ogg"
+            
             files = {
-                "audio": ("audio.wav", wav_data, "audio/wav")
+                "audio": (file_name, wav_data, mime_type)
             }
             
             data = {
