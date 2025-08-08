@@ -141,11 +141,14 @@ export const useElevenLabs = () => {
       
       const response = await apiService.testElevenLabsAuth();
       
+      console.log('📡 Ответ от testElevenLabsAuth:', response);
+      
       if (response.success) {
         console.log('✅ Аутентификация ElevenLabs успешна');
         return response;
       } else {
-        throw new Error(response.message || 'Ошибка аутентификации ElevenLabs');
+        console.error('❌ Аутентификация ElevenLabs неуспешна:', response);
+        throw new Error(response.message || response.error || 'Ошибка аутентификации ElevenLabs');
       }
     } catch (error) {
       console.error('❌ Ошибка аутентификации ElevenLabs:', error);

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useElevenLabs } from '../hooks/useElevenLabs';
 import ErrorMessage from './ErrorMessage';
 
-const ElevenLabsTester = () => {
+const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
   const [testText, setTestText] = useState('Привет! Это тест ElevenLabs API.');
   const [selectedVoiceForTest, setSelectedVoiceForTest] = useState('');
   const [audioFile, setAudioFile] = useState(null);
@@ -162,12 +162,30 @@ const ElevenLabsTester = () => {
 
         <div className="test-input-group">
           <label>Голос для тестов:</label>
-          <input
-            type="text"
-            value={selectedVoiceForTest}
-            onChange={(e) => setSelectedVoiceForTest(e.target.value)}
-            placeholder="Введите ID голоса (например: 21m00Tcm4TlvDq8ikWAM)"
-          />
+          <div className="voice-dropdown-container">
+            <select
+              className="voice-dropdown"
+              value={selectedVoiceForTest}
+              onChange={(e) => setSelectedVoiceForTest(e.target.value)}
+              disabled={loadingVoices}
+            >
+              <option value="">Выберите голос для тестов</option>
+              {loadingVoices ? (
+                <option value="">Загрузка голосов...</option>
+              ) : (
+                voices && voices.length > 0 && voices.map((voice) => (
+                  <option key={voice.voice_id} value={voice.voice_id}>
+                    {voice.name} - {voice.description}
+                  </option>
+                ))
+              )}
+            </select>
+            {loadingVoices && (
+              <div className="loading-indicator">
+                <span className="loading-spinner">⏳</span>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="test-input-group">
@@ -223,6 +241,15 @@ const ElevenLabsTester = () => {
           </button>
         </div>
       </div>
+
+      {/* Показываем информацию о выбранном голосе */}
+      {selectedVoiceForTest && (
+        <div className="voice-info">
+          <p className="selected-voice">
+            Выбран для тестов: <strong>{voices.find(v => v.voice_id === selectedVoiceForTest)?.name}</strong>
+          </p>
+        </div>
+      )}
 
       {error && (
         <ErrorMessage 

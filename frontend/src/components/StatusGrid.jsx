@@ -1,5 +1,4 @@
 import React from 'react';
-import ElevenLabsStatus from './ElevenLabsStatus';
 
 const StatusGrid = () => {
   return (
@@ -22,10 +21,7 @@ const StatusGrid = () => {
         </div>
       </div>
 
-      {/* ElevenLabs Status Section */}
-      <div className="section">
-        <ElevenLabsStatus />
-      </div>
+
     </div>
   );
 };

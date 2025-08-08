@@ -71,14 +71,39 @@ class AsyncHTTPClient(IHTTPClient):
             if files:
                 # Handle file uploads
                 form_data = aiohttp.FormData()
-                for key, value in data.items() if data else []:
-                    form_data.add_field(key, str(value))
                 
+                # Add file fields first
                 for key, file_data in files.items():
-                    if isinstance(file_data, (bytes, bytearray)):
-                        form_data.add_field(key, file_data, filename=f"{key}.file")
+                    if isinstance(file_data, tuple) and len(file_data) == 3:
+                        # Format: (filename, data, content_type)
+                        filename, file_content, content_type = file_data
+                        form_data.add_field(
+                            key,
+                            file_content,
+                            filename=filename,
+                            content_type=content_type
+                        )
+                    elif isinstance(file_data, (bytes, bytearray)):
+                        form_data.add_field(
+                            key,
+                            file_data,
+                            filename=f"{key}.file",
+                            content_type="application/octet-stream"
+                        )
                     else:
                         form_data.add_field(key, file_data)
+                
+                # Add regular data fields
+                if data:
+                    for key, value in data.items():
+                        if isinstance(value, (dict, list)):
+                            form_data.add_field(key, json.dumps(value))
+                        else:
+                            form_data.add_field(key, str(value))
+                
+                self.logger.info(f"🔄 Making multipart request to {url}")
+                self.logger.info(f"🔄 Headers: {headers}")
+                self.logger.info(f"🔄 Form data fields: {[getattr(field, 'name', str(field)) for field in form_data._fields]}")
                 
                 async with session.request(
                     method, url, data=form_data, headers=headers, timeout=timeout_obj
@@ -86,7 +111,11 @@ class AsyncHTTPClient(IHTTPClient):
                     return await self._handle_response(response)
             else:
                 # Handle JSON requests
-                json_data = json.dumps(data) if data else None
+                if data:
+                    self.logger.info(f"🔄 Making JSON request to {url}")
+                    self.logger.info(f"🔄 Headers: {headers}")
+                    self.logger.info(f"🔄 Data: {json.dumps(data)[:1000]}...")
+                
                 async with session.request(
                     method, url, json=data, headers=headers, timeout=timeout_obj
                 ) as response:
@@ -114,7 +143,9 @@ class AsyncHTTPClient(IHTTPClient):
             # If it's audio data, return binary content
             if 'audio' in content_type or 'application/octet-stream' in content_type:
                 self.logger.info(f"Received binary audio data, content-type: {content_type}")
-                return await response.read()
+                audio_data = await response.read()
+                self.logger.info(f"Audio data size: {len(audio_data)} bytes")
+                return audio_data
             
             # For JSON responses, try to parse as JSON
             response_text = await response.text()

@@ -18,7 +18,7 @@ export const useDIdStreaming = () => {
     try {
       console.log('🎬 Step 1: Creating D-ID stream with image:', imageUrl);
       
-      const response = await apiService.createDIdStream(imageUrl);
+      const response = await apiService.createStream(imageUrl);
       
       console.log('🎯 Hook received response:', response);
       console.log('🔍 Checking response.success:', response.success);
@@ -109,7 +109,7 @@ export const useDIdStreaming = () => {
       console.log('🔗 Using streamId:', currentStreamId);
       console.log('🔗 Using sessionId:', currentSessionId);
       
-      const response = await apiService.startDIdStream(
+      const response = await apiService.startStream(
         currentStreamId,
         currentSessionId,
         sdpAnswer
@@ -161,7 +161,7 @@ export const useDIdStreaming = () => {
       console.log('🌐 Using streamId:', currentStreamId);
       console.log('🌐 Using sessionId:', currentSessionId);
       
-      const response = await apiService.submitDIdIceCandidate(
+      const response = await apiService.submitIceCandidate(
         currentStreamId,
         currentSessionId,
         candidate,
@@ -215,7 +215,7 @@ export const useDIdStreaming = () => {
       console.log('🎤 Using streamId:', currentStreamId);
       console.log('🎤 Using sessionId:', currentSessionId);
       
-      const response = await apiService.createDIdTalk(
+      const response = await apiService.createTalk(
         currentStreamId,
         currentSessionId,
         script
@@ -256,7 +256,7 @@ export const useDIdStreaming = () => {
     try {
       console.log('🔚 Step 5: Closing D-ID stream');
       
-      const response = await apiService.closeDIdStream(
+      const response = await apiService.closeStream(
         streamState.streamId,
         streamState.sessionId
       );
@@ -288,7 +288,7 @@ export const useDIdStreaming = () => {
     }
     
     try {
-      const response = await apiService.getDIdStreamStatus(streamState.streamId);
+      const response = await apiService.getStreamStatus(streamState.streamId);
       return response;
     } catch (error) {
       console.error('❌ Error getting stream status:', error);

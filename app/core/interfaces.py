@@ -117,6 +117,11 @@ class ITTSService(ABC):
         pass
     
     @abstractmethod
+    async def speech_to_speech_stream(self, audio_data: bytes, voice_id: str, model_id: str = "eleven_multilingual_sts_v2") -> bytes:
+        """Convert speech to speech with different voice - streaming version"""
+        pass
+    
+    @abstractmethod
     async def test_authentication(self) -> Dict[str, Any]:
         """Test service authentication"""
         pass

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import './App.css';
 
 // Components
@@ -6,11 +6,15 @@ import Header from './components/Header';
 import ImageUpload from './components/ImageUpload';
 import VoiceSelector from './components/VoiceSelector';
 import CreateStreamButton from './components/CreateStreamButton';
+import VideoPlayer from './components/VideoPlayer';
+import MicrophoneInput from './components/MicrophoneInput';
 import Features from './components/Features';
 import Technologies from './components/Technologies';
 import StatusGrid from './components/StatusGrid';
 import ElevenLabsTester from './components/ElevenLabsTester';
+
 import DIdStreamingTester from './components/DIdStreamingTester';
+import VoiceChanger from './components/VoiceChanger';
 
 // Hooks
 import { useVoices } from './hooks/useVoices';
@@ -29,6 +33,18 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [showElevenLabsTester, setShowElevenLabsTester] = useState(false);
   const [showDIdStreamingTester, setShowDIdStreamingTester] = useState(false);
+  const [showVoiceChanger, setShowVoiceChanger] = useState(false);
+  
+  // Video streaming state
+  const [videoStream, setVideoStream] = useState(null);
+  const [isVideoReady, setIsVideoReady] = useState(false);
+  
+  // Microphone streaming state
+  const [microphoneStatus, setMicrophoneStatus] = useState('idle');
+  const [processedAudio, setProcessedAudio] = useState(null);
+  
+  // Microphone ref
+  const microphoneRef = useRef(null);
 
   const { voices, loadingVoices, voicesError, retryFetchVoices } = useVoices();
   const { 
@@ -60,6 +76,23 @@ function App() {
     // Эта функция теперь просто передает управление в VoiceSelector
     // Воспроизведение обрабатывается в компоненте VoiceSelector
     console.log('🎤 Запрос на воспроизведение голоса передан в VoiceSelector');
+  };
+
+  // Microphone handlers
+  const handleAudioReceived = (audioBlob) => {
+    console.log('🔊 Processed audio received:', audioBlob.size, 'bytes');
+    setProcessedAudio(audioBlob);
+    // Here you could integrate with D-ID streaming or other systems
+  };
+
+  const handleMicrophoneError = (error) => {
+    console.error('🎤 Microphone error:', error);
+    // Handle microphone errors - could show user notification
+  };
+
+  const handleMicrophoneStatusChange = (status) => {
+    console.log('🎤 Microphone status changed:', status);
+    setMicrophoneStatus(status);
   };
 
   const uploadDefaultImage = async () => {
@@ -201,6 +234,17 @@ function App() {
       console.log('✅ Talk стрим создан:', talkResult.talk_id || talkResult.talkId);
       console.log('✅ Полный процесс D-ID стриминга завершен успешно!');
       
+      // Initialize microphone after successful stream creation
+      if (microphoneRef.current) {
+        console.log('🎤 Инициализируем микрофон для стриминга...');
+        try {
+          await microphoneRef.current.startMicrophone();
+          console.log('✅ Микрофон инициализирован и готов к стримингу');
+        } catch (error) {
+          console.warn('⚠️ Не удалось инициализировать микрофон:', error);
+        }
+      }
+      
       // Simple success notification without technical details
       const imageInfo = selectedImage ? 'с загруженным изображением' : 'с изображением по умолчанию';
       console.log(`🎉 Стрим успешно создан ${imageInfo} и готов к использованию!`);
@@ -230,6 +274,12 @@ function App() {
 
   const handleCloseStream = async () => {
     try {
+      // Stop microphone if it's active
+      if (microphoneRef.current) {
+        console.log('🎤 Останавливаем микрофон...');
+        microphoneRef.current.stopMicrophone();
+      }
+      
       await closeStream();
       console.log('✅ Стрим закрыт');
     } catch (error) {
@@ -242,107 +292,162 @@ function App() {
       <div className="container">
         <Header />
 
-        <main>
-          {/* Секция выбора изображения */}
-          <div className="section">
-            <h2>Изображение (необязательно)</h2>
-            <p className="text-muted mb-3">
-              Загрузите изображение для стрима или используйте изображение по умолчанию.
-            </p>
-            <ImageUpload
+        <main className="main-layout">
+          {/* Left Panel - Controls */}
+          <div className="control-panel">
+            {/* Секция выбора изображения */}
+            <div className="section">
+              <h2>Изображение (необязательно)</h2>
+              <p className="text-muted mb-3">
+                Загрузите изображение для стрима или используйте изображение по умолчанию.
+              </p>
+              <ImageUpload
+                selectedImage={selectedImage}
+                previewUrl={previewUrl}
+                onImageSelect={handleImageSelect}
+                onImageRemove={handleImageRemove}
+              />
+            </div>
+
+            {/* Выбор голоса */}
+            <div className="section">
+              <h2>Выбор голоса</h2>
+              <VoiceSelector
+                selectedVoice={selectedVoice}
+                voices={voices}
+                loadingVoices={loadingVoices}
+                voicesError={voicesError}
+                isPlaying={isPlaying}
+                onVoiceChange={handleVoiceChange}
+                onPlayVoice={handlePlayVoice}
+                onRetryVoices={retryFetchVoices}
+              />
+              
+
+            </div>
+
+            {/* Микрофон для реального времени стриминга */}
+            <div className="section">
+              <h2>Голосовой стриминг</h2>
+              <MicrophoneInput
+                ref={microphoneRef}
+                voiceId={selectedVoice}
+                voiceName={voices.find(v => v.voice_id === selectedVoice)?.name}
+                onAudioReceived={handleAudioReceived}
+                onError={handleMicrophoneError}
+                onStatusChange={handleMicrophoneStatusChange}
+                autoPlay={true}
+                autoInitialize={false} // Отключаем автоматическую инициализацию
+                chunkDuration={2000}
+              />
+              {microphoneStatus !== 'idle' && (
+                <div className="mic-status-info">
+                  <p><strong>Статус микрофона:</strong> {microphoneStatus}</p>
+                  {processedAudio && (
+                    <p><strong>Последнее аудио:</strong> {processedAudio.size} байт</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Кнопка создания стрима */}
+            <CreateStreamButton
               selectedImage={selectedImage}
-              previewUrl={previewUrl}
-              onImageSelect={handleImageSelect}
-              onImageRemove={handleImageRemove}
+              selectedVoice={selectedVoice}
+              isCreating={streamState.isCreating}
+              onCreateStream={handleCreateStream}
             />
+
+            {/* Статус стрима */}
+            {streamState.status !== 'idle' && (
+              <div className="section">
+                <h2>Статус стрима</h2>
+                <div className={`stream-status ${streamState.status}`}>
+                  <p><strong>Статус:</strong> {streamState.status}</p>
+                  {streamState.streamId && (
+                    <p><strong>Stream ID:</strong> {streamState.streamId}</p>
+                  )}
+                  {streamState.error && (
+                    <p className="error"><strong>Ошибка:</strong> {streamState.error}</p>
+                  )}
+                  {streamState.isConnected && (
+                    <button 
+                      className="btn btn-secondary"
+                      onClick={handleCloseStream}
+                    >
+                      Закрыть стрим
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Секция выбора голоса */}
-          <div className="section">
-            <h2>Голос</h2>
-            <VoiceSelector
-              selectedVoice={selectedVoice}
+          {/* Right Panel - Video Player */}
+          <div className="video-panel">
+            <VideoPlayer
+              stream={videoStream}
+              isConnected={streamState.isConnected}
+              connectionStatus={streamState.status}
+              onVideoReady={() => setIsVideoReady(true)}
+              className="main-video-player"
+              isStreamActive={streamState.isConnected && videoStream}
+            />
+          </div>
+        </main>
+
+        {/* Testing Panel Section */}
+        <div className="section">
+          <div className="section-header">
+            <h2>Панель тестирования</h2>
+            <div className="tester-buttons">
+              <button 
+                className="toggle-tester-btn"
+                onClick={() => setShowElevenLabsTester(!showElevenLabsTester)}
+              >
+                {showElevenLabsTester ? 'Скрыть' : 'Показать'} ElevenLabs Тестер
+              </button>
+              
+              <button 
+                className="toggle-tester-btn"
+                onClick={() => setShowDIdStreamingTester(!showDIdStreamingTester)}
+              >
+                {showDIdStreamingTester ? 'Скрыть' : 'Показать'} D-ID Streaming Тестер
+              </button>
+              
+              <button 
+                className="toggle-tester-btn"
+                onClick={() => setShowVoiceChanger(!showVoiceChanger)}
+              >
+                {showVoiceChanger ? 'Скрыть' : 'Показать'} Voice Changer
+              </button>
+            </div>
+          </div>
+          
+          {showElevenLabsTester && (
+            <ElevenLabsTester 
               voices={voices}
               loadingVoices={loadingVoices}
-              voicesError={voicesError}
-              isPlaying={isPlaying}
-              onVoiceChange={handleVoiceChange}
-              onPlayVoice={handlePlayVoice}
-              onRetryVoices={retryFetchVoices}
             />
-          </div>
-
-          {/* Кнопка создания стрима */}
-          <CreateStreamButton
-            selectedImage={selectedImage}
-            selectedVoice={selectedVoice}
-            isCreating={streamState.isCreating}
-            onCreateStream={handleCreateStream}
-          />
-
-          {/* Статус стрима */}
-          {streamState.status !== 'idle' && (
-            <div className="section">
-              <h2>Статус стрима</h2>
-              <div className={`stream-status ${streamState.status}`}>
-                <p><strong>Статус:</strong> {streamState.status}</p>
-                {streamState.streamId && (
-                  <p><strong>Stream ID:</strong> {streamState.streamId}</p>
-                )}
-                {streamState.error && (
-                  <p className="error"><strong>Ошибка:</strong> {streamState.error}</p>
-                )}
-                {streamState.isConnected && (
-                  <button 
-                    className="btn btn-secondary"
-                    onClick={handleCloseStream}
-                  >
-                    Закрыть стрим
-                  </button>
-                )}
-              </div>
-            </div>
           )}
+          
+          {showDIdStreamingTester && (
+            <DIdStreamingTester />
+          )}
+          
+          {showVoiceChanger && (
+            <VoiceChanger />
+          )}
+        </div>
 
-          {/* Testing Panel Section */}
-          <div className="section">
-            <div className="section-header">
-              <h2>Панель тестирования</h2>
-              <div className="tester-buttons">
-                <button 
-                  className="toggle-tester-btn"
-                  onClick={() => setShowElevenLabsTester(!showElevenLabsTester)}
-                >
-                  {showElevenLabsTester ? 'Скрыть' : 'Показать'} ElevenLabs Тестер
-                </button>
-                
-                <button 
-                  className="toggle-tester-btn"
-                  onClick={() => setShowDIdStreamingTester(!showDIdStreamingTester)}
-                >
-                  {showDIdStreamingTester ? 'Скрыть' : 'Показать'} D-ID Streaming Тестер
-                </button>
-              </div>
-            </div>
-            
-            {showElevenLabsTester && (
-              <ElevenLabsTester />
-            )}
-            
-            {showDIdStreamingTester && (
-              <DIdStreamingTester />
-            )}
-          </div>
+        <div className="section">
+          <h2>Добро пожаловать</h2>
+          <p>Это приложение для создания интерактивных видео-стримов с использованием D-ID API и ElevenLabs.</p>
+        </div>
 
-          <div className="section">
-            <h2>Добро пожаловать</h2>
-            <p>Это приложение для создания интерактивных видео-стримов с использованием D-ID API и ElevenLabs.</p>
-          </div>
-
-          <StatusGrid />
-          <Features />
-          <Technologies />
-        </main>
+        <StatusGrid />
+        <Features />
+        <Technologies />
       </div>
       
 

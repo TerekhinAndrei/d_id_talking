@@ -214,9 +214,27 @@ class CloudinaryStorageService(IStorageService, BaseService):
         
         # Cloudinary configuration
         self.cloudinary_url = self.config.get_setting("CLOUDINARY_URL")
-        self.cloud_name = self.config.get_setting("CLOUDINARY_CLOUD_NAME")
-        self.api_key = self.config.get_setting("CLOUDINARY_API_KEY")
-        self.api_secret = self.config.get_setting("CLOUDINARY_API_SECRET")
+        
+        # Parse CLOUDINARY_URL if provided
+        if self.cloudinary_url:
+            # Format: cloudinary://API_KEY:API_SECRET@CLOUD_NAME
+            try:
+                url_parts = self.cloudinary_url.replace('cloudinary://', '').split('@')
+                credentials = url_parts[0].split(':')
+                self.api_key = credentials[0]
+                self.api_secret = credentials[1]
+                self.cloud_name = url_parts[1]
+                self.logger.info(f"Parsed Cloudinary config: cloud_name={self.cloud_name}, api_key={self.api_key[:8]}...")
+            except Exception as e:
+                self.logger.error(f"Failed to parse CLOUDINARY_URL: {e}")
+                self.api_key = None
+                self.api_secret = None
+                self.cloud_name = None
+        else:
+            # Fallback to individual settings
+            self.cloud_name = self.config.get_setting("CLOUDINARY_CLOUD_NAME")
+            self.api_key = self.config.get_setting("CLOUDINARY_API_KEY")
+            self.api_secret = self.config.get_setting("CLOUDINARY_API_SECRET")
         
         self.logger.info(f"CloudinaryStorageService initialized")
     
@@ -227,19 +245,33 @@ class CloudinaryStorageService(IStorageService, BaseService):
     async def upload_file(self, file_data: bytes, filename: str, content_type: str) -> FileMetadata:
         """Upload file to Cloudinary"""
         try:
-            # This would implement actual Cloudinary upload
-            # For now, return a mock response
-            file_id = str(uuid.uuid4())
+            import cloudinary
+            import cloudinary.uploader
+            import cloudinary.api
+            
+            # Configure Cloudinary
+            cloudinary.config(
+                cloud_name=self.cloud_name,
+                api_key=self.api_key,
+                api_secret=self.api_secret
+            )
+            
+            # Upload to Cloudinary
+            result = cloudinary.uploader.upload(
+                file_data,
+                public_id=str(uuid.uuid4()),
+                resource_type="auto"
+            )
             
             metadata = FileMetadata(
                 filename=filename,
                 content_type=content_type,
                 size=len(file_data),
-                url=f"https://res.cloudinary.com/{self.cloud_name}/image/upload/{file_id}",
+                url=result['secure_url'],
                 created_at=self._get_current_timestamp()
             )
             
-            self.logger.info(f"File uploaded to Cloudinary: {file_id}")
+            self.logger.info(f"File uploaded to Cloudinary: {result['public_id']}")
             return metadata
             
         except Exception as e:

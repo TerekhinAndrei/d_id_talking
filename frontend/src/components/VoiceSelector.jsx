@@ -114,7 +114,7 @@ const VoiceSelector = ({
         </div>
         
         <button 
-          className={`play-voice-btn ${isActuallyPlaying ? 'playing' : ''}`}
+          className={`btn btn-success ${isActuallyPlaying ? 'playing' : ''}`}
           onClick={handlePlayVoice}
           disabled={!selectedVoice || isActuallyPlaying || loadingVoices}
           title="Прослушать пример голоса (ElevenLabs)"

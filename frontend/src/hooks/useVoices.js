@@ -12,9 +12,9 @@ export const useVoices = () => {
         setVoicesError(null);
         
         console.log('🔄 Загружаю голоса из API...');
-        console.log('📡 URL:', '/api/v1/generation/voices');
+        console.log('📡 URL:', '/api/v1/voices');
         
-        const response = await fetch('/api/v1/generation/voices');
+        const response = await fetch('/api/v1/voices');
         console.log('📡 Response status:', response.status);
         console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
         

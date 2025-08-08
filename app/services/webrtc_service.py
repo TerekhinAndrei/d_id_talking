@@ -39,6 +39,7 @@ class WebRTCService:
                     data = await response.json()
                     
                     logger.info(f"Stream created successfully: {data.get('id')}")
+                    logger.info(f"Full D-ID API response: {data}")
                     return {
                         'stream_id': data.get('id'),
                         'session_id': data.get('session_id'),
@@ -53,7 +54,7 @@ class WebRTCService:
             logger.error(f"Headers: {self.headers}")
             raise
     
-    async def start_webrtc_connection(self, stream_id: str, session_id: str, answer: str) -> Dict[str, Any]:
+    async def start_webrtc_connection(self, stream_id: str, session_id: str, answer: Dict[str, Any]) -> Dict[str, Any]:
         """
         Step 2: Start a WebRTC connection
         POST /talks/streams/{stream_id}/sdp
@@ -71,6 +72,12 @@ class WebRTCService:
                     data = await response.json()
                     
                     logger.info(f"WebRTC connection started for stream: {stream_id}")
+                    logger.info(f"SDP payload sent: {payload}")
+                    
+                    # Update session_id if provided in response
+                    if data.get("session_id"):
+                        logger.info(f"Updated session_id from SDP response: {data.get('session_id')[:50]}...")
+                    
                     return data
                     
         except Exception as e:
@@ -87,23 +94,42 @@ class WebRTCService:
             payload = {
                 "candidate": candidate,
                 "sdpMid": sdp_mid,
-                "sdpMLineIndex": sdp_m_line_index,
+                "sdpMLineIndex": int(sdp_m_line_index),
                 "session_id": session_id
             }
             
+            logger.info(f"=== ICE CANDIDATE DEBUG ===")
+            logger.info(f"URL: {url}")
+            logger.info(f"Headers: {self.headers}")
+            logger.info(f"Payload: {payload}")
+            logger.info(f"========================")
+            
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=self.headers, json=payload) as response:
-                    response.raise_for_status()
+                    logger.info(f"D-ID API Response Status: {response.status}")
+                    logger.info(f"D-ID API Response Headers: {dict(response.headers)}")
+                    
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(f"D-ID API Error Response: {error_text}")
+                        response.raise_for_status()
+                    
                     data = await response.json()
+                    logger.info(f"D-ID API Success Response: {data}")
+                    
+                    # Update session_id if provided in response
+                    if data.get("session_id"):
+                        logger.info(f"Updated session_id from ICE response: {data.get('session_id')[:50]}...")
                     
                     logger.info(f"ICE candidate submitted for stream: {stream_id}")
                     return data
                     
         except Exception as e:
             logger.error(f"Error submitting ICE candidate: {e}")
+            logger.error(f"Exception type: {type(e)}")
             raise
     
-    async def create_talk_stream(self, stream_id: str, session_id: str, script: Dict[str, Any], driver_url: str = "bank://lively/", config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def create_talk_stream(self, stream_id: str, session_id: str, script: Dict[str, Any]) -> Dict[str, Any]:
         """
         Step 4: Create a talk stream
         POST /talks/streams/{stream_id}
@@ -112,8 +138,6 @@ class WebRTCService:
             url = f"{self.base_url}/talks/streams/{stream_id}"
             payload = {
                 "script": script,
-                "driver_url": driver_url,
-                "config": config or {"stitch": True},
                 "session_id": session_id
             }
             

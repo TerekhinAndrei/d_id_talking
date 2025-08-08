@@ -1,0 +1,290 @@
+/* VoiceChanger Component Styles */
+.voice-changer {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+}
+
+.voice-changer-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--border-secondary);
+}
+
+.voice-changer-header h2 {
+  margin: 0 0 10px 0;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.voice-changer-header p {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+}
+
+.voice-changer-section {
+  margin-bottom: 30px;
+  padding: 25px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--border-secondary);
+}
+
+.voice-changer-section h3 {
+  margin: 0 0 20px 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Voice Selector */
+.voice-selector {
+  width: 100%;
+  padding: 15px;
+  border: 2px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.voice-selector:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.1);
+}
+
+.voice-selector option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 10px;
+}
+
+/* Recording Controls */
+.recording-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.recording-status {
+  padding: 10px 20px;
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 25px;
+  font-weight: 600;
+  color: var(--warning);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+/* File Upload */
+.file-upload-area {
+  border: 2px dashed var(--border-primary);
+  border-radius: 8px;
+  padding: 40px;
+  text-align: center;
+  background: var(--bg-secondary);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.file-upload-area:hover,
+.file-upload-area.dragover {
+  border-color: var(--accent-primary);
+  background: rgba(74, 158, 255, 0.05);
+}
+
+.upload-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.upload-icon {
+  font-size: 3rem;
+  color: var(--text-muted);
+}
+
+.upload-content p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.upload-hint {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-top: 10px;
+}
+
+/* Error Message */
+.error-message {
+  padding: 15px;
+  background: rgba(220, 53, 69, 0.1);
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  border-radius: 8px;
+  margin: 15px 0;
+}
+
+.error-message h3 {
+  margin: 0 0 10px 0;
+  color: var(--error);
+}
+
+.error-message p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+/* Processing Status */
+.processing-status {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-secondary);
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-primary);
+  border-radius: 50%;
+  border-top-color: var(--accent-primary);
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Results */
+.results-container {
+  margin-top: 20px;
+  padding: 20px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--border-secondary);
+}
+
+.audio-info {
+  margin-bottom: 15px;
+  padding: 15px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-primary);
+}
+
+.audio-info p {
+  margin: 5px 0;
+  color: var(--text-secondary);
+}
+
+.audio-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Instructions */
+.instructions {
+  margin-top: 20px;
+  padding: 20px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--border-secondary);
+}
+
+.instructions ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.instructions li {
+  margin: 8px 0;
+  color: var(--text-secondary);
+}
+
+/* Technical Info */
+.tech-info {
+  margin-top: 20px;
+  padding: 15px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--border-secondary);
+}
+
+.tech-info p {
+  margin: 5px 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.tech-info strong {
+  color: var(--text-primary);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .voice-changer {
+    padding: 15px;
+    margin: 10px;
+  }
+  
+  .voice-changer-header h2 {
+    font-size: 2rem;
+  }
+  
+  .recording-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .audio-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .tech-info p {
+    font-size: 0.8rem;
+  }
+}
+
+/* Accessibility improvements */
+.voice-changer-section p:empty::before {
+  content: " ";
+  display: block;
+  height: 1px;
+}
+
+.voice-changer-section:focus-within {
+  border-color: var(--accent-primary);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .voice-changer * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+

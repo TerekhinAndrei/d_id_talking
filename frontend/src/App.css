@@ -14,6 +14,12 @@
   --warning: #ffc107;
   --error: #dc3545;
   --info: #17a2b8;
+  
+  /* RGB values for transparency effects */
+  --accent-primary-rgb: 74, 158, 255;
+  --success-rgb: 40, 167, 69;
+  --warning-rgb: 255, 193, 7;
+  --error-rgb: 220, 53, 69;
 }
 
 * {
@@ -290,37 +296,7 @@ body {
   animation: spin 1s linear infinite;
 }
 
-.play-voice-btn {
-  width: 48px;
-  height: 48px;
-  border: none;
-  border-radius: 8px;
-  background: var(--accent-primary);
-  color: var(--text-primary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  font-size: 1.2rem;
-  flex-shrink: 0;
-}
-
-.play-voice-btn:hover:not(:disabled) {
-  background: var(--accent-secondary);
-  transform: scale(1.05);
-}
-
-.play-voice-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: var(--bg-tertiary);
-}
-
-.play-voice-btn.playing {
-  background: var(--warning);
-  animation: pulse 1.5s infinite;
-}
+/* Кнопка воспроизведения голоса теперь использует основную систему кнопок */
 
 .speaker-icon {
   font-size: 1.2rem;
@@ -412,7 +388,10 @@ body {
 }
 
 .btn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 12px 24px;
   border: none;
   border-radius: 8px;
@@ -421,6 +400,7 @@ body {
   cursor: pointer;
   transition: all 0.2s ease;
   text-decoration: none;
+  min-height: 44px;
 }
 
 .btn-primary {
@@ -428,8 +408,9 @@ body {
   color: var(--text-primary);
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: var(--accent-secondary);
+  transform: translateY(-1px);
 }
 
 .btn-success {
@@ -437,19 +418,210 @@ body {
   color: var(--text-primary);
 }
 
+.btn-success:hover:not(:disabled) {
+  background: #218838;
+  transform: translateY(-1px);
+}
+
 .btn-danger {
   background: var(--error);
   color: var(--text-primary);
 }
 
+.btn-danger:hover:not(:disabled) {
+  background: #c53030;
+  transform: translateY(-1px);
+}
+
+.btn-warning {
+  background: var(--warning);
+  color: var(--text-primary);
+}
+
+.btn-warning:hover:not(:disabled) {
+  background: #e0a800;
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--border-primary);
+  transform: translateY(-1px);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
+}
+
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  transform: none !important;
 }
 
 .btn.creating {
   background: var(--warning);
   animation: pulse 1.5s infinite;
+}
+
+.btn.playing {
+  background: var(--success);
+  animation: pulse 1s infinite;
+}
+
+.btn.recording {
+  background: var(--error);
+  animation: pulse 1s infinite;
+}
+
+.btn.processing {
+  background: var(--warning);
+  animation: pulse 1.5s infinite;
+}
+
+/* Специальные кнопки, которые используют основную систему */
+
+
+.close-message-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 10px;
+  line-height: 1;
+  transition: color 0.2s;
+  min-height: auto;
+}
+
+.close-message-btn:hover {
+  color: var(--text-primary);
+}
+
+/* Кнопка микрофона - специальный случай */
+.mic-button {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid var(--border-primary);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  overflow: hidden;
+  min-height: auto;
+  padding: 0;
+}
+
+.mic-button:hover:not(:disabled) {
+  transform: scale(1.05);
+  border-color: var(--accent-primary);
+}
+
+.mic-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.mic-button.ready {
+  border-color: var(--success);
+  background: linear-gradient(135deg, var(--bg-tertiary), rgba(40, 167, 69, 0.1));
+}
+
+.mic-button.recording {
+  border-color: var(--error);
+  background: linear-gradient(135deg, var(--bg-tertiary), rgba(220, 53, 69, 0.1));
+  animation: pulse-recording 1s infinite;
+}
+
+.mic-button.processing {
+  border-color: var(--warning);
+  background: linear-gradient(135deg, var(--bg-tertiary), rgba(255, 193, 7, 0.1));
+  animation: pulse-processing 1.5s infinite;
+}
+
+.mic-button.error {
+  border-color: var(--error);
+  background: linear-gradient(135deg, var(--bg-tertiary), rgba(220, 53, 69, 0.2));
+}
+
+/* Кнопка воспроизведения голоса */
+.play-voice-btn {
+  composes: btn btn-primary;
+  position: relative;
+  overflow: hidden;
+}
+
+.play-voice-btn.playing {
+  background: var(--success);
+  animation: pulse 1s infinite;
+}
+
+/* Кнопка переключения тестера */
+.toggle-tester-btn {
+  composes: btn btn-secondary;
+  font-size: 0.9rem;
+  padding: 8px 16px;
+}
+
+/* Кнопки тестирования */
+.test-btn {
+  composes: btn btn-primary;
+  font-size: 0.9rem;
+  padding: 8px 16px;
+}
+
+.test-btn.reset {
+  composes: btn btn-danger;
+}
+
+/* Анимации */
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(74, 158, 255, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(74, 158, 255, 0);
+  }
+}
+
+@keyframes pulse-recording {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+  }
+}
+
+@keyframes pulse-processing {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(255, 193, 7, 0);
+  }
 }
 
 .status {
@@ -802,20 +974,7 @@ body {
   margin-bottom: 15px;
 }
 
-.toggle-tester-btn {
-  padding: 8px 16px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.toggle-tester-btn:hover {
-  background-color: #0056b3;
-}
+/* Кнопка переключения тестера теперь использует основную систему кнопок */
 
 /* Voice Preview Status */
 .voice-preview-status {
@@ -902,45 +1061,7 @@ body {
   to { transform: rotate(360deg); }
 }
 
-.play-voice-btn {
-  padding: 12px 16px;
-  background: linear-gradient(135deg, var(--success) 0%, #20c997 100%);
-  color: var(--text-primary);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 50px;
-  font-weight: 600;
-  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
-}
-
-.play-voice-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #218838 0%, #1ea085 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4);
-}
-
-.play-voice-btn:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
-}
-
-.play-voice-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-.play-voice-btn.playing {
-  background: linear-gradient(135deg, var(--warning) 0%, #ffb84d 100%);
-  color: var(--bg-primary);
-  animation: pulse 1.5s infinite;
-}
+/* Кнопка воспроизведения голоса теперь использует основную систему кнопок */
 
 @keyframes pulse {
   0% { transform: scale(1); }
@@ -979,85 +1100,52 @@ body {
   font-size: 14px;
 }
 
-/* ElevenLabs Status Styles */
-.elevenlabs-status {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 15px;
-  margin: 15px 0;
-  border: 1px solid #e9ecef;
-}
-
-.status-header {
+/* Статус сообщения для других компонентов */
+.status-message {
+  margin: 0 0 10px 0;
+  color: var(--text-primary);
+  font-size: 14px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-secondary);
+  animation: slideIn 0.3s ease-out;
 }
 
-.status-header h4 {
-  margin: 0;
-  color: #495057;
-  font-size: 16px;
+.message-content {
+  flex: 1;
+  color: var(--text-primary);
 }
 
-.refresh-status-btn {
-  padding: 6px 12px;
-  background-color: #007bff;
-  color: white;
+.close-message-btn {
+  background: none;
   border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  font-size: 14px;
-}
-
-.refresh-status-btn:hover:not(:disabled) {
-  background-color: #0056b3;
-}
-
-.refresh-status-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.status-content {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  background: white;
-  border-radius: 4px;
-  border: 1px solid #dee2e6;
-}
-
-.status-icon {
+  color: var(--text-muted);
   font-size: 18px;
   font-weight: bold;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 10px;
+  line-height: 1;
+  transition: color 0.2s;
 }
 
-.status-text {
-  font-weight: 600;
-  color: #495057;
+.close-message-btn:hover {
+  color: var(--text-primary);
 }
 
-.status-details {
-  background: white;
-  border-radius: 4px;
-  padding: 12px;
-  border: 1px solid #dee2e6;
-}
-
-.status-message {
-  margin: 0 0 10px 0;
-  color: #495057;
-  font-size: 14px;
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .status-data {
@@ -1068,16 +1156,16 @@ body {
 
 .data-item {
   font-size: 12px;
-  color: #6c757d;
+  color: var(--text-muted);
 }
 
 .data-item strong {
-  color: #495057;
+  color: var(--text-primary);
 }
 
 .last-checked {
   font-size: 12px;
-  color: #6c757d;
+  color: var(--text-muted);
   text-align: center;
   padding: 8px;
   background: white;
@@ -1441,4 +1529,190 @@ body {
   color: var(--text-primary);
   margin: 0;
   font-size: 0.9rem;
+}
+
+/* Main Layout - Two Column Design */
+.main-layout {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 30px;
+  min-height: calc(100vh - 120px);
+  align-items: start;
+}
+
+/* Control Panel - Left Column */
+.control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 100%;
+}
+
+/* Video Panel - Right Column */
+.video-panel {
+  position: sticky;
+  top: 20px;
+  height: calc(100vh - 140px);
+  min-height: 500px;
+}
+
+.main-video-player {
+  height: 100%;
+  width: 100%;
+}
+
+/* Responsive Design for Main Layout */
+@media (max-width: 1200px) {
+  .main-layout {
+    grid-template-columns: 1fr 1.5fr;
+    gap: 20px;
+  }
+  
+  .video-panel {
+    height: calc(100vh - 160px);
+    min-height: 400px;
+  }
+}
+
+@media (max-width: 900px) {
+  .main-layout {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .video-panel {
+    position: relative;
+    top: auto;
+    height: 60vh;
+    min-height: 350px;
+    order: -1; /* Move video player to top on mobile */
+  }
+  
+  .control-panel {
+    order: 1;
+  }
+}
+
+@media (max-width: 600px) {
+  .main-layout {
+    gap: 15px;
+  }
+  
+  .video-panel {
+    height: 50vh;
+    min-height: 300px;
+  }
+}
+
+/* Enhanced Section Styling for Two-Column Layout */
+.control-panel .section {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--border-primary);
+  transition: all 0.3s ease;
+}
+
+.control-panel .section:hover {
+  border-color: var(--border-secondary);
+  box-shadow: 0 4px 12px rgba(74, 158, 255, 0.1);
+}
+
+.control-panel .section h2 {
+  margin-bottom: 15px;
+  color: var(--text-primary);
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+/* Stream Status in Control Panel */
+.stream-status {
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  padding: 15px;
+  border-left: 4px solid var(--accent-primary);
+}
+
+.stream-status.creating {
+  border-left-color: var(--warning);
+}
+
+.stream-status.connected {
+  border-left-color: var(--success);
+}
+
+.stream-status.error {
+  border-left-color: var(--error);
+}
+
+.stream-status p {
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.stream-status .error {
+  color: var(--error);
+  font-weight: 500;
+}
+
+/* Improve button spacing in control panel */
+.control-panel .btn {
+  margin-top: 10px;
+}
+
+/* Container adjustments for new layout */
+.container {
+  max-width: none;
+  width: 100%;
+  padding: 0 20px;
+}
+
+/* Testing Panel Styling */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.tester-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.toggle-tester-btn {
+  padding: 8px 16px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.85rem;
+}
+
+.toggle-tester-btn:hover {
+  background: var(--accent-primary);
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+/* Microphone Status Info */
+.mic-status-info {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border-left: 4px solid var(--accent-primary);
+}
+
+.mic-status-info p {
+  margin: 4px 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.mic-status-info strong {
+  color: var(--text-primary);
 }

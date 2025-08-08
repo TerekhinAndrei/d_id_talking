@@ -81,7 +81,7 @@ class ApplicationManager:
     
     def _setup_routes(self):
         """Setup application routes"""
-        # Include API router
+        # Include API router with proper prefixes
         self.app.include_router(api_router, prefix=config.API_V1_STR)
         
         # Root endpoint that redirects to docs
