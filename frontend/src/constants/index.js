@@ -1,5 +1,6 @@
 export const DEFAULT_AVATAR_URL = '/default_avatar.jpg';
 export const DEFAULT_VOICE_ID = '9BWtsMINqrJLrRacOk9x'; // Aria - первый голос из API
+export const SILENCE_AUDIO_URL = 'https://res.cloudinary.com/daeoqig4w/video/upload/v1754770303/1-second-of-silence_l1un5v.mp3';
 
 export const FALLBACK_VOICES = [
   { voice_id: '9BWtsMINqrJLrRacOk9x', name: 'Rachel', description: 'Женский голос, теплый и дружелюбный' },

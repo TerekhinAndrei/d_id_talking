@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 
-export const useMicrophoneRecording = () => {
+export const useMicrophoneRecording = (options = {}) => {
   // Состояния
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -170,6 +170,12 @@ export const useMicrophoneRecording = () => {
   const playAudioChunk = useCallback(async (audioData) => {
     try {
       console.log('🎵 Получен аудио чанк через WebSocket');
+      // Передаём наружу (например, в мост ElevenLabs -> D-ID)
+      try {
+        if (options && typeof options.onProcessedChunk === 'function') {
+          options.onProcessedChunk(audioData);
+        }
+      } catch (_) {}
       
       // Конвертируем base64 в ArrayBuffer
       const binaryString = atob(audioData);
@@ -211,7 +217,7 @@ export const useMicrophoneRecording = () => {
     } catch (error) {
       console.error('❌ Ошибка воспроизведения аудио чанка:', error);
     }
-  }, [streamStats.processedChunks]);
+  }, [streamStats.processedChunks, options]);
 
   // Начало записи
   const startRecording = useCallback(async (voiceId) => {

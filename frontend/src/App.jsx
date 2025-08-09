@@ -18,6 +18,7 @@ import DIdStreamingTester from './components/DIdStreamingTester';
 // Hooks
 import { useVoices } from './hooks/useVoices';
 import { useDIdStreaming } from './hooks/useDIdStreaming';
+import { useElevenLabsDidBridge } from './hooks/useElevenLabsDidBridge';
 
 // Constants
 import { DEFAULT_AVATAR_URL, DEFAULT_VOICE_ID } from './constants';
@@ -55,6 +56,9 @@ function App() {
     closeStream,
     resetState 
   } = useDIdStreaming();
+
+  // Unified bridge: ElevenLabs → D-ID (starts/stops with main flow)
+  const bridge = useElevenLabsDidBridge();
 
   const handleImageSelect = (file) => {
     setSelectedImage(file);
@@ -99,7 +103,7 @@ function App() {
       console.log('📤 Загружаем дефолтное изображение в Cloudinary...');
       
       // Получаем дефолтное изображение как файл
-      const defaultImageUrl = `http://localhost:5177${DEFAULT_AVATAR_URL}`;
+      const defaultImageUrl = `${window.location.origin}${DEFAULT_AVATAR_URL}`;
       console.log('📸 Загружаем дефолтное изображение с URL:', defaultImageUrl);
       console.log('📸 window.location.origin:', window.location.origin);
       console.log('📸 DEFAULT_AVATAR_URL:', DEFAULT_AVATAR_URL);
@@ -177,22 +181,18 @@ function App() {
       console.log('🔍 streamState.videoStream:', streamState.videoStream);
       console.log('🔍 streamState.isConnected:', streamState.isConnected);
       
-      // Step 4: Create Talk for avatar animation
-      console.log('🎤 Создание talk стрима для анимации аватара');
-      const talkResult = await createTalk(
-        streamResult.streamId,
-        streamResult.sessionId,
-        selectedVoice // Передаем выбранный голос
-      );
-      
-      if (!talkResult.success) {
-        throw new Error('Не удалось создать talk стрим');
+      // Автоматически запускаем мост ElevenLabs → D-ID
+      try {
+        await bridge.start({
+          streamId: streamResult.streamId,
+          sessionId: streamResult.sessionId,
+          voiceId: selectedVoice
+        });
+        console.log('🔊 Мост ElevenLabs → D-ID запущен');
+      } catch (e) {
+        console.warn('⚠️ Не удалось запустить мост ElevenLabs → D-ID:', e);
       }
-      
-      console.log('✅ Talk стрим создан - аватар готов к анимации');
-      console.log('🔍 streamState after talk creation:', streamState);
-      console.log('🔍 streamState.videoStream after talk:', streamState.videoStream);
-      
+
       // Force video re-render
       setIsVideoReady(true);
       
@@ -201,11 +201,7 @@ function App() {
       
     } catch (error) {
       console.error('❌ Ошибка создания стрима:', error);
-      setStreamState(prev => ({
-        ...prev,
-        error: error.message,
-        status: 'error'
-      }));
+      // Ошибку уже видно в консоли; состояние хука тут недоступно
     } finally {
       setIsCreating(false);
       console.log('✅ Stream creation completed');
@@ -214,6 +210,8 @@ function App() {
 
   const handleCloseStream = async () => {
     try {
+      // Останавливаем мост до закрытия стрима
+      try { bridge.stop(); } catch (_) {}
       // Stop microphone if it's active (now handled by WebRTC)
       // if (microphoneRef.current) {
       //   console.log('🎤 Останавливаем микрофон...');
@@ -397,6 +395,8 @@ function App() {
             {showDIdStreamingTester && (
               <DIdStreamingTester />
             )}
+
+            {/* Доп. тестеры доступны по кнопке выше; основной флоу не требует доп. кликов */}
           </div>
 
           <div className="section">

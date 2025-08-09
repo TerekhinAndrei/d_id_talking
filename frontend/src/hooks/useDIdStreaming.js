@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { apiService } from '../services/api';
+import { DidWebRtcSession } from '../services/webrtc/DidWebRtcSession';
 
 export const useDIdStreaming = () => {
   const [streamState, setStreamState] = useState({
@@ -16,6 +17,9 @@ export const useDIdStreaming = () => {
     error: null,
     status: 'idle'
   });
+
+  // Keep a reference to WebRTC session (OOP encapsulation)
+  const sessionRef = useRef(null);
 
   // Log all streamState changes
   useEffect(() => {
@@ -156,159 +160,7 @@ export const useDIdStreaming = () => {
     }
   }, []);
 
-  // Start D-ID stream with WebRTC setup
-  const startStream = useCallback(async (streamId, sessionId, sdpOffer, iceServers) => {
-    // Use passed parameters if provided, otherwise use state
-    const currentStreamId = streamId || streamState.streamId;
-    const currentSessionId = sessionId || streamState.sessionId;
-    const currentSdpOffer = sdpOffer || streamState.sdpOffer;
-    const currentIceServers = iceServers || streamState.iceServers;
-
-    if (!currentStreamId || !currentSessionId || !currentSdpOffer || !currentIceServers) {
-      throw new Error('Missing required stream data');
-    }
-
-    console.log('🔗 Step 2: Starting D-ID stream with WebRTC setup');
-    console.log('🔗 Using streamId:', currentStreamId);
-    console.log('🔗 Using sessionId:', currentSessionId);
-    console.log('🔗 sdpOffer type:', typeof currentSdpOffer);
-    console.log('🔗 sdpOffer length:', currentSdpOffer.length);
-    console.log('🔗 iceServers type:', typeof currentIceServers);
-    console.log('🔗 iceServers length:', currentIceServers.length);
-
-    setStreamState(prev => ({ ...prev, status: 'connecting', error: null }));
-    
-    try {
-      // Create WebRTC peer connection - EXACT SAME AS DIdStreamingTester
-      const peerConnection = new RTCPeerConnection({ 
-        iceServers: currentIceServers 
-      });
-
-      // Add audio track from microphone
-      let audioStream = null;
-      try {
-        audioStream = await addAudioTrack(peerConnection);
-      } catch (audioError) {
-        console.warn('⚠️ Could not add audio track:', audioError);
-        // Continue without audio - stream will still work
-      }
-
-      // Set up event listeners - EXACT SAME AS DIdStreamingTester
-      peerConnection.addEventListener('icecandidate', (event) => {
-        if (event.candidate) {
-          console.log('🧊 ICE candidate generated');
-          // Submit ICE candidate with current stream data
-          submitIceCandidate(event.candidate, currentStreamId, currentSessionId);
-        }
-      });
-
-      // ICE connection state change handler - EXACT SAME AS DIdStreamingTester
-      peerConnection.addEventListener('iceconnectionstatechange', () => {
-        console.log('🔗 ICE connection state:', peerConnection.iceConnectionState);
-        
-        if (peerConnection.iceConnectionState === 'connected') {
-          console.log('✅ WebRTC connection established!');
-          // Set connected state immediately when WebRTC is connected
-          setStreamState(prev => ({
-            ...prev,
-            isConnected: true,
-            isActive: true,
-            status: 'connected'
-          }));
-        }
-      });
-
-      peerConnection.addEventListener('track', (event) => {
-        console.log('🎬 Received video track!');
-        console.log('🎬 Video track details:', {
-          kind: event.track.kind,
-          id: event.track.id,
-          enabled: event.track.enabled,
-          streams: event.streams.length
-        });
-        
-        // Handle video stream
-        const videoElement = document.getElementById('video-player');
-        if (videoElement && event.streams[0]) {
-          videoElement.srcObject = event.streams[0];
-        }
-        
-        // Update stream state with video stream
-        console.log('🎬 Setting video stream in state:', event.streams[0]);
-        setStreamState(prev => {
-          const newState = {
-            ...prev,
-            videoStream: event.streams[0]
-          };
-          console.log('🎬 Updated stream state with video:', newState);
-          return newState;
-        });
-      });
-
-      // Set remote description (SDP offer) - EXACT SAME AS DIdStreamingTester
-      await peerConnection.setRemoteDescription({
-        type: 'offer',
-        sdp: currentSdpOffer
-      });
-
-      // Create answer - EXACT SAME AS DIdStreamingTester
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-
-      console.log('📝 SDP answer created');
-
-      // Submit SDP answer - EXACT SAME AS DIdStreamingTester
-      console.log('📝 Submitting SDP answer object:', answer);
-      const response = await apiService.startDIdStream(
-        currentStreamId,
-        currentSessionId,
-        answer
-      );
-      
-      if (response.success) {
-        console.log('✅ Stream started successfully');
-        console.log('🔍 Response object:', response);
-        
-        setStreamState(prev => {
-          const newState = {
-            ...prev,
-            streamId: currentStreamId, // Keep the original streamId
-            sessionId: response.session_id || currentSessionId, // Use response session_id or keep current
-            status: 'connected',
-            isConnected: true,
-            isActive: true,
-            peerConnection,
-            audioStream, // Store audio stream for later use
-            videoStream: prev.videoStream // Preserve video stream from previous state
-          };
-          
-          console.log('🔄 Updating stream state to:', newState);
-          console.log('🔍 Current values:', {
-            currentStreamId,
-            currentSessionId,
-            responseSessionId: response.session_id,
-            hasVideoStream: !!prev.videoStream,
-            videoStreamId: prev.videoStream?.id || 'null'
-          });
-          return newState;
-        });
-        
-        return { success: true, sessionId: response.session_id };
-      } else {
-        throw new Error(response.message || 'Failed to start stream');
-      }
-    } catch (error) {
-      console.error('❌ Error starting stream:', error);
-      setStreamState(prev => ({
-        ...prev,
-        error: error.message,
-        status: 'error'
-      }));
-      throw error;
-    }
-  }, [streamState.streamId, streamState.sessionId, streamState.sdpOffer, streamState.iceServers, addAudioTrack]);
-
-  // Submit ICE candidate - EXACT SAME AS DIdStreamingTester
+  // Submit ICE candidate - define BEFORE startStream to avoid TDZ in deps
   const submitIceCandidate = useCallback(async (candidate, streamId, sessionId) => {
     try {
       console.log('🎬 submitIceCandidate called with:', {
@@ -340,7 +192,118 @@ export const useDIdStreaming = () => {
     } catch (error) {
       console.error('❌ Error submitting ICE candidate:', error);
     }
-  }, [apiService]);
+  }, []);
+
+  // Start D-ID stream with WebRTC setup (via DidWebRtcSession)
+  const startStream = useCallback(async (streamId, sessionId, sdpOffer, iceServers) => {
+    // Use passed parameters if provided, otherwise use state
+    const currentStreamId = streamId || streamState.streamId;
+    const currentSessionId = sessionId || streamState.sessionId;
+    const currentSdpOffer = sdpOffer || streamState.sdpOffer;
+    const currentIceServers = iceServers || streamState.iceServers;
+
+    if (!currentStreamId || !currentSessionId || !currentSdpOffer || !currentIceServers) {
+      throw new Error('Missing required stream data');
+    }
+
+    console.log('🔗 Step 2: Starting D-ID stream with WebRTC setup');
+    console.log('🔗 Using streamId:', currentStreamId);
+    console.log('🔗 Using sessionId:', currentSessionId);
+    console.log('🔗 sdpOffer type:', typeof currentSdpOffer);
+    console.log('🔗 sdpOffer length:', currentSdpOffer.length);
+    console.log('🔗 iceServers type:', typeof currentIceServers);
+    console.log('🔗 iceServers length:', currentIceServers.length);
+
+    setStreamState(prev => ({ ...prev, status: 'connecting', error: null }));
+    
+    try {
+      // Create session
+      sessionRef.current = new DidWebRtcSession(currentIceServers, {
+        onIceCandidate: (candidate) => {
+          console.log('🧊 ICE candidate generated');
+          submitIceCandidate(candidate, currentStreamId, currentSessionId);
+        },
+        onIceConnectionStateChange: (state) => {
+          console.log('🔗 ICE connection state:', state);
+          if (state === 'connected') {
+            console.log('✅ WebRTC connection established!');
+            setStreamState(prev => ({ ...prev, isConnected: true, isActive: true, status: 'connected' }));
+          }
+        },
+        onTrack: (event) => {
+          console.log('🎬 Received track:', { kind: event.track.kind, id: event.track.id, streams: event.streams.length });
+          if (event.streams[0]) {
+            setStreamState(prev => ({ ...prev, videoStream: event.streams[0] }));
+          }
+        }
+      });
+
+      const pc = sessionRef.current.createPeerConnection();
+
+      // Add audio track from microphone (optional)
+      let audioStream = null;
+      try {
+        audioStream = await addAudioTrack(pc);
+      } catch (audioError) {
+        console.warn('⚠️ Could not add audio track:', audioError);
+      }
+
+      // Apply remote offer and create local answer
+      await sessionRef.current.setRemoteOffer(currentSdpOffer);
+      const answer = await sessionRef.current.createAnswerAndSetLocal();
+
+      console.log('📝 SDP answer created');
+
+      // Submit SDP answer
+      console.log('📝 Submitting SDP answer object:', answer);
+      const response = await apiService.startDIdStream(currentStreamId, currentSessionId, answer);
+      
+      if (response.success) {
+        console.log('✅ Stream started successfully');
+        console.log('🔍 Response object:', response);
+        
+        setStreamState(prev => {
+          const newState = {
+            ...prev,
+            streamId: currentStreamId, // Keep the original streamId
+            sessionId: response.session_id || currentSessionId, // Use response session_id or keep current
+            status: 'connected',
+            isConnected: true,
+            isActive: true,
+            peerConnection: pc,
+            audioStream, // Store audio stream for later use
+            videoStream: prev.videoStream // Preserve video stream from previous state
+          };
+          
+          console.log('🔄 Updating stream state to:', newState);
+          console.log('🔍 Current values:', {
+            currentStreamId,
+            currentSessionId,
+            responseSessionId: response.session_id,
+            hasVideoStream: !!prev.videoStream,
+            videoStreamId: prev.videoStream?.id || 'null'
+          });
+          return newState;
+        });
+
+        // No silent warmup: align with official demo, video will activate when WS audio starts streaming
+
+        return { success: true, sessionId: response.session_id };
+      } else {
+        throw new Error(response.message || 'Failed to start stream');
+      }
+    } catch (error) {
+      console.error('❌ Error starting stream:', error);
+      setStreamState(prev => ({
+        ...prev,
+        error: error.message,
+        status: 'error'
+      }));
+      throw error;
+    }
+  }, [streamState.streamId, streamState.sessionId, streamState.sdpOffer, streamState.iceServers, addAudioTrack, submitIceCandidate]);
+
+  // (moved above to avoid TDZ)
 
   // Step 4: Create talk stream - EXACT SAME AS DIdStreamingTester
   const createTalk = useCallback(async (streamId, sessionId, voice) => {
@@ -389,7 +352,7 @@ export const useDIdStreaming = () => {
       console.error('❌ Error creating talk stream:', error);
       return { success: false, error: error.message };
     }
-  }, [apiService]);
+  }, []);
 
   // Stop audio track
   const stopAudioTrack = useCallback(() => {
@@ -417,9 +380,12 @@ export const useDIdStreaming = () => {
       stopAudioTrack();
       
       // Close peer connection if exists
-      if (streamState.peerConnection) {
+      if (sessionRef.current) {
         console.log('🔌 Closing peer connection...');
-        streamState.peerConnection.close();
+        sessionRef.current.close();
+        sessionRef.current = null;
+      } else if (streamState.peerConnection) {
+        try { streamState.peerConnection.close(); } catch (_) {}
       }
       
       const response = await apiService.closeStream(
