@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { apiService } from '../services/api';
 import { useDIdMicrophoneTalk } from '../hooks/useDIdMicrophoneTalk';
 
@@ -17,13 +17,18 @@ const DIdStreamingTester = ({ selectedVoice }) => {
     audioUrl: 'https://res.cloudinary.com/daeoqig4w/video/upload/v1754770303/1-second-of-silence_l1un5v.mp3'
   });
 
+  // Состояние для управления видимостью заглушки
+  const [showPlaceholder, setShowPlaceholder] = useState(true);
+  
+  // Таймер для автоматического показа заглушки
+  const placeholderTimerRef = useRef(null);
+
   // Используем хук для микрофонного talk
   const {
     isProcessing: isMicProcessing,
     isRecording: isMicRecording,
     isUploading: isMicUploading,
     isSendingToDid,
-    isPlayingSilence,
     error: micError,
     logs: micLogs,
     streamStats: micStats,
@@ -304,6 +309,94 @@ const DIdStreamingTester = ({ selectedVoice }) => {
     }
   }, [testState, addLog]);
 
+  // useEffect для управления таймером заглушки
+  useEffect(() => {
+    const video = document.getElementById('test-video');
+    if (!video) return;
+
+    const startPlaceholderTimer = () => {
+      // Очищаем предыдущий таймер
+      if (placeholderTimerRef.current) {
+        clearTimeout(placeholderTimerRef.current);
+      }
+      
+      // Запускаем новый таймер на 2 секунды
+      placeholderTimerRef.current = setTimeout(() => {
+        console.log('🎬 Таймер истек, показываем заглушку');
+        setShowPlaceholder(true);
+      }, 2000);
+    };
+
+    const stopPlaceholderTimer = () => {
+      if (placeholderTimerRef.current) {
+        clearTimeout(placeholderTimerRef.current);
+        placeholderTimerRef.current = null;
+      }
+    };
+
+    // Обработчики событий
+    const handlePlay = () => {
+      console.log('🎬 Основное видео начало воспроизведение, скрываем заглушку');
+      setShowPlaceholder(false);
+      stopPlaceholderTimer();
+    };
+
+    const handlePause = () => {
+      console.log('🎬 Основное видео приостановлено, показываем заглушку');
+      setShowPlaceholder(true);
+      startPlaceholderTimer();
+    };
+
+    const handleEnded = () => {
+      console.log('🎬 Основное видео завершилось, показываем заглушку');
+      setShowPlaceholder(true);
+      stopPlaceholderTimer();
+    };
+
+    const handleWaiting = () => {
+      console.log('🎬 Основное видео ждет данные, показываем заглушку');
+      setShowPlaceholder(true);
+      startPlaceholderTimer();
+    };
+
+    const handleTimeUpdate = () => {
+      // Проверяем, не закончилось ли видео
+      if (video.duration > 0 && video.currentTime >= video.duration - 0.1) {
+        console.log('🎬 Основное видео в конце, показываем заглушку');
+        setShowPlaceholder(true);
+        stopPlaceholderTimer();
+      }
+    };
+
+    const handleStalled = () => {
+      console.log('🎬 Основное видео остановилось, показываем заглушку');
+      setShowPlaceholder(true);
+      startPlaceholderTimer();
+    };
+
+    // Добавляем обработчики
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+    video.addEventListener('ended', handleEnded);
+    video.addEventListener('waiting', handleWaiting);
+    video.addEventListener('timeupdate', handleTimeUpdate);
+    video.addEventListener('stalled', handleStalled);
+
+    // Запускаем таймер по умолчанию
+    startPlaceholderTimer();
+
+    // Очистка при размонтировании
+    return () => {
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+      video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('waiting', handleWaiting);
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('stalled', handleStalled);
+      stopPlaceholderTimer();
+    };
+  }, []);
+
   // Step 4: Create talk stream with microphone
   const handleCreateTalkMic = useCallback(async () => {
     try {
@@ -499,14 +592,54 @@ const DIdStreamingTester = ({ selectedVoice }) => {
         </div>
       )}
 
-      <div className="video-container">
-        <h3>🎬 Video Stream</h3>
+      <div className="video-container" style={{ 
+        position: 'relative', 
+        width: '100%', 
+        maxWidth: '400px', 
+        aspectRatio: '1 / 1', // Квадратные пропорции как у аватара
+        margin: '0 auto',
+        backgroundColor: '#000',
+        border: '1px solid #ccc',
+        borderRadius: '8px',
+        overflow: 'hidden'
+      }}>
+        {/* Основной видеоэлемент */}
         <video 
           id="test-video"
           autoPlay 
           playsInline
+          controls
+          style={{ 
+            width: '100%', 
+            height: '100%',
+            position: 'relative',
+            zIndex: 1,
+            objectFit: 'contain', // Сохраняет пропорции для корректного воспроизведения
+            backgroundColor: '#000'
+          }}
+        />
+        
+        {/* Заглушка с видео ожидания */}
+        <video 
+          id="placeholder-video"
+          autoPlay 
+          playsInline
+          loop
           muted
-          style={{ width: '100%', maxWidth: '400px', border: '1px solid #ccc' }}
+          style={{ 
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            opacity: showPlaceholder ? 1 : 0,
+            transition: 'opacity 0.3s ease',
+            zIndex: 2,
+            pointerEvents: 'none',
+            objectFit: 'fill', // Заполняет весь контейнер без сохранения пропорций
+            backgroundColor: '#000'
+          }}
+          src="/Waiting.mp4"
         />
       </div>
 
@@ -546,10 +679,6 @@ const DIdStreamingTester = ({ selectedVoice }) => {
             <div className="status-item">
               <span className="label">Sending to D-ID:</span>
               <span className="value">{isSendingToDid ? '⏳ Processing...' : '✅ Idle'}</span>
-            </div>
-            <div className="status-item">
-              <span className="label">Playing Silence:</span>
-              <span className="value">{isPlayingSilence ? '🔇 Active (1s interval)' : '✅ Idle'}</span>
             </div>
           </div>
           

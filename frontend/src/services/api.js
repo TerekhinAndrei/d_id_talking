@@ -251,7 +251,10 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify({
         image_url: imageUrl,
-        description: description
+        description: description,
+        config: {
+          output_resolution: 512 // Стандартное разрешение для квадратного видео
+        }
       }),
     });
   }
@@ -336,8 +339,21 @@ class ApiService {
     return this.uploadImage(formData.get('file'));
   }
 
-  async createDIdStream(imageUrl, description = 'D-ID streaming session') {
-    return this.createStream(imageUrl, description);
+  async createDIdStream(imageUrl, description = 'D-ID streaming session', config = null) {
+    if (config) {
+      // Если передана конфигурация, используем её
+      return this.request('/streaming/start', {
+        method: 'POST',
+        body: JSON.stringify({
+          image_url: imageUrl,
+          description: description,
+          config: config
+        }),
+      });
+    } else {
+      // Иначе используем стандартную конфигурацию
+      return this.createStream(imageUrl, description);
+    }
   }
 
   async startDIdStream(streamId, sessionId, sdpAnswer) {
