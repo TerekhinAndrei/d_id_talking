@@ -23,10 +23,106 @@ export const useMicrophoneRecording = (options = {}) => {
   const selectedVoiceRef = useRef(null);
   const isRecordingRef = useRef(false);
   
-  // Буфер для фраз
-  const audioBufferRef = useRef([]);
-  const silenceTimerRef = useRef(null);
-  const isSpeakingRef = useRef(false);
+  // 🎵 AudioWorklet refs
+  const audioWorkletNodeRef = useRef(null);
+  const audioWorkletLoadedRef = useRef(false);
+
+  // 🎵 ОЧЕРЕДЬ ВОСПРОИЗВЕДЕНИЯ - НОВАЯ АРХИТЕКТУРА
+  const playbackQueueRef = useRef([]);
+  const isPlayingRef = useRef(false);
+  const currentAudioSourceRef = useRef(null);
+
+  // Обработчик очереди воспроизведения
+  const processPlaybackQueue = useCallback(async () => {
+    if (isPlayingRef.current || playbackQueueRef.current.length === 0) {
+      return;
+    }
+
+    isPlayingRef.current = true;
+    
+    while (playbackQueueRef.current.length > 0) {
+      const audioData = playbackQueueRef.current.shift();
+      
+      try {
+        console.log('🎵 Воспроизводим аудио из очереди, осталось:', playbackQueueRef.current.length);
+        
+        // Передаём наружу (например, в мост ElevenLabs -> D-ID)
+        try {
+          if (options && typeof options.onProcessedChunk === 'function') {
+            options.onProcessedChunk(audioData);
+          }
+        } catch (error) {
+          console.warn('Ошибка в onProcessedChunk callback:', error);
+        }
+        
+        // Конвертируем base64 в ArrayBuffer
+        const binaryString = atob(audioData);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Используем Web Audio API для лучшего качества
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        // Декодируем аудио данные
+        const audioBuffer = await audioContextRef.current.decodeAudioData(bytes.buffer);
+        
+        // Создаем источник и воспроизводим
+        const source = audioContextRef.current.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContextRef.current.destination);
+        
+        // Сохраняем ссылку на текущий источник
+        currentAudioSourceRef.current = source;
+        
+        // Ждем окончания воспроизведения
+        await new Promise((resolve, reject) => {
+          source.onended = resolve;
+          source.onerror = reject;
+          source.start();
+        });
+        
+        // Очищаем ссылку
+        currentAudioSourceRef.current = null;
+        
+        console.log('🎵 Аудио фрагмент воспроизведен');
+        
+        // Обновляем статистику
+        setStreamStats(prev => ({
+          ...prev,
+          processedChunks: prev.processedChunks + 1
+        }));
+        
+        // Добавляем в историю обработанных чанков
+        setProcessedChunks(prev => [...prev, {
+          id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          counter: streamStats.processedChunks + 1,
+          size: audioData.length,
+          timestamp: new Date()
+        }]);
+        
+      } catch (error) {
+        console.error('❌ Ошибка воспроизведения аудио из очереди:', error);
+        // Продолжаем с следующим элементом очереди
+      }
+    }
+    
+    isPlayingRef.current = false;
+  }, [streamStats.processedChunks, options]);
+
+  // Добавление аудио в очередь воспроизведения
+  const addToPlaybackQueue = useCallback((audioData) => {
+    playbackQueueRef.current.push(audioData);
+    console.log('📥 Добавлен в очередь воспроизведения, размер очереди:', playbackQueueRef.current.length);
+    
+    // Запускаем обработку очереди, если она еще не запущена
+    if (!isPlayingRef.current) {
+      processPlaybackQueue();
+    }
+  }, [processPlaybackQueue]);
 
   // Подключение к WebSocket
   const connectWebSocket = useCallback(() => {
@@ -46,7 +142,8 @@ export const useMicrophoneRecording = (options = {}) => {
           console.log('📨 Получено WebSocket сообщение:', message);
           
           if (message.type === 'audio_data') {
-            playAudioChunk(message.data);
+            // 🎵 ИСПОЛЬЗУЕМ ОЧЕРЕДЬ ВМЕСТО ПРЯМОГО ВОСПРОИЗВЕДЕНИЯ
+            addToPlaybackQueue(message.data);
           } else if (message.type === 'error') {
             console.error('❌ WebSocket ошибка:', message.message);
             setError(message.message);
@@ -68,6 +165,79 @@ export const useMicrophoneRecording = (options = {}) => {
     } catch (error) {
       console.error('❌ Ошибка подключения к WebSocket:', error);
       setError('Ошибка подключения к WebSocket');
+    }
+  }, [addToPlaybackQueue]);
+
+  // 🎵 Загрузка AudioWorklet
+  const loadAudioWorklet = useCallback(async () => {
+    if (audioWorkletLoadedRef.current) {
+      return;
+    }
+
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      // Загружаем AudioWorklet модуль
+      await audioContextRef.current.audioWorklet.addModule('/audio-recorder-worklet.js');
+      audioWorkletLoadedRef.current = true;
+      console.log('✅ AudioWorklet загружен успешно');
+      
+    } catch (error) {
+      console.error('❌ Ошибка загрузки AudioWorklet:', error);
+      setError('Ошибка загрузки AudioWorklet');
+      throw error;
+    }
+  }, []);
+
+  // 🎵 Создание AudioWorklet узла
+  const createAudioWorkletNode = useCallback(async (stream) => {
+    try {
+      // Создаем источник из медиа потока
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      
+      // Создаем AudioWorklet узел
+      audioWorkletNodeRef.current = new AudioWorkletNode(audioContextRef.current, 'audio-recorder-processor');
+      
+      // Обработчик сообщений от AudioWorklet
+      audioWorkletNodeRef.current.port.onmessage = (event) => {
+        const { type, data, hasSpeech } = event.data;
+        
+        switch (type) {
+          case 'audio_data':
+            // Обрабатываем аудио данные с детекцией речи
+            console.log('🎵 Получены аудио данные от AudioWorklet:', { hasSpeech, dataLength: data?.length });
+            processAudioChunk(data, hasSpeech);
+            break;
+            
+          case 'send_phrase':
+            // Отправляем фразу через WebSocket
+            console.log('📤 Отправляем фразу через WebSocket');
+            sendPhrase([data]);
+            break;
+            
+          case 'debug':
+            // Отладочная информация
+            console.log('🔍 AudioWorklet debug:', data);
+            break;
+        }
+      };
+      
+      // Подключаем узлы
+      source.connect(audioWorkletNodeRef.current);
+      audioWorkletNodeRef.current.connect(audioContextRef.current.destination);
+      
+      // Запускаем запись в AudioWorklet
+      audioWorkletNodeRef.current.port.postMessage({
+        type: 'start_recording'
+      });
+      
+      console.log('🎵 AudioWorklet узел создан и запущен');
+      
+    } catch (error) {
+      console.error('❌ Ошибка создания AudioWorklet узла:', error);
+      throw error;
     }
   }, []);
 
@@ -152,7 +322,7 @@ export const useMicrophoneRecording = (options = {}) => {
       
       // Добавляем в историю отправленных чанков
       setAudioChunks(prev => [...prev, {
-        id: Date.now(),
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         counter: streamStats.sentChunks + 1,
         size: wavData.length,
         timestamp: new Date()
@@ -166,59 +336,6 @@ export const useMicrophoneRecording = (options = {}) => {
     }
   }, [streamStats.sentChunks, convertFloat32ToWav]);
 
-  // Воспроизведение полученного аудио
-  const playAudioChunk = useCallback(async (audioData) => {
-    try {
-      console.log('🎵 Получен аудио чанк через WebSocket');
-      // Передаём наружу (например, в мост ElevenLabs -> D-ID)
-      try {
-        if (options && typeof options.onProcessedChunk === 'function') {
-          options.onProcessedChunk(audioData);
-        }
-      } catch (_) {}
-      
-      // Конвертируем base64 в ArrayBuffer
-      const binaryString = atob(audioData);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      
-      // Используем Web Audio API для лучшего качества
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      
-      // Декодируем аудио данные
-      const audioBuffer = await audioContextRef.current.decodeAudioData(bytes.buffer);
-      
-      // Создаем источник и воспроизводим
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContextRef.current.destination);
-      source.start();
-      
-      console.log('🎵 Аудио воспроизведено через Web Audio API');
-      
-      // Обновляем статистику
-      setStreamStats(prev => ({
-        ...prev,
-        processedChunks: prev.processedChunks + 1
-      }));
-      
-      // Добавляем в историю обработанных чанков
-      setProcessedChunks(prev => [...prev, {
-        id: Date.now(),
-        counter: streamStats.processedChunks + 1,
-        size: audioData.length,
-        timestamp: new Date()
-      }]);
-      
-    } catch (error) {
-      console.error('❌ Ошибка воспроизведения аудио чанка:', error);
-    }
-  }, [streamStats.processedChunks, options]);
-
   // Начало записи
   const startRecording = useCallback(async (voiceId) => {
     try {
@@ -229,42 +346,38 @@ export const useMicrophoneRecording = (options = {}) => {
       
       connectWebSocket();
       
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      }
-
+      // 🎵 Загружаем AudioWorklet
+      await loadAudioWorklet();
+      
+      // Получаем доступ к микрофону
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-
-      // Используем ScriptProcessor для надежности
-      console.log('🔄 Создаю ScriptProcessor...');
-      const processor = audioContextRef.current.createScriptProcessor(16384, 1, 1); // Увеличиваем размер буфера
       
-      processor.onaudioprocess = (event) => {
-        const inputData = event.inputBuffer.getChannelData(0);
-        if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
-          // Обрабатываем чанк с детекцией речи
-          processAudioChunk(Array.from(inputData));
-        }
-      };
-      
-      source.connect(processor);
-      processor.connect(audioContextRef.current.destination);
+      // 🎵 Создаем AudioWorklet узел
+      await createAudioWorkletNode(stream);
       
       setIsRecording(true);
-      console.log('🎤 Запись начата с ScriptProcessor');
+      console.log('🎤 Запись начата с AudioWorklet');
       
     } catch (error) {
       console.error('❌ Ошибка начала записи:', error);
       setError('Ошибка доступа к микрофону');
       setIsProcessing(false);
     }
-  }, [connectWebSocket, sendAudioChunk]);
+  }, [connectWebSocket, loadAudioWorklet, createAudioWorkletNode]);
 
   // Остановка записи
   const stopRecording = useCallback(() => {
     try {
+      // 🎵 Останавливаем AudioWorklet
+      if (audioWorkletNodeRef.current) {
+        audioWorkletNodeRef.current.port.postMessage({
+          type: 'stop_recording'
+        });
+        audioWorkletNodeRef.current.disconnect();
+        audioWorkletNodeRef.current = null;
+      }
+      
       // Останавливаем поток
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
@@ -276,25 +389,32 @@ export const useMicrophoneRecording = (options = {}) => {
         websocketRef.current.close();
       }
       
+      // 🎵 Очищаем очередь воспроизведения
+      playbackQueueRef.current = [];
+      isPlayingRef.current = false;
+      
+      // Останавливаем текущее воспроизведение
+      if (currentAudioSourceRef.current) {
+        try {
+          currentAudioSourceRef.current.stop();
+        } catch (error) {
+          console.warn('Ошибка остановки текущего аудио:', error);
+        }
+        currentAudioSourceRef.current = null;
+      }
+      
       isRecordingRef.current = false;
       setIsRecording(false);
       setIsProcessing(false);
       
-      console.log('⏹️ Запись остановлена');
+      console.log('⏹️ Запись остановлена, AudioWorklet отключен, очередь очищена');
       
     } catch (error) {
       console.error('❌ Ошибка остановки записи:', error);
     }
   }, []);
 
-  // Детекция речи
-  const detectSpeech = useCallback((audioData) => {
-    // Простая детекция по громкости
-    const volume = Math.sqrt(audioData.reduce((sum, sample) => sum + sample * sample, 0) / audioData.length);
-    const threshold = 0.01; // Порог громкости
-    
-    return volume > threshold;
-  }, []);
+
 
   // Отправка фразы
   const sendPhrase = useCallback(async (audioBuffer) => {
@@ -335,7 +455,7 @@ export const useMicrophoneRecording = (options = {}) => {
       
       // Добавляем в историю
       setAudioChunks(prev => [...prev, {
-        id: Date.now(),
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         counter: streamStats.sentChunks + 1,
         size: wavData.length,
         type: 'phrase',
@@ -347,34 +467,14 @@ export const useMicrophoneRecording = (options = {}) => {
     }
   }, [streamStats.sentChunks, convertFloat32ToWav]);
 
-  // Обработка аудио чанка с детекцией речи
-  const processAudioChunk = useCallback((audioData) => {
-    const hasSpeech = detectSpeech(audioData);
-    
-    if (hasSpeech) {
-      // Есть речь - добавляем в буфер
-      audioBufferRef.current.push(audioData);
-      isSpeakingRef.current = true;
-      
-      // Сбрасываем таймер тишины
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-      }
-      
-      // Устанавливаем таймер для отправки фразы
-      silenceTimerRef.current = setTimeout(() => {
-        if (audioBufferRef.current.length > 0) {
-          sendPhrase([...audioBufferRef.current]);
-          audioBufferRef.current = [];
-          isSpeakingRef.current = false;
-        }
-      }, 1000); // Отправляем через 1 секунду тишины
-      
-    } else if (isSpeakingRef.current) {
-      // Тишина после речи - добавляем в буфер
-      audioBufferRef.current.push(audioData);
+  // 🎵 Обработка аудио чанка от AudioWorklet
+  const processAudioChunk = useCallback((audioData, hasSpeech) => {
+    // Отправляем только если есть речь и WebSocket открыт
+    if (hasSpeech && websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+      console.log('🎤 Отправляем аудио чанк с речью');
+      sendAudioChunk(audioData);
     }
-  }, [detectSpeech, sendPhrase]);
+  }, [sendAudioChunk]);
 
   // Очистка при размонтировании
   useEffect(() => {

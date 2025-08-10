@@ -2,63 +2,122 @@ class AudioRecorderProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.isRecording = false;
-    this.chunkSize = 4096;
-    this.buffer = [];
+    this.audioBuffer = [];
+    this.isSpeaking = false;
+    this.speechThreshold = 0.01;
+    this.silenceTimeout = 1000; // 1 second
+    this.lastSpeechTime = 0;
+    this.currentFrame = 0; // Добавляем счетчик кадров
+    
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Привязываем обработчик сообщений
+    this.port.onmessage = this.handleMessage.bind(this);
   }
 
-  process(inputs, outputs, parameters) {
-    const input = inputs[0];
-    if (!input || !input[0] || !this.isRecording) {
-      return true;
-    }
+  // Детекция речи по громкости
+  detectSpeech(audioData) {
+    const volume = Math.sqrt(
+      audioData.reduce((sum, sample) => sum + sample * sample, 0) / audioData.length
+    );
+    return volume > this.speechThreshold;
+  }
 
-    const inputChannel = input[0];
+  // Обработка аудио данных
+  process(inputs) {
+    // Проверяем, что запись активна
+    if (!this.isRecording) return true;
     
-    // Добавляем данные в буфер
-    for (let i = 0; i < inputChannel.length; i++) {
-      this.buffer.push(inputChannel[i]);
-    }
+    const input = inputs[0];
+    if (!input || input.length === 0) return true;
 
-    // Отправляем чанк когда буфер заполнен
-    if (this.buffer.length >= this.chunkSize) {
-      const chunk = this.buffer.slice(0, this.chunkSize);
-      this.buffer = this.buffer.slice(this.chunkSize);
-      
+    const inputData = input[0];
+    if (!inputData) return true;
+
+    // Увеличиваем счетчик кадров
+    this.currentFrame += inputData.length;
+    
+    // Детекция речи (используем Float32Array напрямую)
+    const hasSpeech = this.detectSpeech(inputData);
+    
+    // Логируем каждые 100 кадров для отладки
+    if (this.currentFrame % 100 === 0) {
       this.port.postMessage({
-        type: 'audio-chunk',
-        data: chunk
+        type: 'debug',
+        data: {
+          frame: this.currentFrame,
+          hasSpeech: hasSpeech,
+          bufferSize: this.audioBuffer.length,
+          isSpeaking: this.isSpeaking,
+          volume: Math.sqrt(inputData.reduce((sum, sample) => sum + sample * sample, 0) / inputData.length)
+        }
       });
+    }
+    
+    if (hasSpeech) {
+      // Есть речь - добавляем в буфер (копируем Float32Array)
+      this.audioBuffer.push(new Float32Array(inputData));
+      this.isSpeaking = true;
+      this.lastSpeechTime = this.currentFrame / globalThis.sampleRate;
+      
+    } else if (this.isSpeaking) {
+      // Тишина после речи - добавляем в буфер
+      this.audioBuffer.push(new Float32Array(inputData));
+      
+      // Проверяем, не пора ли отправить фразу
+      const currentTime = this.currentFrame / globalThis.sampleRate;
+      if (currentTime - this.lastSpeechTime > this.silenceTimeout / 1000) {
+        // Объединяем все фрагменты в одну фразу
+        const totalLength = this.audioBuffer.reduce((sum, chunk) => sum + chunk.length, 0);
+        const combinedAudio = new Float32Array(totalLength);
+        
+        let offset = 0;
+        for (const chunk of this.audioBuffer) {
+          combinedAudio.set(chunk, offset);
+          offset += chunk.length;
+        }
+        
+        // Отправляем фразу
+        this.port.postMessage({
+          type: 'send_phrase',
+          data: Array.from(combinedAudio) // Конвертируем только при отправке
+        });
+        
+        // Очищаем буфер
+        this.audioBuffer = [];
+        this.isSpeaking = false;
+      }
     }
 
     return true;
   }
 
   // Обработка сообщений от основного потока
-  port.onmessage = (event) => {
+  handleMessage(event) {
     const { type, data } = event.data;
     
     switch (type) {
-      case 'start-recording':
+      case 'start_recording':
         this.isRecording = true;
-        this.buffer = [];
+        this.audioBuffer = [];
+        this.isSpeaking = false;
+        this.lastSpeechTime = 0;
         break;
         
-      case 'stop-recording':
+      case 'stop_recording':
         this.isRecording = false;
-        // Отправляем оставшиеся данные
-        if (this.buffer.length > 0) {
-          this.port.postMessage({
-            type: 'audio-chunk',
-            data: this.buffer
-          });
-        }
+        this.audioBuffer = [];
+        this.isSpeaking = false;
         break;
         
-      case 'set-chunk-size':
-        this.chunkSize = data;
+      case 'set_speech_threshold':
+        this.speechThreshold = data.threshold || 0.01;
+        break;
+        
+      case 'set_silence_timeout':
+        this.silenceTimeout = data.timeout || 1000;
         break;
     }
-  };
+  }
 }
 
+// Регистрируем процессор
 registerProcessor('audio-recorder-processor', AudioRecorderProcessor);

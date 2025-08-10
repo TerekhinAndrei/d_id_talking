@@ -152,7 +152,7 @@ export const useMicrophoneToCloudinary = (options = {}) => {
         
         // Добавляем в список загруженных файлов
         setUploadedFiles(prev => [...prev, {
-          id: Date.now(),
+          id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           url: cloudinaryUrl,
           timestamp: new Date(),
           size: audioData.length
@@ -171,7 +171,7 @@ export const useMicrophoneToCloudinary = (options = {}) => {
         
         // Добавляем в историю обработанных чанков
         setProcessedChunks(prev => [...prev, {
-          id: Date.now(),
+          id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           counter: streamStats.processedChunks + 1,
           originalSize: audioData.length,
           cloudinaryUrl: cloudinaryUrl,
@@ -221,7 +221,7 @@ export const useMicrophoneToCloudinary = (options = {}) => {
       
       // Добавляем в историю отправленных чанков
       setAudioChunks(prev => [...prev, {
-        id: Date.now(),
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         counter: streamStats.sentChunks + 1,
         size: wavData.length,
         timestamp: new Date()
@@ -348,7 +348,7 @@ export const useMicrophoneToCloudinary = (options = {}) => {
       
       // Добавляем в историю
       setAudioChunks(prev => [...prev, {
-        id: Date.now(),
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         counter: streamStats.sentChunks + 1,
         size: wavData.length,
         type: 'phrase',

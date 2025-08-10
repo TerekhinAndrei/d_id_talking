@@ -33,23 +33,28 @@ export const useElevenLabsDidBridge = () => {
     if (!voiceId) throw new Error('Missing voice');
     try {
       setError(null);
-      await ws.connect();
-      await ws.beginExternalStreaming(streamId, sessionId);
-      await bridge.start(streamId, sessionId);
+      
+      // ВРЕМЕННО ОТКЛЮЧАЕМ WebSocket D-ID для тестирования
+      console.log('🔧 Временно отключен WebSocket D-ID для тестирования записи микрофона');
+      
+      // Запускаем только запись микрофона
       await mic.startRecording(voiceId);
       setIsActive(true);
+      console.log('✅ Запись микрофона запущена (без WebSocket моста)');
+      
     } catch (e) {
       setError(e.message);
+      console.error('❌ Ошибка запуска записи микрофона:', e);
       throw e;
     }
-  }, [ws, bridge, mic]);
+  }, [mic]);
 
   const stop = useCallback(() => {
-    try { mic.stopRecording(); } catch (_) {}
-    try { bridge.stop(); } catch (_) {}
-    try { ws.endExternalStreaming?.(); } catch (_) {}
+    console.log('🛑 Остановка записи микрофона');
+    try { mic.stopRecording(); } catch (e) { console.warn('⚠️ Ошибка остановки микрофона:', e); }
     setIsActive(false);
-  }, [mic, bridge, ws]);
+    console.log('✅ Запись микрофона остановлена');
+  }, [mic]);
 
   return { start, stop, status, error };
 };
