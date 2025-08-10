@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     
     # Cloudinary Configuration
     CLOUDINARY_URL: Optional[str] = None
+    CLOUDINARY_CLOUD_NAME: Optional[str] = None
+    CLOUDINARY_API_KEY: Optional[str] = None
+    CLOUDINARY_API_SECRET: Optional[str] = None
     
     # Client URL
     CLIENT_URL: str = "http://localhost:3000"

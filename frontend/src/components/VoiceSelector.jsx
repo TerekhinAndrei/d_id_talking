@@ -50,9 +50,17 @@ const VoiceSelector = ({
         console.log('Аудио данные получены, начинаю воспроизведение');
         
         // Play the generated audio
-        await playAudioData(response.audio_data, response.format || 'mp3');
+        const playResult = await playAudioData(response.audio_data, response.format || 'mp3');
         
-        console.log('🎵 Воспроизведение завершено успешно');
+        if (playResult.success) {
+          console.log('🎵 Воспроизведение завершено успешно');
+        } else if (playResult.canRetry) {
+          // Autoplay was blocked, show user-friendly message
+          console.log('⚠️ Автозапуск заблокирован, но аудио готово к воспроизведению');
+          alert(playResult.message);
+        } else {
+          throw new Error(playResult.message || 'Ошибка воспроизведения');
+        }
       } else {
         throw new Error('Не удалось получить аудио данные от сервера');
       }
@@ -68,6 +76,8 @@ const VoiceSelector = ({
         errorMessage = 'Ошибка обработки аудио данных. Попробуйте еще раз.';
       } else if (error.message.includes('network')) {
         errorMessage = 'Ошибка сети. Проверьте подключение к интернету.';
+      } else if (error.message.includes('Браузер заблокировал')) {
+        errorMessage = error.message; // Use the user-friendly message we created
       } else {
         errorMessage = `Ошибка: ${error.message}`;
       }

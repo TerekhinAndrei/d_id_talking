@@ -206,18 +206,13 @@ export const useElevenLabs = () => {
     }
   }, []);
 
-  // Play Audio Data
-  const playAudioData = useCallback((audioBase64, format = 'mp3') => {
+  // Play audio data
+  const playAudioData = useCallback(async (audioBase64, format = 'mp3') => {
     try {
+      console.log('🔊 Воспроизведение аудио...', { format, dataLength: audioBase64?.length || 0 });
+
       if (!audioBase64) {
-        throw new Error('Нет аудио данных для воспроизведения');
-      }
-
-      console.log('🔊 Воспроизведение аудио...', { format, dataLength: audioBase64.length });
-
-      // Validate base64 string
-      if (typeof audioBase64 !== 'string') {
-        throw new Error('Аудио данные должны быть строкой');
+        throw new Error('Аудио данные отсутствуют');
       }
 
       // Remove any potential data URL prefix
@@ -264,7 +259,6 @@ export const useElevenLabs = () => {
       // Add event listeners for better error handling
       audio.addEventListener('error', (e) => {
         console.error('Ошибка воспроизведения аудио:', e);
-        throw new Error(`Ошибка воспроизведения: ${e.message}`);
       });
 
       audio.addEventListener('loadstart', () => {
@@ -275,18 +269,35 @@ export const useElevenLabs = () => {
         console.log('✅ Аудио готово к воспроизведению');
       });
 
-      // Play audio with error handling
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(error => {
-          console.error('Ошибка воспроизведения:', error);
-          throw new Error(`Не удалось воспроизвести аудио: ${error.message}`);
-        });
+      // Play audio with proper error handling for autoplay restrictions
+      try {
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+          console.log('🔊 Воспроизведение аудио начато');
+        }
+      } catch (playError) {
+        console.warn('⚠️ Автозапуск аудио заблокирован браузером:', playError.message);
+        
+        // Show user-friendly message about autoplay restriction
+        const errorMessage = 'Браузер заблокировал автозапуск аудио. Нажмите на кнопку воспроизведения еще раз для прослушивания.';
+        console.log('💡 Подсказка:', errorMessage);
+        
+        // Don't throw error, just log it as a warning
+        // The user can manually trigger playback again
+        return { 
+          success: false, 
+          message: errorMessage, 
+          audio: audio,
+          canRetry: true 
+        };
       }
-
-      console.log('🔊 Воспроизведение аудио начато');
       
-      return audio;
+      return { 
+        success: true, 
+        message: 'Аудио воспроизводится', 
+        audio: audio 
+      };
     } catch (error) {
       console.error('❌ Ошибка воспроизведения аудио:', error);
       setError(error.message);

@@ -98,6 +98,28 @@ function App() {
     // setMicrophoneStatus(status);
   };
 
+  const uploadImageToCloudinary = async (imageFile) => {
+    try {
+      console.log('📤 Загружаем изображение в Cloudinary...');
+      
+      const formData = new FormData();
+      formData.append('file', imageFile);
+      
+      const uploadResponse = await apiService.uploadToCloudinary(formData);
+      console.log('📥 Получен ответ от Cloudinary:', uploadResponse);
+      
+      if (uploadResponse.success && uploadResponse.url) {
+        console.log('✅ Изображение загружено в Cloudinary:', uploadResponse.url);
+        return uploadResponse.url;
+      } else {
+        throw new Error('Не удалось загрузить изображение в Cloudinary');
+      }
+    } catch (error) {
+      console.error('❌ Ошибка загрузки изображения в Cloudinary:', error);
+      throw error;
+    }
+  };
+
   const uploadDefaultImage = async () => {
     try {
       console.log('📤 Загружаем дефолтное изображение в Cloudinary...');
@@ -118,18 +140,7 @@ function App() {
       const blob = await response.blob();
       const file = new File([blob], 'default_avatar.jpg', { type: 'image/jpeg' });
       
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const uploadResponse = await apiService.uploadToCloudinary(formData);
-      console.log('📥 Получен ответ от Cloudinary для дефолтного изображения:', uploadResponse);
-      
-      if (uploadResponse.success && uploadResponse.url) {
-        console.log('✅ Дефолтное изображение загружено в Cloudinary:', uploadResponse.url);
-        return uploadResponse.url;
-      } else {
-        throw new Error('Не удалось загрузить дефолтное изображение в Cloudinary');
-      }
+      return await uploadImageToCloudinary(file);
     } catch (error) {
       console.error('❌ Ошибка загрузки дефолтного изображения:', error);
       throw error;
@@ -141,11 +152,17 @@ function App() {
       setIsCreating(true);
       console.log('🚀 Начинаем флоу D-ID стриминга (до Step 3 включительно)');
       
-      // Upload default image to Cloudinary
-      console.log('📸 Загружаем дефолтное изображение в Cloudinary...');
-      const imageUrl = await uploadDefaultImage();
+      // Upload image to Cloudinary
+      let imageUrl;
+      if (selectedImage) {
+        console.log('📸 Загружаем выбранное пользователем изображение в Cloudinary...');
+        imageUrl = await uploadImageToCloudinary(selectedImage);
+      } else {
+        console.log('📸 Загружаем дефолтное изображение в Cloudinary...');
+        imageUrl = await uploadDefaultImage();
+      }
       
-      console.log('📸 Используем изображение:', selectedImage ? 'загруженное' : 'по умолчанию');
+      console.log('📸 Используем изображение:', selectedImage ? 'загруженное пользователем' : 'по умолчанию');
       console.log('📸 Создание стрима с изображением:', imageUrl);
       
       // Step 1: Create stream - EXACT SAME AS DIdStreamingTester
@@ -196,7 +213,7 @@ function App() {
       // Force video re-render
       setIsVideoReady(true);
       
-      console.log('🎉 Стрим успешно создан с изображением по умолчанию и готов к использованию!');
+      console.log('🎉 Стрим успешно создан и готов к использованию!');
       console.log('🎤 Говорите в микрофон - аватар будет анимироваться с синтезированной речью');
       
     } catch (error) {

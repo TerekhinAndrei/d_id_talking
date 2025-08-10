@@ -256,7 +256,7 @@ export const useDIdStreaming = () => {
 
       // Submit SDP answer
       console.log('📝 Submitting SDP answer object:', answer);
-      const response = await apiService.startDIdStream(currentStreamId, currentSessionId, answer);
+      const response = await apiService.startDIdStream(currentStreamId, currentSessionId, answer.sdp);
       
       if (response.success) {
         console.log('✅ Stream started successfully');

@@ -14,6 +14,8 @@ from app.core.base import (
 )
 from app.services.elevenlabs_service import ElevenLabsService
 from app.services.d_id_service import DIdService
+from app.services.d_id_websocket_service import DIdWebSocketService
+from app.services.webrtc_service import WebRTCService
 
 
 class ServiceFactory:
@@ -95,6 +97,26 @@ class ServiceFactory:
         if service_key not in self._services:
             self.logger.info("Creating audio processor")
             self._services[service_key] = AudioProcessor()
+        
+        return self._services[service_key]
+    
+    def get_websocket_service(self) -> DIdWebSocketService:
+        """Get WebSocket service instance"""
+        service_key = "websocket_service"
+        
+        if service_key not in self._services:
+            self.logger.info("Creating D-ID WebSocket service")
+            self._services[service_key] = DIdWebSocketService()
+        
+        return self._services[service_key]
+    
+    def get_webrtc_service(self) -> WebRTCService:
+        """Get WebRTC service instance"""
+        service_key = "webrtc_service"
+        
+        if service_key not in self._services:
+            self.logger.info("Creating D-ID WebRTC service")
+            self._services[service_key] = WebRTCService()
         
         return self._services[service_key]
     
@@ -190,6 +212,14 @@ class ServiceContainer:
     def get_audio_processor(self) -> IAudioProcessor:
         """Get audio processor"""
         return self.factory.get_audio_processor()
+    
+    def get_websocket_service(self) -> DIdWebSocketService:
+        """Get WebSocket service instance"""
+        return self.factory.get_websocket_service()
+    
+    def get_webrtc_service(self) -> Any:
+        """Get WebRTC service instance"""
+        return self.factory.get_webrtc_service()
     
     async def initialize(self) -> Dict[str, Any]:
         """Initialize all services"""

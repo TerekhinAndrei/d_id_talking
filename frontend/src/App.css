@@ -924,6 +924,11 @@ body {
   background-color: #fffdf5;
 }
 
+.test-result.warning {
+  border-left-color: #fd7e14;
+  background-color: #fff8f0;
+}
+
 .result-header {
   display: flex;
   justify-content: space-between;
@@ -2607,4 +2612,46 @@ body {
 
 .text-success {
   color: var(--success) !important;
+}
+
+.test-result.warning {
+  color: #856404;
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  padding: 10px;
+  border-radius: 4px;
+  margin: 10px 0;
+}
+
+.audio-settings {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+}
+
+.audio-settings h3 {
+  margin-top: 0;
+  color: #495057;
+}
+
+.audio-input label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.audio-input input {
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.audio-input small {
+  display: block;
+  margin-top: 5px;
+  color: #6c757d;
+  font-size: 12px;
 }

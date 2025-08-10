@@ -11,7 +11,9 @@ const DIdStreamingTester = () => {
     peerConnection: null,
     isConnected: false,
     error: null,
-    logs: []
+    logs: [],
+    talkMode: 'text', // 'text' or 'audio'
+    audioUrl: 'https://res.cloudinary.com/daeoqig4w/video/upload/v1754770303/1-second-of-silence_l1un5v.mp3'
   });
 
   const addLog = useCallback((message, type = 'info') => {
@@ -31,7 +33,9 @@ const DIdStreamingTester = () => {
       peerConnection: null,
       isConnected: false,
       error: null,
-      logs: []
+      logs: [],
+      talkMode: 'text',
+      audioUrl: 'https://res.cloudinary.com/daeoqig4w/video/upload/v1754770303/1-second-of-silence_l1un5v.mp3'
     });
   }, []);
 
@@ -155,7 +159,7 @@ const DIdStreamingTester = () => {
       const sdpResponse = await apiService.startDIdStream(
         testState.streamId,
         testState.sessionId,
-        answer
+        answer.sdp
       );
 
                    if (sdpResponse.success) {
@@ -255,6 +259,33 @@ const DIdStreamingTester = () => {
     }
   }, [testState, addLog]);
 
+  // Step 4: Create talk stream with audio
+  const createTalkAudio = useCallback(async () => {
+    try {
+      addLog('🎵 Step 4: Creating talk stream with audio...', 'info');
+      
+      const response = await apiService.createDIdTalkAudio(
+        testState.streamId,
+        testState.sessionId,
+        testState.audioUrl,
+        "en-US-JennyNeural"
+      );
+
+      if (response.success) {
+        addLog('✅ Talk stream with audio created successfully!', 'success');
+        addLog(`🎵 Audio URL: ${testState.audioUrl}`, 'info');
+        addLog(`📋 Talk ID: ${response.talk_id || 'N/A'}`, 'info');
+        setTestState(prev => ({ ...prev, step: 4, error: null }));
+      } else {
+        addLog(`❌ Failed to create talk with audio: ${response.error}`, 'error');
+        setTestState(prev => ({ ...prev, error: response.error }));
+      }
+    } catch (error) {
+      addLog(`❌ Error creating talk with audio: ${error.message}`, 'error');
+      setTestState(prev => ({ ...prev, error: error.message }));
+    }
+  }, [testState, addLog]);
+
   // Step 5: Close stream
   const closeStream = useCallback(async () => {
     try {
@@ -310,7 +341,15 @@ const DIdStreamingTester = () => {
           disabled={testState.step < 2 || !testState.isConnected}
           className="test-btn"
         >
-          Step 4: Create Talk
+          Step 4: Create Talk (Text)
+        </button>
+        
+        <button 
+          onClick={createTalkAudio}
+          disabled={testState.step < 2 || !testState.isConnected}
+          className="test-btn"
+        >
+          Step 4: Create Talk (Audio)
         </button>
         
         <button 
@@ -355,6 +394,22 @@ const DIdStreamingTester = () => {
             <span className="label">WebRTC Connected:</span>
             <span className="value">{testState.isConnected ? '✅ Yes' : '❌ No'}</span>
           </div>
+        </div>
+      </div>
+
+      <div className="audio-settings">
+        <h3>🎵 Audio Settings</h3>
+        <div className="audio-input">
+          <label htmlFor="audioUrl">Audio URL:</label>
+          <input
+            type="text"
+            id="audioUrl"
+            value={testState.audioUrl}
+            onChange={(e) => setTestState(prev => ({ ...prev, audioUrl: e.target.value }))}
+            placeholder="Enter audio URL"
+            style={{ width: '100%', padding: '8px', marginTop: '4px' }}
+          />
+          <small>Default: 1 second of silence from Cloudinary</small>
         </div>
       </div>
 

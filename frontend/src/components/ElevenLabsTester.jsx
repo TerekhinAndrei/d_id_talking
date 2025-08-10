@@ -78,7 +78,11 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
         });
         
         // Play the generated audio
-        await playAudioData(response.audio_data, response.format);
+        const playResult = await playAudioData(response.audio_data, response.format);
+        
+        if (!playResult.success && playResult.canRetry) {
+          addTestResult('Воспроизведение аудио', 'warning', playResult.message);
+        }
       } else {
         addTestResult('Text-to-Speech', 'error', response.message || 'Ошибка TTS');
       }
@@ -111,7 +115,11 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
         });
         
         // Play the generated audio
-        await playAudioData(response.audio_data, response.format);
+        const playResult = await playAudioData(response.audio_data, response.format);
+        
+        if (!playResult.success && playResult.canRetry) {
+          addTestResult('Воспроизведение аудио', 'warning', playResult.message);
+        }
       } else {
         addTestResult('Speech-to-Speech', 'error', response.message || 'Ошибка STS');
       }
@@ -486,6 +494,7 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
                   {result.success === 'success' && '✅'}
                   {result.success === 'error' && '❌'}
                   {result.success === 'pending' && '⏳'}
+                  {result.success === 'warning' && '⚠️'}
                   <span className="result-message">{result.message}</span>
                 </div>
                 {result.data && (

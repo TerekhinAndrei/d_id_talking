@@ -38,11 +38,44 @@ class WebRTCService:
                     response.raise_for_status()
                     data = await response.json()
                     
+                    # Extract session cookies from response headers
+                    session_cookies = []
+                    set_cookie = response.headers.get("set-cookie", "")
+                    logger.info(f"Set-Cookie header: {set_cookie}")
+                    
+                    # Extract AWSALB and AWSALBCORS cookies like in tests
+                    import re
+                    alb = re.search(r"AWSALB=([^;]+)", set_cookie)
+                    cors = re.search(r"AWSALBCORS=([^;]+)", set_cookie)
+                    
+                    if alb:
+                        session_cookies.append(f"AWSALB={alb.group(1)}")
+                    if cors:
+                        session_cookies.append(f"AWSALBCORS={cors.group(1)}")
+                    
+                    # Also check if session_id is in the JSON response
+                    if data.get('session_id'):
+                        session_id_from_json = data.get('session_id')
+                        logger.info(f"Session ID from JSON: {session_id_from_json[:100]}...")
+                        
+                        # Extract just the cookie values from the session_id string
+                        alb_match = re.search(r"AWSALB=([^;]+)", session_id_from_json)
+                        cors_match = re.search(r"AWSALBCORS=([^;]+)", session_id_from_json)
+                        
+                        if alb_match:
+                            session_cookies.append(f"AWSALB={alb_match.group(1)}")
+                        if cors_match:
+                            session_cookies.append(f"AWSALBCORS={cors_match.group(1)}")
+                    
+                    session_id = '; '.join(session_cookies) if session_cookies else None
+                    
                     logger.info(f"Stream created successfully: {data.get('id')}")
                     logger.info(f"Full D-ID API response: {data}")
+                    logger.info(f"Session cookies extracted: {session_cookies}")
+                    
                     return {
                         'stream_id': data.get('id'),
-                        'session_id': data.get('session_id'),
+                        'session_id': session_id,
                         'offer': data.get('offer'),
                         'ice_servers': data.get('ice_servers', [])
                     }
@@ -62,21 +95,21 @@ class WebRTCService:
         try:
             url = f"{self.base_url}/talks/streams/{stream_id}/sdp"
             payload = {
-                "answer": answer,
-                "session_id": session_id
+                "answer": answer
             }
             
+            # Add session cookies if provided
+            headers = self.headers.copy()
+            if session_id and session_id != "default_session":
+                headers["Cookie"] = session_id
+            
             async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=self.headers, json=payload) as response:
+                async with session.post(url, headers=headers, json=payload) as response:
                     response.raise_for_status()
                     data = await response.json()
                     
                     logger.info(f"WebRTC connection started for stream: {stream_id}")
                     logger.info(f"SDP payload sent: {payload}")
-                    
-                    # Update session_id if provided in response
-                    if data.get("session_id"):
-                        logger.info(f"Updated session_id from SDP response: {data.get('session_id')[:50]}...")
                     
                     return data
                     
@@ -94,18 +127,22 @@ class WebRTCService:
             payload = {
                 "candidate": candidate,
                 "sdpMid": sdp_mid,
-                "sdpMLineIndex": int(sdp_m_line_index),
-                "session_id": session_id
+                "sdpMLineIndex": int(sdp_m_line_index)
             }
+            
+            # Add session cookies if provided
+            headers = self.headers.copy()
+            if session_id and session_id != "default_session":
+                headers["Cookie"] = session_id
             
             logger.info(f"=== ICE CANDIDATE DEBUG ===")
             logger.info(f"URL: {url}")
-            logger.info(f"Headers: {self.headers}")
+            logger.info(f"Headers: {headers}")
             logger.info(f"Payload: {payload}")
             logger.info(f"========================")
             
             async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=self.headers, json=payload) as response:
+                async with session.post(url, headers=headers, json=payload) as response:
                     logger.info(f"D-ID API Response Status: {response.status}")
                     logger.info(f"D-ID API Response Headers: {dict(response.headers)}")
                     
@@ -116,10 +153,6 @@ class WebRTCService:
                     
                     data = await response.json()
                     logger.info(f"D-ID API Success Response: {data}")
-                    
-                    # Update session_id if provided in response
-                    if data.get("session_id"):
-                        logger.info(f"Updated session_id from ICE response: {data.get('session_id')[:50]}...")
                     
                     logger.info(f"ICE candidate submitted for stream: {stream_id}")
                     return data
@@ -137,17 +170,21 @@ class WebRTCService:
         try:
             url = f"{self.base_url}/talks/streams/{stream_id}"
             payload = {
-                "script": script,
-                "session_id": session_id
+                "script": script
             }
+            
+            # Add session cookies if provided
+            headers = self.headers.copy()
+            if session_id and session_id != "default_session":
+                headers["Cookie"] = session_id
             
             logger.info(f"Creating talk stream for stream: {stream_id}")
             logger.info(f"Request URL: {url}")
             logger.info(f"Request payload: {payload}")
-            logger.info(f"Request headers: {self.headers}")
+            logger.info(f"Request headers: {headers}")
             
             async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=self.headers, json=payload) as response:
+                async with session.post(url, headers=headers, json=payload) as response:
                     logger.info(f"D-ID API Response Status: {response.status}")
                     logger.info(f"D-ID API Response Headers: {dict(response.headers)}")
                     
@@ -216,4 +253,91 @@ class WebRTCService:
                     
         except Exception as e:
             logger.error(f"Error getting stream status: {e}")
+            raise 
+
+    async def submit_sdp_answer(self, stream_id: str, sdp_answer: str, session_id: str = None) -> Dict[str, Any]:
+        """
+        Submit SDP answer to D-ID API
+        This is a wrapper around start_webrtc_connection for the endpoint
+        """
+        try:
+            # Create answer object from SDP string
+            answer = {
+                "type": "answer",
+                "sdp": sdp_answer
+            }
+            
+            # Use provided session_id or default
+            if not session_id:
+                session_id = "default_session"
+            
+            return await self.start_webrtc_connection(stream_id, session_id, answer)
+            
+        except Exception as e:
+            logger.error(f"Error submitting SDP answer: {e}")
+            raise
+
+    async def submit_ice_candidate_simple(self, stream_id: str, candidate: str, sdp_mid: str, sdp_mline_index: int, session_id: str = None) -> Dict[str, Any]:
+        """
+        Submit ICE candidate to D-ID API (simplified version for endpoint)
+        """
+        try:
+            # Use provided session_id or default
+            if not session_id:
+                session_id = "default_session"
+            
+            return await self.submit_ice_candidate(stream_id, session_id, candidate, sdp_mid, sdp_mline_index)
+            
+        except Exception as e:
+            logger.error(f"Error submitting ICE candidate: {e}")
+            raise
+
+    async def create_talk_stream_simple(self, stream_id: str, text: str, voice_id: Optional[str] = None, session_id: str = None) -> Dict[str, Any]:
+        """
+        Create talk stream with text (simplified version for endpoint)
+        """
+        try:
+            # Create script object from text - using format from tests
+            script = {
+                "type": "text",
+                "input": text,
+                "provider": {
+                    "type": "microsoft",
+                    "voice_id": voice_id or "en-US-JennyNeural"
+                }
+            }
+            
+            # Use provided session_id or default
+            if not session_id:
+                session_id = "default_session"
+            
+            return await self.create_talk_stream(stream_id, session_id, script)
+            
+        except Exception as e:
+            logger.error(f"Error creating talk stream: {e}")
+            raise 
+
+    async def create_talk_stream_audio(self, stream_id: str, audio_url: str, voice_id: Optional[str] = None, session_id: str = None) -> Dict[str, Any]:
+        """
+        Create talk stream with audio (simplified version for endpoint)
+        """
+        try:
+            # Create script object with audio - using format from D-ID API docs
+            script = {
+                "type": "audio",
+                "audio_url": audio_url,
+                "provider": {
+                    "type": "microsoft",
+                    "voice_id": voice_id or "en-US-JennyNeural"
+                }
+            }
+            
+            # Use provided session_id or default
+            if not session_id:
+                session_id = "default_session"
+            
+            return await self.create_talk_stream(stream_id, session_id, script)
+            
+        except Exception as e:
+            logger.error(f"Error creating talk stream with audio: {e}")
             raise 
