@@ -27,10 +27,102 @@ export const useMicrophoneToCloudinary = (options = {}) => {
   const selectedVoiceRef = useRef(null);
   const isRecordingRef = useRef(false);
   
-  // Буфер для фраз
-  const audioBufferRef = useRef([]);
-  const silenceTimerRef = useRef(null);
-  const isSpeakingRef = useRef(false);
+  // 🎵 AudioWorklet refs
+  const audioWorkletNodeRef = useRef(null);
+  const audioWorkletLoadedRef = useRef(false);
+
+  // 🎵 ОЧЕРЕДЬ ЗАГРУЗКИ В CLOUDINARY - НОВАЯ АРХИТЕКТУРА
+  const uploadQueueRef = useRef([]);
+  const isUploadingRef = useRef(false);
+
+  // Обработчик очереди загрузки в Cloudinary
+  const processUploadQueue = useCallback(async () => {
+    if (isUploadingRef.current || uploadQueueRef.current.length === 0) {
+      return;
+    }
+
+    isUploadingRef.current = true;
+    
+    while (uploadQueueRef.current.length > 0) {
+      const audioData = uploadQueueRef.current.shift();
+      
+      try {
+        console.log('☁️ Загружаем аудио в Cloudinary из очереди, осталось:', uploadQueueRef.current.length);
+        
+        // Конвертируем base64 в Blob
+        const binaryString = atob(audioData);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        const audioBlob = new Blob([bytes], { type: 'audio/mp3' });
+        
+        // Создаем файл с именем для загрузки
+        const audioFile = new File([audioBlob], `processed_audio_${Date.now()}.mp3`, { type: 'audio/mp3' });
+        
+        // Загружаем через наш API
+        const response = await apiService.uploadAudio(audioFile);
+        
+        if (response.success) {
+          const cloudinaryUrl = response.data.url;
+          console.log('✅ Аудио загружено в Cloudinary:', cloudinaryUrl);
+          
+          // Добавляем в список загруженных файлов
+          setUploadedFiles(prev => [...prev, {
+            id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            url: cloudinaryUrl,
+            timestamp: new Date(),
+            size: audioData.length
+          }]);
+          
+          // Обновляем статистику
+          setStreamStats(prev => ({
+            ...prev,
+            uploadedFiles: prev.uploadedFiles + 1
+          }));
+          
+          // Вызываем callback если предоставлен
+          try {
+            if (options && typeof options.onAudioUploaded === 'function') {
+              options.onAudioUploaded(cloudinaryUrl);
+            }
+          } catch (error) {
+            console.warn('Ошибка в onAudioUploaded callback:', error);
+          }
+          
+          // Добавляем в историю обработанных чанков
+          setProcessedChunks(prev => [...prev, {
+            id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            counter: streamStats.processedChunks + 1,
+            originalSize: audioData.length,
+            cloudinaryUrl: cloudinaryUrl,
+            timestamp: new Date()
+          }]);
+          
+        } else {
+          throw new Error(response.message || 'Ошибка загрузки в Cloudinary');
+        }
+        
+      } catch (error) {
+        console.error('❌ Ошибка загрузки аудио в Cloudinary из очереди:', error);
+        // Продолжаем с следующим элементом очереди
+      }
+    }
+    
+    isUploadingRef.current = false;
+  }, [streamStats.processedChunks, options]);
+
+  // Добавление аудио в очередь загрузки
+  const addToUploadQueue = useCallback((audioData) => {
+    uploadQueueRef.current.push(audioData);
+    console.log('📥 Добавлен в очередь загрузки Cloudinary, размер очереди:', uploadQueueRef.current.length);
+    
+    // Запускаем обработку очереди, если она еще не запущена
+    if (!isUploadingRef.current) {
+      processUploadQueue();
+    }
+  }, [processUploadQueue]);
 
   // Подключение к WebSocket
   const connectWebSocket = useCallback(() => {
@@ -50,7 +142,8 @@ export const useMicrophoneToCloudinary = (options = {}) => {
           console.log('📨 Получено WebSocket сообщение для Cloudinary:', message);
           
           if (message.type === 'audio_data') {
-            await uploadAudioToCloudinary(message.data);
+            // ☁️ ИСПОЛЬЗУЕМ ОЧЕРЕДЬ ЗАГРУЗКИ ВМЕСТО ПРЯМОЙ ЗАГРУЗКИ
+            addToUploadQueue(message.data);
           } else if (message.type === 'error') {
             console.error('❌ WebSocket ошибка:', message.message);
             setError(message.message);
@@ -72,6 +165,79 @@ export const useMicrophoneToCloudinary = (options = {}) => {
     } catch (error) {
       console.error('❌ Ошибка подключения к WebSocket:', error);
       setError('Ошибка подключения к WebSocket');
+    }
+  }, [addToUploadQueue]);
+
+  // 🎵 Загрузка AudioWorklet
+  const loadAudioWorklet = useCallback(async () => {
+    if (audioWorkletLoadedRef.current) {
+      return;
+    }
+
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      // Загружаем AudioWorklet модуль
+      await audioContextRef.current.audioWorklet.addModule('/audio-recorder-worklet.js');
+      audioWorkletLoadedRef.current = true;
+      console.log('✅ AudioWorklet загружен успешно для Cloudinary');
+      
+    } catch (error) {
+      console.error('❌ Ошибка загрузки AudioWorklet:', error);
+      setError('Ошибка загрузки AudioWorklet');
+      throw error;
+    }
+  }, []);
+
+  // 🎵 Создание AudioWorklet узла
+  const createAudioWorkletNode = useCallback(async (stream) => {
+    try {
+      // Создаем источник из медиа потока
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      
+      // Создаем AudioWorklet узел
+      audioWorkletNodeRef.current = new AudioWorkletNode(audioContextRef.current, 'audio-recorder-processor');
+      
+      // Обработчик сообщений от AudioWorklet
+      audioWorkletNodeRef.current.port.onmessage = (event) => {
+        const { type, data, hasSpeech } = event.data;
+        
+        switch (type) {
+          case 'audio_data':
+            // Обрабатываем аудио данные с детекцией речи
+            console.log('🎵 Получены аудио данные от AudioWorklet для Cloudinary:', { hasSpeech, dataLength: data?.length });
+            processAudioChunk(data, hasSpeech);
+            break;
+            
+          case 'send_phrase':
+            // Отправляем фразу через WebSocket
+            console.log('📤 Отправляем фразу через WebSocket для Cloudinary');
+            sendPhrase([data]);
+            break;
+            
+          case 'debug':
+            // Отладочная информация
+            console.log('🔍 AudioWorklet debug для Cloudinary:', data);
+            break;
+        }
+      };
+      
+      // Подключаем узлы
+      source.connect(audioWorkletNodeRef.current);
+      audioWorkletNodeRef.current.connect(audioContextRef.current.destination);
+      
+      // Запускаем запись в AudioWorklet
+      audioWorkletNodeRef.current.port.postMessage({
+        type: 'start_recording'
+      });
+      
+      console.log('🎵 AudioWorklet узел создан и запущен для Cloudinary');
+      
+    } catch (error) {
+      console.error('❌ Ошибка создания AudioWorklet узла:', error);
+      throw error;
     }
   }, []);
 
@@ -125,71 +291,6 @@ export const useMicrophoneToCloudinary = (options = {}) => {
     }
   }, []);
 
-  // Загрузка аудио в Cloudinary
-  const uploadAudioToCloudinary = useCallback(async (audioData) => {
-    try {
-      setIsUploading(true);
-      console.log('☁️ Загружаем аудио в Cloudinary...');
-      
-      // Конвертируем base64 в Blob
-      const binaryString = atob(audioData);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      
-      const audioBlob = new Blob([bytes], { type: 'audio/mp3' });
-      
-      // Создаем файл с именем для загрузки
-      const audioFile = new File([audioBlob], `processed_audio_${Date.now()}.mp3`, { type: 'audio/mp3' });
-      
-      // Загружаем через наш API
-      const response = await apiService.uploadAudio(audioFile);
-      
-      if (response.success) {
-        const cloudinaryUrl = response.data.url;
-        console.log('✅ Аудио загружено в Cloudinary:', cloudinaryUrl);
-        
-        // Добавляем в список загруженных файлов
-        setUploadedFiles(prev => [...prev, {
-          id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          url: cloudinaryUrl,
-          timestamp: new Date(),
-          size: audioData.length
-        }]);
-        
-        // Обновляем статистику
-        setStreamStats(prev => ({
-          ...prev,
-          uploadedFiles: prev.uploadedFiles + 1
-        }));
-        
-        // Вызываем callback если предоставлен
-        if (options && typeof options.onAudioUploaded === 'function') {
-          options.onAudioUploaded(cloudinaryUrl);
-        }
-        
-        // Добавляем в историю обработанных чанков
-        setProcessedChunks(prev => [...prev, {
-          id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          counter: streamStats.processedChunks + 1,
-          originalSize: audioData.length,
-          cloudinaryUrl: cloudinaryUrl,
-          timestamp: new Date()
-        }]);
-        
-      } else {
-        throw new Error(response.message || 'Ошибка загрузки в Cloudinary');
-      }
-      
-    } catch (error) {
-      console.error('❌ Ошибка загрузки в Cloudinary:', error);
-      setError(`Ошибка загрузки в Cloudinary: ${error.message}`);
-    } finally {
-      setIsUploading(false);
-    }
-  }, [streamStats.processedChunks, options]);
-
   // Отправка аудио чанка через WebSocket
   const sendAudioChunk = useCallback((audioData) => {
     if (!websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) {
@@ -242,42 +343,38 @@ export const useMicrophoneToCloudinary = (options = {}) => {
       
       connectWebSocket();
       
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      }
-
+      // 🎵 Загружаем AudioWorklet
+      await loadAudioWorklet();
+      
+      // Получаем доступ к микрофону
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-
-      // Используем ScriptProcessor для надежности
-      console.log('🔄 Создаю ScriptProcessor для Cloudinary...');
-      const processor = audioContextRef.current.createScriptProcessor(16384, 1, 1);
       
-      processor.onaudioprocess = (event) => {
-        const inputData = event.inputBuffer.getChannelData(0);
-        if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
-          // Обрабатываем чанк с детекцией речи
-          processAudioChunk(Array.from(inputData));
-        }
-      };
-      
-      source.connect(processor);
-      processor.connect(audioContextRef.current.destination);
+      // 🎵 Создаем AudioWorklet узел
+      await createAudioWorkletNode(stream);
       
       setIsRecording(true);
-      console.log('🎤 Запись начата для Cloudinary загрузки');
+      console.log('🎤 Запись начата с AudioWorklet для Cloudinary загрузки');
       
     } catch (error) {
       console.error('❌ Ошибка начала записи:', error);
       setError('Ошибка доступа к микрофону');
       setIsProcessing(false);
     }
-  }, [connectWebSocket]);
+  }, [connectWebSocket, loadAudioWorklet, createAudioWorkletNode]);
 
   // Остановка записи
   const stopRecording = useCallback(() => {
     try {
+      // 🎵 Останавливаем AudioWorklet
+      if (audioWorkletNodeRef.current) {
+        audioWorkletNodeRef.current.port.postMessage({
+          type: 'stop_recording'
+        });
+        audioWorkletNodeRef.current.disconnect();
+        audioWorkletNodeRef.current = null;
+      }
+      
       // Останавливаем поток
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
@@ -289,24 +386,19 @@ export const useMicrophoneToCloudinary = (options = {}) => {
         websocketRef.current.close();
       }
       
+      // ☁️ Очищаем очередь загрузки
+      uploadQueueRef.current = [];
+      isUploadingRef.current = false;
+      
       isRecordingRef.current = false;
       setIsRecording(false);
       setIsProcessing(false);
       
-      console.log('⏹️ Запись остановлена');
+      console.log('⏹️ Запись остановлена, AudioWorklet отключен, очередь Cloudinary очищена');
       
     } catch (error) {
       console.error('❌ Ошибка остановки записи:', error);
     }
-  }, []);
-
-  // Детекция речи
-  const detectSpeech = useCallback((audioData) => {
-    // Простая детекция по громкости
-    const volume = Math.sqrt(audioData.reduce((sum, sample) => sum + sample * sample, 0) / audioData.length);
-    const threshold = 0.01; // Порог громкости
-    
-    return volume > threshold;
   }, []);
 
   // Отправка фразы
@@ -360,34 +452,14 @@ export const useMicrophoneToCloudinary = (options = {}) => {
     }
   }, [streamStats.sentChunks, convertFloat32ToWav]);
 
-  // Обработка аудио чанка с детекцией речи
-  const processAudioChunk = useCallback((audioData) => {
-    const hasSpeech = detectSpeech(audioData);
-    
-    if (hasSpeech) {
-      // Есть речь - добавляем в буфер
-      audioBufferRef.current.push(audioData);
-      isSpeakingRef.current = true;
-      
-      // Сбрасываем таймер тишины
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-      }
-      
-      // Устанавливаем таймер для отправки фразы
-      silenceTimerRef.current = setTimeout(() => {
-        if (audioBufferRef.current.length > 0) {
-          sendPhrase([...audioBufferRef.current]);
-          audioBufferRef.current = [];
-          isSpeakingRef.current = false;
-        }
-      }, 1000); // Отправляем через 1 секунду тишины
-      
-    } else if (isSpeakingRef.current) {
-      // Тишина после речи - добавляем в буфер
-      audioBufferRef.current.push(audioData);
+  // 🎵 Обработка аудио чанка от AudioWorklet
+  const processAudioChunk = useCallback((audioData, hasSpeech) => {
+    // Отправляем только если есть речь и WebSocket открыт
+    if (hasSpeech && websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+      console.log('🎤 Отправляем аудио чанк с речью для Cloudinary');
+      sendAudioChunk(audioData);
     }
-  }, [detectSpeech, sendPhrase]);
+  }, [sendAudioChunk]);
 
   // Очистка при размонтировании
   useEffect(() => {
