@@ -13,7 +13,9 @@ export const useMicrophoneToCloudinary = (options = {}) => {
     uploadedFiles: 0,
     totalBytes: 0,
     totalSentData: 0,
-    processingTime: 0
+    processingTime: 0,
+    speechDetected: 0,
+    silenceDetected: 0
   });
   const [audioChunks, setAudioChunks] = useState([]);
   const [processedChunks, setProcessedChunks] = useState([]);
@@ -65,7 +67,8 @@ export const useMicrophoneToCloudinary = (options = {}) => {
         const response = await apiService.uploadAudio(audioFile);
         
         if (response.success) {
-          const cloudinaryUrl = response.data.url;
+          // Используем HTTPS URL вместо HTTP
+          const cloudinaryUrl = response.data.secure_url || response.data.url;
           console.log('✅ Аудио загружено в Cloudinary:', cloudinaryUrl);
           
           // Добавляем в список загруженных файлов
@@ -146,7 +149,14 @@ export const useMicrophoneToCloudinary = (options = {}) => {
             addToUploadQueue(message.data);
           } else if (message.type === 'error') {
             console.error('❌ WebSocket ошибка:', message.message);
-            setError(message.message);
+            
+            // Проверяем на ошибку 429 (система занята)
+            if (message.message && message.message.includes('429')) {
+              console.warn('⚠️ ElevenLabs API перегружен (429). Это временная проблема.');
+              setError('ElevenLabs API временно перегружен. Попробуйте позже.');
+            } else {
+              setError(message.message);
+            }
           }
         } catch (error) {
           console.error('❌ Ошибка парсинга WebSocket сообщения:', error);
@@ -207,19 +217,35 @@ export const useMicrophoneToCloudinary = (options = {}) => {
         switch (type) {
           case 'audio_data':
             // Обрабатываем аудио данные с детекцией речи
-            console.log('🎵 Получены аудио данные от AudioWorklet для Cloudinary:', { hasSpeech, dataLength: data?.length });
+            // Логируем только при наличии речи
+            if (hasSpeech) {
+              console.log('🎵 Получены аудио данные с речью от AudioWorklet:', { 
+                dataLength: data?.length,
+                willSend: websocketRef.current?.readyState === WebSocket.OPEN
+              });
+            }
             processAudioChunk(data, hasSpeech);
             break;
             
           case 'send_phrase':
-            // Отправляем фразу через WebSocket
+            // Отправляем фразу через WebSocket (только если есть речь)
             console.log('📤 Отправляем фразу через WebSocket для Cloudinary');
             sendPhrase([data]);
             break;
             
           case 'debug':
-            // Отладочная информация
-            console.log('🔍 AudioWorklet debug для Cloudinary:', data);
+            // Отладочная информация - только важные события
+            // Закомментировано для уменьшения количества логов
+            /*
+            if (data.event) {
+              console.log(`🔍 AudioWorklet ${data.event}:`, {
+                frame: data.frame,
+                hasSpeech: data.hasSpeech,
+                volume: data.volume.toFixed(6),
+                bufferSize: data.bufferSize
+              });
+            }
+            */
             break;
         }
       };
@@ -454,11 +480,20 @@ export const useMicrophoneToCloudinary = (options = {}) => {
 
   // 🎵 Обработка аудио чанка от AudioWorklet
   const processAudioChunk = useCallback((audioData, hasSpeech) => {
+    // Обновляем статистику детекции речи
+    setStreamStats(prev => ({
+      ...prev,
+      totalChunks: prev.totalChunks + 1,
+      speechDetected: prev.speechDetected + (hasSpeech ? 1 : 0),
+      silenceDetected: prev.silenceDetected + (hasSpeech ? 0 : 1)
+    }));
+    
     // Отправляем только если есть речь и WebSocket открыт
     if (hasSpeech && websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
       console.log('🎤 Отправляем аудио чанк с речью для Cloudinary');
       sendAudioChunk(audioData);
     }
+    // Убираем логирование тишины - оно слишком частое
   }, [sendAudioChunk]);
 
   // Очистка при размонтировании

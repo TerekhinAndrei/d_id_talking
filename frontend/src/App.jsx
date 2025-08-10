@@ -409,9 +409,9 @@ function App() {
               />
             )}
             
-            {showDIdStreamingTester && (
-              <DIdStreamingTester />
-            )}
+                  {showDIdStreamingTester && (
+        <DIdStreamingTester selectedVoice={selectedVoice} />
+      )}
 
             {/* Доп. тестеры доступны по кнопке выше; основной флоу не требует доп. кликов */}
           </div>

@@ -8,6 +8,7 @@ class AudioRecorderProcessor extends AudioWorkletProcessor {
     this.silenceTimeout = 1000; // 1 second
     this.lastSpeechTime = 0;
     this.currentFrame = 0; // Добавляем счетчик кадров
+    this.lastHasSpeech = false; // Для отслеживания изменений состояния речи
     
     // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Привязываем обработчик сообщений
     this.port.onmessage = this.handleMessage.bind(this);
@@ -38,8 +39,9 @@ class AudioRecorderProcessor extends AudioWorkletProcessor {
     // Детекция речи (используем Float32Array напрямую)
     const hasSpeech = this.detectSpeech(inputData);
     
-    // Логируем каждые 100 кадров для отладки
-    if (this.currentFrame % 100 === 0) {
+    // Логируем только при изменении состояния речи (не так часто)
+    if (hasSpeech !== this.lastHasSpeech) {
+      this.lastHasSpeech = hasSpeech;
       this.port.postMessage({
         type: 'debug',
         data: {
@@ -47,7 +49,8 @@ class AudioRecorderProcessor extends AudioWorkletProcessor {
           hasSpeech: hasSpeech,
           bufferSize: this.audioBuffer.length,
           isSpeaking: this.isSpeaking,
-          volume: Math.sqrt(inputData.reduce((sum, sample) => sum + sample * sample, 0) / inputData.length)
+          volume: Math.sqrt(inputData.reduce((sum, sample) => sum + sample * sample, 0) / inputData.length),
+          event: hasSpeech ? 'speech_started' : 'speech_ended'
         }
       });
     }

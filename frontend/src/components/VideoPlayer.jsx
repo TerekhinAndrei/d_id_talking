@@ -16,6 +16,7 @@ const VideoPlayer = ({
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('info');
   const [showOverlay, setShowOverlay] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
 
   // Status messages mapping
   const statusMessages = {
@@ -107,6 +108,19 @@ const VideoPlayer = ({
       tracks: stream.getTracks().length,
       videoTracks: stream.getVideoTracks().length,
       audioTracks: stream.getAudioTracks().length
+    });
+    
+    // Проверяем аудиодорожки
+    const audioTracks = stream.getAudioTracks();
+    console.log('🎵 Audio tracks found:', audioTracks.length);
+    audioTracks.forEach((track, index) => {
+      console.log(`🎵 Audio track ${index}:`, {
+        id: track.id,
+        kind: track.kind,
+        enabled: track.enabled,
+        muted: track.muted,
+        readyState: track.readyState
+      });
     });
     setIsLoading(true);
     setVideoError(null);
@@ -208,10 +222,29 @@ const VideoPlayer = ({
     const video = videoRef.current;
     if (!video) return;
 
+    console.log('🔊 Audio control check:', {
+      hasStream: !!stream,
+      isConnected,
+      videoMuted: video.muted,
+      streamAudioTracks: stream ? stream.getAudioTracks().length : 0,
+      streamVideoTracks: stream ? stream.getVideoTracks().length : 0
+    });
+
     if (stream && isConnected) {
-      // Unmute when we have stream and connection
-      video.muted = false;
-      console.log('🔊 Unmuted video for active stream');
+      // Check if stream has audio tracks
+      const audioTracks = stream.getAudioTracks();
+      console.log('🎵 Audio tracks in stream:', audioTracks.length);
+      
+      if (audioTracks.length > 0) {
+        // Unmute when we have stream and connection with audio
+        video.muted = false;
+        setIsMuted(false);
+        console.log('🔊 Unmuted video for active stream with audio');
+      } else {
+        console.log('⚠️ Stream has no audio tracks, keeping muted');
+        video.muted = true;
+        setIsMuted(true);
+      }
     } else {
       // Keep muted for waiting video
       video.muted = true;
@@ -219,7 +252,17 @@ const VideoPlayer = ({
     }
   }, [stream, isConnected]);
 
-  // Removed handleVideoClick as user doesn't want click interaction
+  // Handle manual mute/unmute toggle
+  const toggleMute = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const newMutedState = !video.muted;
+    video.muted = newMutedState;
+    setIsMuted(newMutedState);
+    
+    console.log(`🔊 Manual ${newMutedState ? 'muted' : 'unmuted'} video`);
+  }, []);
 
   const handleVideoError = useCallback((error) => {
     console.error('❌ Video element error:', error);
@@ -292,6 +335,17 @@ const VideoPlayer = ({
             </span>
           )}
         </div>
+        
+        {/* Audio Control Button */}
+        {stream && isConnected && (
+          <button 
+            onClick={toggleMute}
+            className="audio-control-btn"
+            title={isMuted ? 'Включить звук' : 'Выключить звук'}
+          >
+            {isMuted ? '🔇' : '🔊'}
+          </button>
+        )}
       </div>
     </div>
   );

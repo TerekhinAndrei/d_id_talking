@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { apiService } from '../services/api';
+import { useDIdMicrophoneTalk } from '../hooks/useDIdMicrophoneTalk';
 
-const DIdStreamingTester = () => {
+const DIdStreamingTester = ({ selectedVoice }) => {
   const [testState, setTestState] = useState({
     step: 0,
     streamId: null,
@@ -15,6 +16,22 @@ const DIdStreamingTester = () => {
     talkMode: 'text', // 'text' or 'audio'
     audioUrl: 'https://res.cloudinary.com/daeoqig4w/video/upload/v1754770303/1-second-of-silence_l1un5v.mp3'
   });
+
+  // Используем хук для микрофонного talk
+  const {
+    isProcessing: isMicProcessing,
+    isRecording: isMicRecording,
+    isUploading: isMicUploading,
+    isSendingToDid,
+    error: micError,
+    logs: micLogs,
+    streamStats: micStats,
+    uploadedFiles: micUploadedFiles,
+    didUploadQueue,
+    createTalkMic,
+    stopTalkMic,
+    clearState: clearMicState
+  } = useDIdMicrophoneTalk();
 
   const addLog = useCallback((message, type = 'info') => {
     setTestState(prev => ({
@@ -286,6 +303,46 @@ const DIdStreamingTester = () => {
     }
   }, [testState, addLog]);
 
+  // Step 4: Create talk stream with microphone
+  const handleCreateTalkMic = useCallback(async () => {
+    try {
+      addLog('🎤 Step 4: Creating talk stream with microphone...', 'info');
+      addLog('🔍 Checking prerequisites...', 'info');
+      
+      // Проверяем необходимые условия
+      if (!testState.streamId) {
+        addLog('❌ Stream ID not available', 'error');
+        return;
+      }
+      
+      if (!testState.sessionId) {
+        addLog('❌ Session ID not available', 'error');
+        return;
+      }
+      
+      if (!testState.isConnected) {
+        addLog('❌ WebRTC connection not established', 'error');
+        return;
+      }
+      
+      if (!selectedVoice) {
+        addLog('❌ Voice not selected', 'error');
+        return;
+      }
+      
+      addLog('✅ All prerequisites met', 'success');
+      addLog(`🎵 Selected voice: ${selectedVoice}`, 'info');
+      
+      // Используем новый хук для микрофонного talk
+      await createTalkMic(testState.streamId, testState.sessionId, selectedVoice);
+      
+    } catch (error) {
+      addLog(`❌ Error creating talk with microphone: ${error.message}`, 'error');
+      addLog(`🔍 Error details: ${error.stack || 'No stack trace available'}`, 'error');
+      setTestState(prev => ({ ...prev, error: error.message }));
+    }
+  }, [testState, selectedVoice, createTalkMic, addLog]);
+
   // Step 5: Close stream
   const closeStream = useCallback(async () => {
     try {
@@ -341,7 +398,7 @@ const DIdStreamingTester = () => {
           disabled={testState.step < 2 || !testState.isConnected}
           className="test-btn"
         >
-          Step 4: Create Talk (Text)
+          Create Talk (Text)
         </button>
         
         <button 
@@ -349,15 +406,36 @@ const DIdStreamingTester = () => {
           disabled={testState.step < 2 || !testState.isConnected}
           className="test-btn"
         >
-          Step 4: Create Talk (Audio)
+          Create Talk (Audio)
         </button>
+        
+        <button 
+          onClick={handleCreateTalkMic}
+          disabled={testState.step < 2 || !testState.isConnected || !selectedVoice || isMicProcessing}
+          className="test-btn"
+        >
+          {isMicRecording ? 'Stop Talk (Mic)' : 'Create Talk (Mic)'}
+        </button>
+        
+        {micError && micError.includes('429') && (
+          <button 
+            onClick={() => {
+              addLog('🔄 Ручной повтор после ошибки 429...', 'info');
+              // Очищаем ошибку и позволяем пользователю повторить
+              clearMicState();
+            }}
+            className="test-btn retry"
+          >
+            🔄 Повторить после 429
+          </button>
+        )}
         
         <button 
           onClick={closeStream}
           disabled={testState.step < 4}
           className="test-btn"
         >
-          Step 5: Close Stream
+          Close Stream
         </button>
         
         <button 
@@ -430,6 +508,89 @@ const DIdStreamingTester = () => {
           style={{ width: '100%', maxWidth: '400px', border: '1px solid #ccc' }}
         />
       </div>
+
+      {/* Микрофонный talk статус */}
+      {isMicRecording && (
+        <div className="mic-status">
+          <h3>🎤 Microphone Talk Status</h3>
+          <div className="status-grid">
+            <div className="status-item">
+              <span className="label">Recording:</span>
+              <span className="value">{isMicRecording ? '✅ Active' : '❌ Inactive'}</span>
+            </div>
+            <div className="status-item">
+              <span className="label">Uploading:</span>
+              <span className="value">{isMicUploading ? '⏳ Uploading...' : '✅ Idle'}</span>
+            </div>
+            <div className="status-item">
+              <span className="label">Files Uploaded:</span>
+              <span className="value">{micUploadedFiles.length}</span>
+            </div>
+            <div className="status-item">
+              <span className="label">Total Chunks:</span>
+              <span className="value">{micStats.totalChunks}</span>
+            </div>
+            <div className="status-item">
+              <span className="label">Speech Detected:</span>
+              <span className="value">{micStats.speechDetected} chunks</span>
+            </div>
+            <div className="status-item">
+              <span className="label">Silence Detected:</span>
+              <span className="value">{micStats.silenceDetected} chunks</span>
+            </div>
+            <div className="status-item">
+              <span className="label">D-ID Queue:</span>
+              <span className="value">{didUploadQueue.length} files</span>
+            </div>
+            <div className="status-item">
+              <span className="label">Sending to D-ID:</span>
+              <span className="value">{isSendingToDid ? '⏳ Processing...' : '✅ Idle'}</span>
+            </div>
+          </div>
+          
+          {micError && (
+            <div className="error-message">
+              <h4>❌ Microphone Error</h4>
+              <p>{micError}</p>
+            </div>
+          )}
+          
+          <div className="mic-logs">
+            <h4>📝 Microphone Logs</h4>
+            <div className="logs">
+              {micLogs.slice(-10).map((log, index) => (
+                <div key={index} className={`log-entry ${log.type}`}>
+                  <span className="timestamp">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                  <span className="message">{log.message}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Очередь D-ID файлов */}
+          {didUploadQueue.length > 0 && (
+            <div className="did-queue">
+              <h4>🎬 D-ID Queue ({didUploadQueue.length} files)</h4>
+              <div className="queue-list">
+                {didUploadQueue.slice(0, 5).map((file, index) => (
+                  <div key={file.id} className="queue-item">
+                    <span className="queue-number">#{index + 1}</span>
+                    <span className="queue-url">{file.url.split('/').pop()}</span>
+                    <span className="queue-time">
+                      {new Date(file.timestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+                ))}
+                {didUploadQueue.length > 5 && (
+                  <div className="queue-more">
+                    ... и еще {didUploadQueue.length - 5} файлов
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="logs-container">
         <h3>📝 Test Logs</h3>
