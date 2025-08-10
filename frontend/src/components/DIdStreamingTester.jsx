@@ -23,6 +23,7 @@ const DIdStreamingTester = ({ selectedVoice }) => {
     isRecording: isMicRecording,
     isUploading: isMicUploading,
     isSendingToDid,
+    isPlayingSilence,
     error: micError,
     logs: micLogs,
     streamStats: micStats,
@@ -545,6 +546,10 @@ const DIdStreamingTester = ({ selectedVoice }) => {
             <div className="status-item">
               <span className="label">Sending to D-ID:</span>
               <span className="value">{isSendingToDid ? '⏳ Processing...' : '✅ Idle'}</span>
+            </div>
+            <div className="status-item">
+              <span className="label">Playing Silence:</span>
+              <span className="value">{isPlayingSilence ? '🔇 Active (1s interval)' : '✅ Idle'}</span>
             </div>
           </div>
           

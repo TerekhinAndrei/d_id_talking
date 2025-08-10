@@ -20,12 +20,74 @@ export const useDIdMicrophoneTalk = () => {
   const [didUploadQueue, setDidUploadQueue] = useState([]);
   const [isSendingToDid, setIsSendingToDid] = useState(false);
 
+  // Состояние для интервала проигрывания тишины
+  const [silenceIntervalId, setSilenceIntervalId] = useState(null);
+  const [isPlayingSilence, setIsPlayingSilence] = useState(false);
+
   // Refs для хранения актуальных параметров
   const currentParamsRef = useRef({
     streamId: null,
     sessionId: null,
     voiceId: null
   });
+
+  // URL файла с тишиной
+  const SILENCE_AUDIO_URL = 'https://res.cloudinary.com/daeoqig4w/video/upload/v1754845533/1-second-of-silence_uyj5kd.mp3';
+
+  // Функция для проигрывания файла с тишиной
+  const playSilenceAudio = useCallback(async () => {
+    const { streamId, sessionId, voiceId } = currentParamsRef.current;
+    
+    if (!streamId || !sessionId || !voiceId) {
+      addLog('❌ Недостаточно параметров для проигрывания тишины', 'warning');
+      return;
+    }
+
+    try {
+      addLog('🔇 Проигрываем файл с тишиной...', 'info');
+      
+      const response = await apiService.createDIdTalkAudio(
+        streamId,
+        sessionId,
+        SILENCE_AUDIO_URL,
+        voiceId
+      );
+
+      if (response.success) {
+        addLog('✅ Файл с тишиной отправлен в D-ID', 'success');
+      } else {
+        addLog(`⚠️ Ошибка отправки файла с тишиной: ${response.error}`, 'warning');
+      }
+    } catch (error) {
+      addLog(`❌ Ошибка проигрывания тишины: ${error.message}`, 'error');
+    }
+  }, [addLog]);
+
+  // Функция для запуска интервала проигрывания тишины
+  const startSilenceInterval = useCallback(() => {
+    if (silenceIntervalId) {
+      clearInterval(silenceIntervalId);
+    }
+    
+    addLog('🔇 Запускаем интервал проигрывания тишины (каждую секунду)', 'info');
+    setIsPlayingSilence(true);
+    
+    const intervalId = setInterval(() => {
+      playSilenceAudio();
+    }, 1000);
+    
+    setSilenceIntervalId(intervalId);
+  }, [silenceIntervalId, playSilenceAudio, addLog]);
+
+  // Функция для остановки интервала проигрывания тишины
+  const stopSilenceInterval = useCallback(() => {
+    if (silenceIntervalId) {
+      clearInterval(silenceIntervalId);
+      setSilenceIntervalId(null);
+      setIsPlayingSilence(false);
+      addLog('🔇 Останавливаем интервал проигрывания тишины', 'info');
+    }
+  }, [silenceIntervalId, addLog]);
 
   // Добавление файла в очередь D-ID
   const addToDidQueue = useCallback((cloudinaryUrl) => {
@@ -96,19 +158,25 @@ export const useDIdMicrophoneTalk = () => {
     onAudioUploaded
   });
 
-  // useEffect для реактивной обработки очереди
+  // useEffect для реактивной обработки очереди и управления тишиной
   useEffect(() => {
     console.log('🔍 useEffect проверяет очередь:', {
       queueLength: didUploadQueue.length,
       isSendingToDid,
       hasQueue: didUploadQueue.length > 0,
-      canProcess: didUploadQueue.length > 0 && !isSendingToDid
+      canProcess: didUploadQueue.length > 0 && !isSendingToDid,
+      isPlayingSilence
     });
     
     addLog(`🔍 useEffect проверяет очередь: ${didUploadQueue.length} файлов, isSendingToDid: ${isSendingToDid}`, 'info');
     
     // Проверяем, что есть файлы в очереди и обработка не запущена
     if (didUploadQueue.length > 0 && !isSendingToDid) {
+      // Останавливаем интервал тишины, если он запущен
+      if (isPlayingSilence) {
+        stopSilenceInterval();
+      }
+      
       // Получаем актуальные значения состояния
       const streamId = currentStreamId;
       const sessionId = currentSessionId;
@@ -198,8 +266,12 @@ export const useDIdMicrophoneTalk = () => {
       
       // Запускаем обработку файла
       processFile();
+    } else if (didUploadQueue.length === 0 && !isSendingToDid && !isPlayingSilence && currentStreamId && currentSessionId && currentVoiceId) {
+      // Если очередь пуста, нет активной обработки, и не проигрывается тишина - запускаем интервал тишины
+      addLog('🔇 Очередь пуста, запускаем проигрывание тишины', 'info');
+      startSilenceInterval();
     }
-  }, [didUploadQueue, isSendingToDid, currentStreamId, currentSessionId, currentVoiceId, addLog]);
+  }, [didUploadQueue, isSendingToDid, currentStreamId, currentSessionId, currentVoiceId, isPlayingSilence, startSilenceInterval, stopSilenceInterval, addLog]);
 
   // Основная функция для создания talk с микрофоном
   const createTalkMic = useCallback(async (streamId, sessionId, voiceId) => {
@@ -223,34 +295,32 @@ export const useDIdMicrophoneTalk = () => {
       addLog(`📊 Session ID: ${sessionId}`, 'info');
       addLog(`🎵 Voice ID: ${voiceId}`, 'info');
       
-      // 🎬 СНАЧАЛА отправляем тестовый аудиофайл для анимации аватара
-      addLog('🎬 Отправляем тестовый аудиофайл для анимации аватара...', 'info');
-      
-      const testAudioUrl = 'https://res.cloudinary.com/daeoqig4w/video/upload/v1754839967/d_id_talking/audio/audio_processed_audio_1754839965822.mp3.mp3';
+      // 🎬 СНАЧАЛА отправляем файл с тишиной для анимации аватара
+      addLog('🎬 Отправляем файл с тишиной для анимации аватара...', 'info');
       
       try {
-        console.log('🎬 createTalkMic - параметры тестового файла:', {
+        console.log('🎬 createTalkMic - параметры файла с тишиной:', {
           streamId,
           sessionId,
-          testAudioUrl,
+          silenceAudioUrl: SILENCE_AUDIO_URL,
           voiceId
         });
         
-        const testResponse = await apiService.createDIdTalkAudio(
+        const silenceResponse = await apiService.createDIdTalkAudio(
           streamId,
           sessionId,
-          testAudioUrl,
+          SILENCE_AUDIO_URL,
           voiceId
         );
         
-        if (testResponse.success) {
-          addLog('✅ Тестовый аудиофайл отправлен в D-ID успешно!', 'success');
-          addLog(`📋 Test Talk ID: ${testResponse.talk_id || 'N/A'}`, 'info');
+        if (silenceResponse.success) {
+          addLog('✅ Файл с тишиной отправлен в D-ID успешно!', 'success');
+          addLog(`📋 Silence Talk ID: ${silenceResponse.talk_id || 'N/A'}`, 'info');
         } else {
-          addLog(`⚠️ Ошибка отправки тестового аудио: ${testResponse.error}`, 'warning');
+          addLog(`⚠️ Ошибка отправки файла с тишиной: ${silenceResponse.error}`, 'warning');
         }
-      } catch (testError) {
-        addLog(`⚠️ Ошибка отправки тестового аудио: ${testError.message}`, 'warning');
+      } catch (silenceError) {
+        addLog(`⚠️ Ошибка отправки файла с тишиной: ${silenceError.message}`, 'warning');
       }
       
       // ПОТОМ сохраняем текущие ID и голос (ПЕРЕД запуском записи)
@@ -294,12 +364,16 @@ export const useDIdMicrophoneTalk = () => {
     try {
       addLog('⏹️ Останавливаем запись микрофона...', 'info');
       stopMicRecording();
+      
+      // Останавливаем интервал тишины
+      stopSilenceInterval();
+      
       addLog('✅ Запись остановлена', 'success');
       setIsProcessing(false);
     } catch (error) {
       addLog(`❌ Ошибка остановки записи: ${error.message}`, 'error');
     }
-  }, [stopMicRecording, addLog]);
+  }, [stopMicRecording, stopSilenceInterval, addLog]);
 
   // Очистка состояния
   const clearState = useCallback(() => {
@@ -310,7 +384,10 @@ export const useDIdMicrophoneTalk = () => {
     setCurrentVoiceId(null);
     setDidUploadQueue([]);
     setIsSendingToDid(false);
-  }, []);
+    
+    // Останавливаем интервал тишины при очистке
+    stopSilenceInterval();
+  }, [stopSilenceInterval]);
 
   return {
     // Состояние
@@ -319,6 +396,7 @@ export const useDIdMicrophoneTalk = () => {
     isMicProcessing,
     isUploading,
     isSendingToDid,
+    isPlayingSilence,
     error: error || micError,
     logs,
     
