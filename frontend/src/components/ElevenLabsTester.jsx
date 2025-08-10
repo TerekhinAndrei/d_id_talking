@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useElevenLabs } from '../hooks/useElevenLabs';
 import { useMicrophoneRecording } from '../hooks/useMicrophoneRecording';
+import { useMicrophoneToCloudinary } from '../hooks/useMicrophoneToCloudinary';
 import ErrorMessage from './ErrorMessage';
 import AudioVisualizer from './AudioVisualizer';
 
@@ -31,6 +32,28 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
     startRecording,
     stopRecording
   } = useMicrophoneRecording();
+
+  // Хук для микрофона с загрузкой в Cloudinary
+  const {
+    isRecording: isRecordingCloudinary,
+    isProcessing: isProcessingCloudinary,
+    isUploading,
+    streamStats: cloudinaryStats,
+    audioChunks: cloudinaryChunks,
+    processedChunks: cloudinaryProcessedChunks,
+    uploadedFiles,
+    error: cloudinaryError,
+    startRecording: startRecordingCloudinary,
+    stopRecording: stopRecordingCloudinary
+  } = useMicrophoneToCloudinary({
+    onAudioUploaded: (cloudinaryUrl) => {
+      console.log('🎵 Аудио загружено в Cloudinary:', cloudinaryUrl);
+      addTestResult('Cloudinary загрузка', 'success', `Файл загружен: ${cloudinaryUrl}`, { url: cloudinaryUrl });
+      
+      // Автоматически воспроизводим загруженный файл
+      playCloudinaryAudio(cloudinaryUrl);
+    }
+  });
 
   const addTestResult = (testName, success, message, data = null) => {
     setTestResults(prev => [...prev, {
@@ -173,9 +196,58 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
     addTestResult('Потоковый стриминг', 'success', 'Стриминг остановлен');
   };
 
+  // Cloudinary streaming functions
+  const handleStartCloudinaryStreaming = async () => {
+    if (!selectedVoiceForTest) {
+      alert('Выберите голос для Cloudinary стриминга');
+      return;
+    }
+
+    try {
+      addTestResult('Cloudinary стриминг', 'pending', 'Запуск стриминга с загрузкой в Cloudinary...');
+      await startRecordingCloudinary(selectedVoiceForTest);
+      addTestResult('Cloudinary стриминг', 'success', 'Стриминг запущен - говорите в микрофон, результат будет загружен в Cloudinary');
+    } catch (error) {
+      addTestResult('Cloudinary стриминг', 'error', error.message);
+    }
+  };
+
+  const handleStopCloudinaryStreaming = () => {
+    stopRecordingCloudinary();
+    addTestResult('Cloudinary стриминг', 'success', 'Стриминг остановлен');
+  };
+
   const handleStopPlayback = () => {
     // Воспроизведение теперь обрабатывается автоматически в AudioWorklet
     addTestResult('Воспроизведение', 'info', 'Воспроизведение обрабатывается автоматически');
+  };
+
+  // Воспроизведение аудио из Cloudinary
+  const playCloudinaryAudio = async (cloudinaryUrl) => {
+    try {
+      addTestResult('Воспроизведение Cloudinary', 'pending', 'Воспроизведение загруженного аудио...');
+      
+      const response = await fetch(cloudinaryUrl);
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      const audio = new Audio(audioUrl);
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        addTestResult('Воспроизведение Cloudinary', 'success', 'Аудио воспроизведено успешно');
+      };
+      
+      audio.onerror = (error) => {
+        URL.revokeObjectURL(audioUrl);
+        addTestResult('Воспроизведение Cloudinary', 'error', `Ошибка воспроизведения: ${error.message}`);
+      };
+      
+      await audio.play();
+      addTestResult('Воспроизведение Cloudinary', 'success', 'Воспроизведение начато');
+      
+    } catch (error) {
+      addTestResult('Воспроизведение Cloudinary', 'error', `Ошибка: ${error.message}`);
+    }
   };
 
   const handleFileChange = (event) => {
@@ -417,6 +489,166 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
           )}
         </div>
 
+        {/* Cloudinary Streaming Section */}
+        <div className="cloudinary-section">
+          <h4>☁️ Микрофон → ElevenLabs → Cloudinary → Автовоспроизведение</h4>
+          
+          <div className="streaming-info">
+            <p className="streaming-description">
+              <strong>🎯 ПОЛНЫЙ ПАЙПЛАЙН:</strong> Говорите в микрофон → ElevenLabs обрабатывает → 
+              Результат загружается в Cloudinary → Автоматически воспроизводится в динамиках. 
+              Полный цикл обработки голоса с сохранением в облаке.
+            </p>
+          </div>
+
+          {/* АУДИО ВИЗУАЛИЗАТОР для Cloudinary */}
+          <AudioVisualizer 
+            isRecording={isRecordingCloudinary}
+            audioData={cloudinaryChunks}
+          />
+
+          <div className="cloudinary-controls">
+            <button 
+              onClick={handleStartCloudinaryStreaming}
+              disabled={isRecordingCloudinary || isProcessingCloudinary || isUploading || !selectedVoiceForTest}
+              className="test-btn microphone-btn cloudinary-btn"
+            >
+              {isRecordingCloudinary ? '⏳' : isUploading ? '☁️' : '🎤'} 
+              {isRecordingCloudinary ? 'Стриминг...' : isUploading ? 'Загрузка...' : 'Начать Cloudinary стриминг'}
+            </button>
+
+            <button 
+              onClick={handleStopCloudinaryStreaming}
+              disabled={!isRecordingCloudinary}
+              className="test-btn microphone-btn stop-btn"
+            >
+              ⏹️ Остановить Cloudinary стриминг
+            </button>
+          </div>
+
+          {/* СТАТИСТИКА CLOUDINARY СТРИМИНГА */}
+          {(isRecordingCloudinary || cloudinaryStats.totalChunks > 0) && (
+            <div className="cloudinary-stats">
+              <h5>📊 Статистика Cloudinary стриминга:</h5>
+              
+              <div className="stats-grid">
+                <div className="stat-item">
+                  <span className="stat-label">Статус записи:</span>
+                  <span className={`stat-value ${isRecordingCloudinary ? 'recording' : 'stopped'}`}>
+                    {isRecordingCloudinary ? '🔴 Запись' : '⏹️ Остановлено'}
+                  </span>
+                </div>
+
+                <div className="stat-item">
+                  <span className="stat-label">Статус обработки:</span>
+                  <span className={`stat-value ${isProcessingCloudinary ? 'processing' : 'idle'}`}>
+                    {isProcessingCloudinary ? '🔄 Обработка' : '⏸️ Ожидание'}
+                  </span>
+                </div>
+
+                <div className="stat-item">
+                  <span className="stat-label">Статус загрузки:</span>
+                  <span className={`stat-value ${isUploading ? 'uploading' : 'idle'}`}>
+                    {isUploading ? '☁️ Загрузка в Cloudinary' : '⏸️ Ожидание'}
+                  </span>
+                </div>
+
+                <div className="stat-item">
+                  <span className="stat-label">Отправлено чанков:</span>
+                  <span className="stat-value">{cloudinaryStats.sentChunks}</span>
+                </div>
+
+                <div className="stat-item">
+                  <span className="stat-label">Обработано чанков:</span>
+                  <span className="stat-value success">{cloudinaryStats.processedChunks}</span>
+                </div>
+
+                <div className="stat-item">
+                  <span className="stat-label">Загружено файлов:</span>
+                  <span className="stat-value success">{cloudinaryStats.uploadedFiles}</span>
+                </div>
+
+                <div className="stat-item">
+                  <span className="stat-label">Общий объем данных:</span>
+                  <span className="stat-value">
+                    {Math.round(cloudinaryStats.totalSentData / 1024)} KB
+                  </span>
+                </div>
+              </div>
+
+              {/* Прогресс-бар загрузки */}
+              {cloudinaryStats.totalChunks > 0 && (
+                <div className="upload-progress">
+                  <div className="progress-bar">
+                    <div 
+                      className="progress-fill cloudinary-fill"
+                      style={{ 
+                        width: `${(cloudinaryStats.uploadedFiles / cloudinaryStats.processedChunks) * 100}%` 
+                      }}
+                    ></div>
+                  </div>
+                  <span className="progress-text">
+                    {cloudinaryStats.uploadedFiles} / {cloudinaryStats.processedChunks} файлов загружено в Cloudinary
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ЗАГРУЖЕННЫЕ ФАЙЛЫ CLOUDINARY */}
+          {uploadedFiles.length > 0 && (
+            <div className="cloudinary-files">
+              <h5>☁️ Загруженные файлы в Cloudinary:</h5>
+              <div className="files-list">
+                {uploadedFiles.slice(-5).reverse().map((file, index) => (
+                  <div key={file.id} className="file-item cloudinary-file">
+                    <div className="file-header">
+                      <span className="file-number">#{uploadedFiles.length - index}</span>
+                      <span className="file-time">{file.timestamp.toLocaleTimeString()}</span>
+                      <span className="file-size">{Math.round(file.size / 1024)} KB</span>
+                    </div>
+                    <div className="file-url">
+                      <a 
+                        href={file.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="cloudinary-link"
+                      >
+                        🔗 {file.url}
+                      </a>
+                    </div>
+                    <div className="file-actions">
+                      <button 
+                        onClick={() => playCloudinaryAudio(file.url)}
+                        className="play-btn"
+                        title="Воспроизвести"
+                      >
+                        🔊 Воспроизвести
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* История чанков Cloudinary */}
+          {cloudinaryChunks.length > 0 && (
+            <div className="cloudinary-chunks">
+              <h5>📦 История чанков Cloudinary:</h5>
+              <div className="chunks-list">
+                {cloudinaryChunks.slice(-5).reverse().map((chunk) => (
+                  <div key={chunk.id} className="chunk-item cloudinary-chunk">
+                    <span className="chunk-number">#{chunk.counter}</span>
+                    <span className="chunk-size">{chunk.size} байт</span>
+                    <span className="chunk-time">{chunk.timestamp.toLocaleTimeString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="test-buttons">
           <button 
             onClick={handleTestAuth}
@@ -468,9 +700,9 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
         </div>
       )}
 
-      {(error || microphoneError) && (
+      {(error || microphoneError || cloudinaryError) && (
         <ErrorMessage 
-          message={`Ошибка ElevenLabs: ${error || microphoneError}`} 
+          message={`Ошибка: ${error || microphoneError || cloudinaryError}`} 
           onRetry={() => {
             clearState();
             // clearData(); // clearData is not in the new useMicrophoneRecording hook

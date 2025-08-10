@@ -2655,3 +2655,190 @@ body {
   color: #6c757d;
   font-size: 12px;
 }
+
+/* Cloudinary Section */
+.cloudinary-section {
+  margin-top: 30px;
+  padding: 20px;
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, #1a1a2e 100%);
+  border-radius: 12px;
+  border: 2px solid #4a9eff;
+  box-shadow: 0 8px 32px rgba(74, 158, 255, 0.1);
+}
+
+.cloudinary-section h4 {
+  color: #4a9eff;
+  margin-bottom: 15px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.cloudinary-controls {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.cloudinary-btn {
+  background: linear-gradient(135deg, #4a9eff 0%, #3a7bd5 100%);
+  border: none;
+  color: white;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.cloudinary-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3a7bd5 0%, #2c5aa0 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(74, 158, 255, 0.3);
+}
+
+.cloudinary-btn:disabled {
+  background: #666;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Cloudinary Stats */
+.cloudinary-stats {
+  margin-top: 20px;
+  padding: 15px;
+  background: rgba(74, 158, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(74, 158, 255, 0.2);
+}
+
+.cloudinary-stats h5 {
+  color: #4a9eff;
+  margin-bottom: 15px;
+  font-size: 16px;
+}
+
+.stat-value.uploading {
+  color: #4a9eff;
+  font-weight: 600;
+}
+
+/* Upload Progress */
+.upload-progress {
+  margin-top: 15px;
+}
+
+.progress-fill.cloudinary-fill {
+  background: linear-gradient(90deg, #4a9eff 0%, #3a7bd5 100%);
+}
+
+/* Cloudinary Files */
+.cloudinary-files {
+  margin-top: 20px;
+  padding: 15px;
+  background: rgba(74, 158, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(74, 158, 255, 0.2);
+}
+
+.cloudinary-files h5 {
+  color: #4a9eff;
+  margin-bottom: 15px;
+  font-size: 16px;
+}
+
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.file-item.cloudinary-file {
+  padding: 12px;
+  background: var(--bg-primary);
+  border-radius: 6px;
+  border: 1px solid var(--border-secondary);
+  transition: all 0.3s ease;
+}
+
+.file-item.cloudinary-file:hover {
+  border-color: #4a9eff;
+  box-shadow: 0 2px 8px rgba(74, 158, 255, 0.1);
+}
+
+.file-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.file-number {
+  font-weight: 600;
+  color: #4a9eff;
+}
+
+.file-time {
+  color: var(--text-secondary);
+}
+
+.file-size {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.file-url {
+  margin-bottom: 8px;
+}
+
+.cloudinary-link {
+  color: #4a9eff;
+  text-decoration: none;
+  font-size: 12px;
+  word-break: break-all;
+  transition: color 0.3s ease;
+}
+
+.cloudinary-link:hover {
+  color: #3a7bd5;
+  text-decoration: underline;
+}
+
+.file-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.play-btn {
+  padding: 6px 12px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.play-btn:hover {
+  background: #218838;
+  transform: translateY(-1px);
+}
+
+/* Cloudinary Chunks */
+.cloudinary-chunks {
+  margin-top: 20px;
+  padding: 15px;
+  background: rgba(74, 158, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(74, 158, 255, 0.2);
+}
+
+.cloudinary-chunks h5 {
+  color: #4a9eff;
+  margin-bottom: 15px;
+  font-size: 16px;
+}
+
+.chunk-item.cloudinary-chunk {
+  background: var(--bg-primary);
+  border-left: 3px solid #4a9eff;
+}

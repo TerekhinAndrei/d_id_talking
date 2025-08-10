@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import { apiService } from '../services/api';
-import { useMicrophoneToDidPipeline } from '../hooks/useMicrophoneToDidPipeline';
 
 const DIdStreamingTester = () => {
   const [testState, setTestState] = useState({
@@ -15,14 +14,6 @@ const DIdStreamingTester = () => {
     logs: [],
     talkMode: 'text', // 'text' or 'audio'
     audioUrl: 'https://res.cloudinary.com/daeoqig4w/video/upload/v1754770303/1-second-of-silence_l1un5v.mp3'
-  });
-
-  // Хук для микрофонного пайплайна в D-ID
-  const microphonePipeline = useMicrophoneToDidPipeline({
-    onAudioSent: (audioUrl, didResponse) => {
-      addLog(`🎤 Аудио отправлено в D-ID: ${audioUrl}`, 'success');
-      addLog(`📊 D-ID ответ: ${JSON.stringify(didResponse)}`, 'info');
-    }
   });
 
   const addLog = useCallback((message, type = 'info') => {
@@ -362,22 +353,6 @@ const DIdStreamingTester = () => {
         </button>
         
         <button 
-          onClick={() => microphonePipeline.startRecording("en-US-JennyNeural", testState.streamId, testState.sessionId)}
-          disabled={testState.step < 2 || !testState.isConnected || microphonePipeline.isRecording}
-          className="test-btn"
-        >
-          🎤 Start Microphone Pipeline
-        </button>
-        
-        <button 
-          onClick={microphonePipeline.stopRecording}
-          disabled={!microphonePipeline.isRecording}
-          className="test-btn"
-        >
-          ⏹️ Stop Microphone Pipeline
-        </button>
-        
-        <button 
           onClick={closeStream}
           disabled={testState.step < 4}
           className="test-btn"
@@ -419,14 +394,6 @@ const DIdStreamingTester = () => {
             <span className="label">WebRTC Connected:</span>
             <span className="value">{testState.isConnected ? '✅ Yes' : '❌ No'}</span>
           </div>
-          <div className="status-item">
-            <span className="label">Microphone Pipeline:</span>
-            <span className="value">{microphonePipeline.isRecording ? '🎤 Recording' : '⏹️ Stopped'}</span>
-          </div>
-          <div className="status-item">
-            <span className="label">Sent Chunks:</span>
-            <span className="value">{microphonePipeline.streamStats.sentChunks}</span>
-          </div>
         </div>
       </div>
 
@@ -450,13 +417,6 @@ const DIdStreamingTester = () => {
         <div className="error-message">
           <h3>❌ Error</h3>
           <p>{testState.error}</p>
-        </div>
-      )}
-
-      {microphonePipeline.error && (
-        <div className="error-message">
-          <h3>❌ Microphone Pipeline Error</h3>
-          <p>{microphonePipeline.error}</p>
         </div>
       )}
 
