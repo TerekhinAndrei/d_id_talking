@@ -8,7 +8,7 @@ const Technologies = () => {
       <h2>Технологии</h2>
       <div className="flex flex-wrap gap-2">
         {TECHNOLOGIES.map((tech, index) => (
-          <span key={index} className="status status-info">
+          <span key={`tech-${tech}-${index}`} className="status status-info">
             {tech}
           </span>
         ))}

@@ -14,7 +14,7 @@ const DIdStreamingTester = ({ selectedVoice }) => {
     error: null,
     logs: [],
     talkMode: 'text', // 'text' or 'audio'
-    audioUrl: 'https://res.cloudinary.com/daeoqig4w/video/upload/v1754770303/1-second-of-silence_l1un5v.mp3'
+    audioUrl: 'https://res.cloudinary.com/daeoqig4w/video/upload/v1754932884/d_id_talking/audio/audio_processed_audio_1754932883244.mp3.mp3'
   });
 
   // Состояние для управления видимостью заглушки
@@ -693,7 +693,7 @@ const DIdStreamingTester = ({ selectedVoice }) => {
             <h4>📝 Microphone Logs</h4>
             <div className="logs">
               {micLogs.slice(-10).map((log, index) => (
-                <div key={index} className={`log-entry ${log.type}`}>
+                <div key={`mic-log-${log.timestamp}-${index}`} className={`log-entry ${log.type}`}>
                   <span className="timestamp">{new Date(log.timestamp).toLocaleTimeString()}</span>
                   <span className="message">{log.message}</span>
                 </div>
@@ -707,7 +707,7 @@ const DIdStreamingTester = ({ selectedVoice }) => {
               <h4>🎬 D-ID Queue ({didUploadQueue.length} files)</h4>
               <div className="queue-list">
                 {didUploadQueue.slice(0, 5).map((file, index) => (
-                  <div key={file.id} className="queue-item">
+                  <div key={`did-queue-${file.id}-${file.timestamp}`} className="queue-item">
                     <span className="queue-number">#{index + 1}</span>
                     <span className="queue-url">{file.url.split('/').pop()}</span>
                     <span className="queue-time">
@@ -730,7 +730,7 @@ const DIdStreamingTester = ({ selectedVoice }) => {
         <h3>📝 Test Logs</h3>
         <div className="logs">
           {testState.logs.map((log, index) => (
-            <div key={index} className={`log-entry ${log.type}`}>
+            <div key={`test-log-${log.timestamp}-${index}`} className={`log-entry ${log.type}`}>
               <span className="timestamp">{new Date(log.timestamp).toLocaleTimeString()}</span>
               <span className="message">{log.message}</span>
             </div>

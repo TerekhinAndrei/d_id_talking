@@ -458,7 +458,7 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
               <h5>📦 История чанков:</h5>
               <div className="chunks-list">
                 {audioChunks.slice(-5).reverse().map((chunk, index) => (
-                  <div key={chunk.id} className="chunk-item">
+                  <div key={`audio-chunk-${chunk.id}-${chunk.timestamp}`} className="chunk-item">
                     <span className="chunk-number">#{chunk.counter}</span>
                     <span className="chunk-size">{chunk.size} байт</span>
                     <span className="chunk-time">{chunk.timestamp.toLocaleTimeString()}</span>
@@ -474,7 +474,7 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
               <h5>✅ Обработанные чанки:</h5>
               <div className="chunks-list">
                 {processedChunks.slice(-5).reverse().map((chunk, index) => (
-                  <div key={chunk.id} className="chunk-item processed">
+                  <div key={`processed-chunk-${chunk.id}-${chunk.timestamp}`} className="chunk-item processed">
                     <span className="chunk-number">#{index + 1}</span>
                     <span className="chunk-size">
                       {chunk.originalSize} → {chunk.processedSize} байт
@@ -601,7 +601,7 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
               <h5>☁️ Загруженные файлы в Cloudinary:</h5>
               <div className="files-list">
                 {uploadedFiles.slice(-5).reverse().map((file, index) => (
-                  <div key={file.id} className="file-item cloudinary-file">
+                  <div key={`cloudinary-file-${file.id}-${file.timestamp}`} className="file-item cloudinary-file">
                     <div className="file-header">
                       <span className="file-number">#{uploadedFiles.length - index}</span>
                       <span className="file-time">{file.timestamp.toLocaleTimeString()}</span>
@@ -638,7 +638,7 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
               <h5>📦 История чанков Cloudinary:</h5>
               <div className="chunks-list">
                 {cloudinaryChunks.slice(-5).reverse().map((chunk) => (
-                  <div key={chunk.id} className="chunk-item cloudinary-chunk">
+                  <div key={`cloudinary-chunk-${chunk.id}-${chunk.timestamp}`} className="chunk-item cloudinary-chunk">
                     <span className="chunk-number">#{chunk.counter}</span>
                     <span className="chunk-size">{chunk.size} байт</span>
                     <span className="chunk-time">{chunk.timestamp.toLocaleTimeString()}</span>
