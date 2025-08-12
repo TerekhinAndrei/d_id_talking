@@ -1,6 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { apiService } from '../services/api';
 import { useDIdMicrophoneTalk } from '../hooks/useDIdMicrophoneTalk';
+// Импортируем наш новый хук
+import { useStreamStatsDetector } from '../hooks/useStreamStatsDetector';
+// Импортируем наш обновленный VideoPlayer
+import VideoPlayer from './VideoPlayer';
 
 const DIdStreamingTester = ({ selectedVoice }) => {
   const [testState, setTestState] = useState({
@@ -10,6 +14,7 @@ const DIdStreamingTester = ({ selectedVoice }) => {
     sdpOffer: null,
     iceServers: null,
     peerConnection: null,
+    stream: null, // Добавим поле для хранения стрима
     isConnected: false,
     error: null,
     logs: [],
@@ -17,11 +22,12 @@ const DIdStreamingTester = ({ selectedVoice }) => {
     audioUrl: 'https://res.cloudinary.com/daeoqig4w/video/upload/v1754932884/d_id_talking/audio/audio_processed_audio_1754932883244.mp3.mp3'
   });
 
-  // Состояние для управления видимостью заглушки
-  const [showPlaceholder, setShowPlaceholder] = useState(true);
-  
-  // Таймер для автоматического показа заглушки
-  const placeholderTimerRef = useRef(null);
+
+
+  // 🔥 НАШ НОВЫЙ ХУК В ДЕЙСТВИИ 🔥
+  const { isSpeaking } = useStreamStatsDetector({ 
+    peerConnection: testState.peerConnection 
+  });
 
   // Используем хук для микрофонного talk
   const {
@@ -54,6 +60,7 @@ const DIdStreamingTester = ({ selectedVoice }) => {
       sdpOffer: null,
       iceServers: null,
       peerConnection: null,
+      stream: null, // Сбрасываем stream
       isConnected: false,
       error: null,
       logs: [],
@@ -158,12 +165,31 @@ const DIdStreamingTester = ({ selectedVoice }) => {
       });
 
       peerConnection.addEventListener('track', (event) => {
-        addLog('🎬 Received video track!', 'success');
-        // Handle video stream
-        const videoElement = document.getElementById('test-video');
-        if (videoElement && event.streams[0]) {
-          videoElement.srcObject = event.streams[0];
-        }
+        addLog('🎬 Received stream!', 'success');
+        console.log('🎬 Track event details:', {
+          track: event.track ? {
+            id: event.track.id,
+            kind: event.track.kind,
+            enabled: event.track.enabled,
+            readyState: event.track.readyState
+          } : 'No track',
+          streams: event.streams ? event.streams.length : 0,
+          streamDetails: event.streams ? event.streams.map(s => ({
+            id: s.id,
+            active: s.active,
+            tracks: s.getTracks().length
+          })) : []
+        });
+        setTestState(prev => ({ ...prev, stream: event.streams[0] }));
+      });
+
+      // Добавляем слушатель для всех событий peerConnection
+      peerConnection.addEventListener('connectionstatechange', () => {
+        console.log('🔗 Connection state changed:', peerConnection.connectionState);
+      });
+
+      peerConnection.addEventListener('signalingstatechange', () => {
+        console.log('📡 Signaling state changed:', peerConnection.signalingState);
       });
 
       // Set remote description (SDP offer)
@@ -185,15 +211,15 @@ const DIdStreamingTester = ({ selectedVoice }) => {
         answer.sdp
       );
 
-                   if (sdpResponse.success) {
-               addLog('✅ SDP answer submitted successfully!', 'success');
-               setTestState(prev => ({
-                 ...prev,
-                 step: 2,
-                 peerConnection,
-                 error: null
-               }));
-             } else {
+                         if (sdpResponse.success) {
+        addLog('✅ SDP answer submitted successfully!', 'success');
+        setTestState(prev => ({
+          ...prev,
+          step: 2,
+          peerConnection, // <--- Сохраняем peerConnection в стейт
+          error: null
+        }));
+      } else {
                let errorMessage = sdpResponse.error;
                
                // Check for specific backend errors
@@ -309,93 +335,7 @@ const DIdStreamingTester = ({ selectedVoice }) => {
     }
   }, [testState, addLog]);
 
-  // useEffect для управления таймером заглушки
-  useEffect(() => {
-    const video = document.getElementById('test-video');
-    if (!video) return;
 
-    const startPlaceholderTimer = () => {
-      // Очищаем предыдущий таймер
-      if (placeholderTimerRef.current) {
-        clearTimeout(placeholderTimerRef.current);
-      }
-      
-      // Запускаем новый таймер на 2 секунды
-      placeholderTimerRef.current = setTimeout(() => {
-        console.log('🎬 Таймер истек, показываем заглушку');
-        setShowPlaceholder(true);
-      }, 2000);
-    };
-
-    const stopPlaceholderTimer = () => {
-      if (placeholderTimerRef.current) {
-        clearTimeout(placeholderTimerRef.current);
-        placeholderTimerRef.current = null;
-      }
-    };
-
-    // Обработчики событий
-    const handlePlay = () => {
-      console.log('🎬 Основное видео начало воспроизведение, скрываем заглушку');
-      setShowPlaceholder(false);
-      stopPlaceholderTimer();
-    };
-
-    const handlePause = () => {
-      console.log('🎬 Основное видео приостановлено, показываем заглушку');
-      setShowPlaceholder(true);
-      startPlaceholderTimer();
-    };
-
-    const handleEnded = () => {
-      console.log('🎬 Основное видео завершилось, показываем заглушку');
-      setShowPlaceholder(true);
-      stopPlaceholderTimer();
-    };
-
-    const handleWaiting = () => {
-      console.log('🎬 Основное видео ждет данные, показываем заглушку');
-      setShowPlaceholder(true);
-      startPlaceholderTimer();
-    };
-
-    const handleTimeUpdate = () => {
-      // Проверяем, не закончилось ли видео
-      if (video.duration > 0 && video.currentTime >= video.duration - 0.1) {
-        console.log('🎬 Основное видео в конце, показываем заглушку');
-        setShowPlaceholder(true);
-        stopPlaceholderTimer();
-      }
-    };
-
-    const handleStalled = () => {
-      console.log('🎬 Основное видео остановилось, показываем заглушку');
-      setShowPlaceholder(true);
-      startPlaceholderTimer();
-    };
-
-    // Добавляем обработчики
-    video.addEventListener('play', handlePlay);
-    video.addEventListener('pause', handlePause);
-    video.addEventListener('ended', handleEnded);
-    video.addEventListener('waiting', handleWaiting);
-    video.addEventListener('timeupdate', handleTimeUpdate);
-    video.addEventListener('stalled', handleStalled);
-
-    // Запускаем таймер по умолчанию
-    startPlaceholderTimer();
-
-    // Очистка при размонтировании
-    return () => {
-      video.removeEventListener('play', handlePlay);
-      video.removeEventListener('pause', handlePause);
-      video.removeEventListener('ended', handleEnded);
-      video.removeEventListener('waiting', handleWaiting);
-      video.removeEventListener('timeupdate', handleTimeUpdate);
-      video.removeEventListener('stalled', handleStalled);
-      stopPlaceholderTimer();
-    };
-  }, []);
 
   // Step 4: Create talk stream with microphone
   const handleCreateTalkMic = useCallback(async () => {
@@ -566,6 +506,10 @@ const DIdStreamingTester = ({ selectedVoice }) => {
             <span className="label">WebRTC Connected:</span>
             <span className="value">{testState.isConnected ? '✅ Yes' : '❌ No'}</span>
           </div>
+          <div className="status-item">
+            <span className="label">Avatar Speaking:</span>
+            <span className="value">{isSpeaking ? '🗣️ Yes' : '😴 Idling'}</span>
+          </div>
         </div>
       </div>
 
@@ -592,54 +536,21 @@ const DIdStreamingTester = ({ selectedVoice }) => {
         </div>
       )}
 
+      {/* 🔥 НАШ НОВЫЙ ВИДЕОПЛЕЕР 🔥 */}
       <div className="video-container" style={{ 
         position: 'relative', 
         width: '100%', 
         maxWidth: '400px', 
-        aspectRatio: '1 / 1', // Квадратные пропорции как у аватара
+        aspectRatio: '1 / 1',
         margin: '0 auto',
         backgroundColor: '#000',
         border: '1px solid #ccc',
         borderRadius: '8px',
         overflow: 'hidden'
       }}>
-        {/* Основной видеоэлемент */}
-        <video 
-          id="test-video"
-          autoPlay 
-          playsInline
-          controls
-          style={{ 
-            width: '100%', 
-            height: '100%',
-            position: 'relative',
-            zIndex: 1,
-            objectFit: 'contain', // Сохраняет пропорции для корректного воспроизведения
-            backgroundColor: '#000'
-          }}
-        />
-        
-        {/* Заглушка с видео ожидания */}
-        <video 
-          id="placeholder-video"
-          autoPlay 
-          playsInline
-          loop
-          muted
-          style={{ 
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            opacity: showPlaceholder ? 1 : 0,
-            transition: 'opacity 0.3s ease',
-            zIndex: 2,
-            pointerEvents: 'none',
-            objectFit: 'fill', // Заполняет весь контейнер без сохранения пропорций
-            backgroundColor: '#000'
-          }}
-          src="/Waiting.mp4"
+        <VideoPlayer 
+          stream={testState.stream}
+          isSpeaking={isSpeaking}
         />
       </div>
 
