@@ -1,0 +1,66 @@
+# Git алиасы для проекта d_id_talking
+# Добавьте эти алиасы в ваш ~/.gitconfig или выполните команды ниже
+
+[alias]
+    # Основные команды
+    st = status
+    co = checkout
+    br = branch
+    ci = commit
+    ca = commit -a
+    cm = commit -m
+    aa = add -A
+    unstage = reset HEAD --
+    last = log -1 HEAD
+    
+    # Просмотр истории
+    lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+    ll = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --all
+    hist = log --pretty=format:\"%h %ad | %s%d [%an]\" --graph --date=short
+    
+    # Работа с ветками
+    new-branch = checkout -b
+    delete-branch = branch -d
+    delete-remote-branch = push origin --delete
+    
+    # Слияние и обновление
+    up = pull origin
+    push-up = push -u origin
+    
+    # Очистка
+    clean-branches = !git branch --merged | grep -v \"\\*\" | xargs -n 1 git branch -d
+    clean-remote-branches = !git branch -r --merged | grep -v origin/main | grep -v origin/develop | sed 's/origin\\///' | xargs -n 1 git push origin --delete
+    
+    # Информация
+    who = shortlog -s --
+    files = show --name-only
+    changes = diff --name-status
+    
+    # Создание веток разработки
+    feature = !sh -c 'git checkout develop && git pull origin develop && git checkout -b feature/$1 && git push -u origin feature/$1' -
+    bugfix = !sh -c 'git checkout develop && git pull origin develop && git checkout -b bugfix/$1 && git push -u origin bugfix/$1' -
+    hotfix = !sh -c 'git checkout main && git pull origin main && git checkout -b hotfix/$1 && git push -u origin hotfix/$1' -
+    
+    # Завершение работы над ветками
+    finish-feature = !sh -c 'git checkout develop && git pull origin develop && git merge --no-ff feature/$1 && git push origin develop && git branch -d feature/$1 && git push origin --delete feature/$1' -
+    finish-bugfix = !sh -c 'git checkout develop && git pull origin develop && git merge --no-ff bugfix/$1 && git push origin develop && git branch -d bugfix/$1 && git push origin --delete bugfix/$1' -
+    finish-hotfix = !sh -c 'git checkout main && git pull origin main && git merge --no-ff hotfix/$1 && git tag -a v$2 -m \"Release version $2\" && git push origin main && git push origin v$2 && git checkout develop && git merge --no-ff hotfix/$1 && git push origin develop && git branch -d hotfix/$1 && git push origin --delete hotfix/$1' -
+
+# Команды для добавления алиасов:
+# git config --global alias.st status
+# git config --global alias.co checkout
+# git config --global alias.br branch
+# git config --global alias.ci commit
+# git config --global alias.ca "commit -a"
+# git config --global alias.cm "commit -m"
+# git config --global alias.aa "add -A"
+# git config --global alias.unstage "reset HEAD --"
+# git config --global alias.last "log -1 HEAD"
+# git config --global alias.lg "log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit"
+# git config --global alias.ll "log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --all"
+# git config --global alias.hist "log --pretty=format:\"%h %ad | %s%d [%an]\" --graph --date=short"
+# git config --global alias.new-branch "checkout -b"
+# git config --global alias.delete-branch "branch -d"
+# git config --global alias.delete-remote-branch "push origin --delete"
+# git config --global alias.up "pull origin"
+# git config --global alias.push-up "push -u origin"
