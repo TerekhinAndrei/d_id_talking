@@ -105,10 +105,26 @@ git branch -d hotfix/срочное-исправление
 
 ## Текущие ветки проекта
 
-- `main` - основная ветка
-- `develop` - ветка разработки
+### Основные ветки
+- `main` - основная ветка (production-ready код)
+- `develop` - ветка разработки (интеграция всех функций)
+
+### Ветки функций (feature)
 - `feature/audio-processing-improvements` - улучшения обработки аудио
+- `feature/voice-synthesis-improvements` - улучшения синтеза голоса
+- `feature/ui-enhancements` - улучшения пользовательского интерфейса
+
+### Ветки исправлений (bugfix)
 - `bugfix/microphone-input-issues` - исправления проблем с микрофоном
+- `bugfix/streaming-performance` - исправления производительности стриминга
+
+### Ветки релизов (release)
+- `release/v1.0.0` - подготовка релиза версии 1.0.0
+
+### Ветки срочных исправлений (hotfix)
+- `hotfix/emergency-fixes` - срочные исправления для production
+
+### Специальные ветки
 - `api-restructure-migration` - миграция API
 - `protected-backend` - защита backend
 - `refactoring/v1.0-solid-architecture` - рефакторинг архитектуры
