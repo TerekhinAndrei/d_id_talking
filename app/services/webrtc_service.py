@@ -22,7 +22,7 @@ class WebRTCService:
         logger.info(f"WebRTC Service initialized with base URL: {self.base_url}")
         logger.info(f"API Key configured: {'Yes' if self.api_key else 'No'}")
     
-    async def create_stream(self, source_url: str) -> Dict[str, Any]:
+    async def create_stream(self, source_url: str, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Step 1: Create a new stream
         POST /talks/streams
@@ -32,6 +32,12 @@ class WebRTCService:
             payload = {
                 "source_url": source_url
             }
+            
+            # Add configuration if provided
+            if config:
+                payload.update(config)
+            
+            logger.info(f"Creating D-ID stream with payload: {payload}")
             
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=self.headers, json=payload) as response:

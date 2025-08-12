@@ -253,7 +253,7 @@ class ApiService {
         image_url: imageUrl,
         description: description,
         config: {
-          output_resolution: 512 // Стандартное разрешение для квадратного видео
+          output_resolution: 1080 // Стандартное разрешение для квадратного видео
         }
       }),
     });

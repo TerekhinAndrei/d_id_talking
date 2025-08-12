@@ -65,7 +65,9 @@ async def start_stream(
         websocket_service = services.get("websocket_service")
         
         # Create stream session using WebRTC service
-        session_data = await webrtc_service.create_stream(str(request.image_url))
+        config = getattr(request, 'config', None)
+        logger.info(f"Stream configuration: {config}")
+        session_data = await webrtc_service.create_stream(str(request.image_url), config)
         
         # Initialize WebSocket connection if available
         if websocket_service and not websocket_service.is_connected:
