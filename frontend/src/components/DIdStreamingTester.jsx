@@ -74,7 +74,7 @@ const DIdStreamingTester = ({ selectedVoice }) => {
     try {
       addLog('🚀 Step 1: Creating new stream...', 'info');
       
-      const imageUrl = 'https://res.cloudinary.com/daeoqig4w/image/upload/v1754601773/ced034aa-4c77-4d02-a762-fb16bcb25d75.jpg';
+      const imageUrl = 'https://res.cloudinary.com/daeoqig4w/image/upload/v1755025109/default_avatar_jaf35x.jpg';
       
       // Проверяем, существует ли изображение
       addLog('🔍 Проверяем доступность изображения...', 'info');

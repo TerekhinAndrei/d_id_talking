@@ -54,11 +54,10 @@
   position: relative;
   width: 100%;
   max-width: 800px;
-  aspect-ratio: 16 / 9;
+  /* aspect-ratio: 16 / 9; */ /* <--- ЗАКОММЕНТИРОВАНО ИЛИ УДАЛЕНО */
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Base background only; image is enabled via .show-placeholder */
   background-color: var(--bg-primary);
   border-radius: 8px;
   overflow: hidden;
