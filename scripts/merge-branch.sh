@@ -5,59 +5,18 @@
 
 set -e
 
-# Цвета для вывода
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Подключение общих утилит
+source "$(dirname "$0")/git-utils.sh"
 
-# Функция для вывода сообщений
-print_message() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-# Проверка аргументов
-if [ $# -lt 2 ]; then
-    print_error "Использование: $0 [feature|bugfix|hotfix] \"название-ветки\""
-    echo "Примеры:"
-    echo "  $0 feature \"audio-processing-improvements\""
-    echo "  $0 bugfix \"microphone-input-issues\""
-    echo "  $0 hotfix \"critical-security-fix\""
-    exit 1
-fi
-
+# Получение и валидация аргументов
+FULL_BRANCH_NAME=$(validate_branch_args "$@")
 BRANCH_TYPE=$1
 BRANCH_NAME=$2
-
-# Проверка типа ветки
-case $BRANCH_TYPE in
-    feature|bugfix|hotfix)
-        ;;
-    *)
-        print_error "Неверный тип ветки. Используйте: feature, bugfix или hotfix"
-        exit 1
-        ;;
-esac
-
-# Формирование полного названия ветки
-FULL_BRANCH_NAME="${BRANCH_TYPE}/${BRANCH_NAME}"
 
 print_message "Завершение работы над веткой: $FULL_BRANCH_NAME"
 
 # Проверка существования ветки
-if ! git show-ref --verify --quiet refs/heads/$FULL_BRANCH_NAME; then
-    print_error "Ветка $FULL_BRANCH_NAME не существует"
-    exit 1
-fi
+check_branch_exists "$FULL_BRANCH_NAME"
 
 # Проверка текущего состояния
 if [ -n "$(git status --porcelain)" ]; then
@@ -75,20 +34,11 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 # Определение целевой ветки для слияния
-if [ "$BRANCH_TYPE" = "hotfix" ]; then
-    TARGET_BRANCH="main"
-    print_message "Слияние hotfix в main"
-else
-    TARGET_BRANCH="develop"
-    print_message "Слияние $BRANCH_TYPE в develop"
-fi
+TARGET_BRANCH=$(get_base_branch "$BRANCH_TYPE")
+print_message "Слияние $BRANCH_TYPE в $TARGET_BRANCH"
 
-# Переключение на целевую ветку и обновление
-print_message "Переключение на $TARGET_BRANCH..."
-git checkout $TARGET_BRANCH
-
-print_message "Обновление $TARGET_BRANCH..."
-git pull origin $TARGET_BRANCH
+# Обновление целевой ветки
+update_branch "$TARGET_BRANCH"
 
 # Слияние ветки
 print_message "Слияние $FULL_BRANCH_NAME в $TARGET_BRANCH..."

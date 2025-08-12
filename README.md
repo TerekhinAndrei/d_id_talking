@@ -1,211 +1,102 @@
 # D-ID Talking Avatar Generator
 
-A web application that generates talking avatars using D-ID API, ElevenLabs speech processing, and Cloudinary file storage.
+Веб-приложение для генерации говорящих аватаров с использованием D-ID API, ElevenLabs обработки речи и Cloudinary для хранения файлов.
 
-## Features
+## 🚀 Быстрый старт
 
-- **Voice Processing**: Audio processing through ElevenLabs Speech-to-Speech
-- **Video Generation**: Talking avatar generation using D-ID API
-- **File Storage**: Cloudinary integration for image and audio storage
-- **Real-time Progress**: Live progress tracking for video generation
-- **Modern UI**: React-based frontend with modern design
-
-## Architecture
-
-### Backend (FastAPI)
-- **API Endpoints**: `/api/v1/generate`, `/api/v1/status`, `/api/v1/voices`
-- **Services**: D-ID, ElevenLabs, Cloudinary integration
-- **File Processing**: Audio conversion and image normalization
-- **Background Tasks**: Asynchronous video generation
-
-### Frontend (React + Vite)
-- **File Upload**: Image and audio file upload
-- **Voice Selection**: ElevenLabs voice selection
-- **Progress Tracking**: Real-time generation progress
-- **Video Display**: Generated video playback
-
-## External APIs
-
-### D-ID API
-- **Purpose**: Video generation with talking avatars
-- **Endpoints**: `/talks`, `/talks/{id}`
-- **Features**: Face animation, audio synchronization
-
-### ElevenLabs API
-- **Purpose**: Speech-to-Speech audio processing
-- **Endpoints**: `/v1/speech-to-speech/{voice_id}`
-- **Features**: Voice cloning, audio enhancement
-
-### Cloudinary
-- **Purpose**: File storage and CDN
-- **Features**: Image and audio upload, public URLs
-
-## Installation
-
-### Prerequisites
+### Предварительные требования
 - Python 3.8+
 - Node.js 16+
-- D-ID API key
-- ElevenLabs API key
-- Cloudinary account
+- API ключи: D-ID, ElevenLabs, Cloudinary
 
-### Backend Setup
+### Установка и запуск
+
+1. **Клонирование репозитория**
 ```bash
-# Install Python dependencies
+git clone <repository-url>
+cd d_id_talking
+```
+
+2. **Настройка backend**
+```bash
+# Установка зависимостей
 pip install -r requirements.txt
 
-# Set environment variables
+# Настройка переменных окружения
 cp env.example .env
-# Edit .env with your API keys
+# Отредактируйте .env с вашими API ключами
 
-# Run backend server
+# Запуск сервера
 python -m uvicorn app.main:app --host 0.0.0.0 --port 3001
 ```
 
-### Frontend Setup
+3. **Настройка frontend**
 ```bash
-# Install Node.js dependencies
 cd frontend
 npm install
-
-# Run development server
 npm run dev
 ```
 
-## Environment Variables
+## 📚 Документация
 
-```env
-# D-ID API
-D_ID_API_KEY=your_d_id_api_key
-D_ID_API_URL=https://api.d-id.com
+- **[Руководство по Backend](BACKEND_GUIDE.md)** - настройка и разработка backend
+- **[Руководство по Frontend](FRONTEND_GUIDE.md)** - настройка и разработка frontend  
+- **[Git Workflow](GIT_WORKFLOW.md)** - организация веток и процесса разработки
 
-# ElevenLabs API
-ELEVENLABS_API_KEY=your_elevenlabs_api_key
-ELEVENLABS_API_URL=https://api.elevenlabs.io
+## 🎯 Основные возможности
 
-# Cloudinary
-CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
-```
+- **Обработка голоса**: Аудио обработка через ElevenLabs Speech-to-Speech
+- **Генерация видео**: Создание говорящих аватаров с помощью D-ID API
+- **Хранение файлов**: Интеграция с Cloudinary для изображений и аудио
+- **Отслеживание прогресса**: Живое отслеживание процесса генерации видео
+- **Современный UI**: React-based frontend с современным дизайном
 
-## Usage
+## 🏗️ Архитектура
 
-1. **Upload Image**: Select a photo for the avatar
-2. **Record Audio**: Record or upload audio file
-3. **Select Voice**: Choose from available ElevenLabs voices
-4. **Generate Video**: Start the generation process
-5. **View Result**: Watch the generated talking avatar
+### Backend (FastAPI)
+- API endpoints для генерации, статуса и голосов
+- Интеграция с D-ID, ElevenLabs, Cloudinary
+- Обработка файлов и фоновые задачи
 
-## API Endpoints
+### Frontend (React + Vite)
+- Загрузка файлов (изображения и аудио)
+- Выбор голоса ElevenLabs
+- Отслеживание прогресса в реальном времени
+- Воспроизведение сгенерированного видео
 
-### POST /api/v1/generate
-Generate a talking avatar video.
+## 🔧 Использование
 
-**Request:**
-- `image_file`: Image file (multipart/form-data)
-- `audio_file`: Audio file (multipart/form-data)
-- `voice_id`: ElevenLabs voice ID
+1. **Загрузите изображение**: Выберите фото для аватара
+2. **Запишите аудио**: Запишите или загрузите аудио файл
+3. **Выберите голос**: Выберите из доступных голосов ElevenLabs
+4. **Сгенерируйте видео**: Запустите процесс генерации
+5. **Просмотрите результат**: Посмотрите сгенерированный говорящий аватар
 
-**Response:**
-```json
-{
-  "task_id": "uuid",
-  "status": "processing",
-  "progress": 0
-}
-```
+## 🧪 Тестирование
 
-### GET /api/v1/status/{task_id}
-Get generation status and result.
-
-**Response:**
-```json
-{
-  "task_id": "uuid",
-  "status": "completed",
-  "progress": 100,
-  "video_url": "https://...",
-  "error_message": null
-}
-```
-
-### GET /api/v1/voices
-Get available ElevenLabs voices.
-
-**Response:**
-```json
-[
-  {
-    "voice_id": "21m00Tcm4TlvDq8ikWAM",
-    "name": "Rachel",
-    "category": "premade"
-  }
-]
-```
-
-## File Processing
-
-### Image Normalization
-- Removes spaces and special characters
-- Handles URL encoding
-- Prevents double extensions
-- Supports JPG, JPEG, PNG formats
-
-### Audio Processing
-- Converts to MP3 format
-- Processes through ElevenLabs Speech-to-Speech
-- Maintains original quality
-- Supports various input formats
-
-## Development
-
-### Testing
 ```bash
-# Run backend tests
+# Тесты backend
 python -m pytest tests/
 
-# Test external APIs
+# Тесты внешних API
 python test_full_flow.py
 ```
 
-### Code Structure
-```
-d_id_talking/
-├── app/
-│   ├── api/v1/endpoints/    # API endpoints
-│   ├── services/            # External API services
-│   ├── models/              # Data models
-│   └── config.py           # Configuration
-├── frontend/               # React application
-├── tests/                  # Test files
-└── uploads/               # Temporary file storage
-```
+## 🐛 Устранение неполадок
 
-## Troubleshooting
+### Частые проблемы
+1. **Ошибки D-ID API**: Проверьте API ключ и лимиты
+2. **Ошибки ElevenLabs**: Проверьте voice ID и API ключ
+3. **Ошибки Cloudinary**: Проверьте учетные данные загрузки
+4. **Проблемы с загрузкой файлов**: Убедитесь в правильных форматах
 
-### Common Issues
-1. **D-ID API Errors**: Check API key and rate limits
-2. **ElevenLabs Errors**: Verify voice ID and API key
-3. **Cloudinary Errors**: Check upload credentials
-4. **File Upload Issues**: Ensure proper file formats
+## 📄 Лицензия
 
-### Debug Mode
-Enable detailed logging by setting `DEBUG=true` in environment variables.
+MIT License
 
-## License
+## 🤝 Поддержка
 
-MIT License - see LICENSE file for details.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## Support
-
-For issues and questions:
-- Check the troubleshooting section
-- Review API documentation
-- Open an issue on GitHub 
+Для вопросов и проблем:
+- Проверьте раздел устранения неполадок
+- Изучите документацию API
+- Создайте issue на GitHub 
