@@ -1,4 +1,4 @@
-# Git Workflow для d_id_talking
+# Git Workflow для talking-head
 
 ## Структура веток
 
