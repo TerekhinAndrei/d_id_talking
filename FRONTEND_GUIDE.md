@@ -607,3 +607,11 @@ npm run dev
 - React Developer Tools
 - Redux DevTools (если используется Redux)
 - Network tab для отладки API запросов
+
+## 👥 Авторы
+
+**Основные разработчики:**
+- **Андрей Терехин** - [andrei@terekhindt.com](mailto:andrei@terekhindt.com)
+- **Свитский** - [svitskiy@gmail.com](mailto:svitskiy@gmail.com)
+
+Для вопросов по frontend разработке обращайтесь к авторам.

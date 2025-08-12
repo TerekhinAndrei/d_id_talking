@@ -112,3 +112,11 @@ git branch -d hotfix/срочное-исправление
 - `api-restructure-migration` - миграция API
 - `protected-backend` - защита backend
 - `refactoring/v1.0-solid-architecture` - рефакторинг архитектуры
+
+## 👥 Авторы
+
+**Основные разработчики:**
+- **Андрей Терехин** - [andrei@terekhindt.com](mailto:andrei@terekhindt.com)
+- **Свитский** - [svitskiy@gmail.com](mailto:svitskiy@gmail.com)
+
+Для вопросов по Git workflow и процессу разработки обращайтесь к авторам.

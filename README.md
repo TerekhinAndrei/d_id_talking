@@ -42,6 +42,8 @@ npm run dev
 - **[Руководство по Backend](BACKEND_GUIDE.md)** - настройка и разработка backend
 - **[Руководство по Frontend](FRONTEND_GUIDE.md)** - настройка и разработка frontend  
 - **[Git Workflow](GIT_WORKFLOW.md)** - организация веток и процесса разработки
+- **[Авторы проекта](AUTHORS.md)** - подробная информация об авторах
+- **[Руководство для контрибьюторов](CONTRIBUTING.md)** - как внести свой вклад в проект
 
 ## 🎯 Основные возможности
 
@@ -90,6 +92,12 @@ python test_full_flow.py
 3. **Ошибки Cloudinary**: Проверьте учетные данные загрузки
 4. **Проблемы с загрузкой файлов**: Убедитесь в правильных форматах
 
+## 👥 Авторы
+
+**Основные разработчики:**
+- **Андрей Терехин** - [andrei@terekhindt.com](mailto:andrei@terekhindt.com)
+- **Свитский** - [svitskiy@gmail.com](mailto:svitskiy@gmail.com)
+
 ## 📄 Лицензия
 
 MIT License
@@ -99,4 +107,5 @@ MIT License
 Для вопросов и проблем:
 - Проверьте раздел устранения неполадок
 - Изучите документацию API
-- Создайте issue на GitHub 
+- Создайте issue на GitHub
+- Свяжитесь с авторами: andrei@terekhindt.com, svitskiy@gmail.com 

@@ -388,3 +388,11 @@ tail -f backend.log
 # Поиск ошибок
 grep "ERROR" backend.log
 ```
+
+## 👥 Авторы
+
+**Основные разработчики:**
+- **Андрей Терехин** - [andrei@terekhindt.com](mailto:andrei@terekhindt.com)
+- **Свитский** - [svitskiy@gmail.com](mailto:svitskiy@gmail.com)
+
+Для вопросов по backend разработке обращайтесь к авторам.
