@@ -1,6 +1,7 @@
-import React from 'react'
+import React from 'react';
+import { VideoPlayerProps } from '../types';
 
-const VideoPlayer = ({ 
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
   defaultVideoSrc = '/Waiting.mp4',
   streamVideoSrc = null,
   isStreamActive = false,
@@ -25,11 +26,11 @@ const VideoPlayer = ({
           autoPlay 
           playsInline
           muted
-          src={streamVideoSrc}
+          src={streamVideoSrc || undefined}
         />
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default VideoPlayer
+export default VideoPlayer;
