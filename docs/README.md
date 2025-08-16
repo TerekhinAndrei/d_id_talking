@@ -6,23 +6,17 @@
 
 ## 🏗️ Архитектурная документация
 
-### Аудиты и отчеты
-- [Аудит архитектуры бэкенда](architecture/BACKEND_ARCHITECTURE_AUDIT.md) - Полный анализ архитектуры бэкенда
-- [Отчет об улучшениях бэкенда](architecture/BACKEND_IMPROVEMENTS_REPORT.md) - Детали улучшений бэкенда
-- [Аудит архитектуры фронтенда](architecture/FRONTEND_ARCHITECTURE_AUDIT.md) - Полный анализ архитектуры фронтенда
-- [Отчет об улучшениях фронтенда](architecture/FRONTEND_IMPROVEMENTS_REPORT.md) - Детали улучшений фронтенда
-- [Финальный отчет по бэкенду](architecture/FINAL_BACKEND_AUDIT_SUMMARY.md) - Итоговый отчет по бэкенду
-- [Финальный отчет по фронтенду](architecture/FINAL_FRONTEND_AUDIT_SUMMARY.md) - Итоговый отчет по фронтенду
-- [Финальный отчет по проекту](architecture/FINAL_PROJECT_AUDIT_SUMMARY.md) - Общий итоговый отчет
+### Обзор и детали
+- [Обзор архитектуры](architecture/ARCHITECTURE_OVERVIEW.md) - Общий обзор архитектуры проекта
+- [Архитектура бэкенда](architecture/BACKEND_ARCHITECTURE.md) - Детальная архитектура бэкенда
+- [Архитектура фронтенда](architecture/FRONTEND_ARCHITECTURE.md) - Детальная архитектура фронтенда
+- [Итоги аудита](architecture/PROJECT_AUDIT_SUMMARY.md) - Итоги аудита и улучшений
 
 ## 🔗 Интеграционная документация
 
-### Отчеты по интеграции
-- [Статус интеграции](integration/FINAL_INTEGRATION_STATUS.md) - Текущий статус интеграции
-- [Интеграция D-ID во фронтенд](integration/D_ID_FRONTEND_INTEGRATION_SUMMARY.md) - Краткий отчет
-- [Детальная интеграция D-ID во фронтенд](integration/FRONTEND_D_ID_INTEGRATION.md) - Подробный отчет
-- [Резюме реализации](integration/IMPLEMENTATION_SUMMARY.md) - Общее резюме
-- [Руководство по D-ID File API](integration/D_ID_FILE_API_GUIDE.md) - Документация API
+### Руководства и статус
+- [Руководство по D-ID](integration/D_ID_INTEGRATION_GUIDE.md) - Полное руководство по интеграции D-ID
+- [Статус интеграций](integration/INTEGRATION_STATUS.md) - Статус всех интеграций
 
 ## 🔧 Техническая документация
 
@@ -31,8 +25,7 @@
 - [Руководство по фронтенду](technical/FRONTEND_GUIDE.md) - Документация фронтенда
 - [Руководство по бэкенду](technical/BACKEND_GUIDE.md) - Документация бэкенда
 - [Рабочий процесс Git](technical/GIT_WORKFLOW.md) - Процессы работы с Git
-- [Отчет об очистке](technical/CLEANUP_REPORT.md) - Отчет об очистке проекта
-- [Отчет об удалении защиты](technical/PROTECTION_REMOVED.md) - Детали удаления защиты
+- [История очистки](technical/PROJECT_CLEANUP.md) - История очистки и улучшений проекта
 
 ## 📖 Как использовать документацию
 
