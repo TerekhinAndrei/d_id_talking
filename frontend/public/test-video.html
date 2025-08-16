@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест видео</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .video-container {
+            max-width: 800px;
+            margin: 20px auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        video {
+            width: 100%;
+            height: auto;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .log {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Тест видео файлов</h1>
+    
+    <div class="video-container">
+        <h2>Waiting.mp4</h2>
+        <div class="test-section">
+            <video id="waiting-video" controls autoplay muted loop>
+                <source src="/Waiting.mp4" type="video/mp4">
+                Ваш браузер не поддерживает видео.
+            </video>
+            <br>
+            <button onclick="testVideo('waiting-video')">Тест Waiting.mp4</button>
+            <button onclick="playVideo('waiting-video')">Воспроизвести</button>
+            <button onclick="pauseVideo('waiting-video')">Пауза</button>
+        </div>
+    </div>
+
+    <div class="video-container">
+        <h2>Test.mp4</h2>
+        <div class="test-section">
+            <video id="test-video" controls autoplay muted loop>
+                <source src="/Test.mp4" type="video/mp4">
+                Ваш браузер не поддерживает видео.
+            </video>
+            <br>
+            <button onclick="testVideo('test-video')">Тест Test.mp4</button>
+            <button onclick="playVideo('test-video')">Воспроизвести</button>
+            <button onclick="pauseVideo('test-video')">Пауза</button>
+        </div>
+    </div>
+
+    <div class="video-container">
+        <h2>Логи</h2>
+        <div id="logs" class="log"></div>
+        <button onclick="clearLogs()">Очистить логи</button>
+    </div>
+
+    <script>
+        function log(message) {
+            const logs = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            logs.innerHTML += `[${timestamp}] ${message}\n`;
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        function testVideo(videoId) {
+            const video = document.getElementById(videoId);
+            log(`Тестируем ${videoId}...`);
+            
+            video.addEventListener('loadstart', () => log(`${videoId}: Загрузка началась`));
+            video.addEventListener('loadeddata', () => log(`${videoId}: Данные загружены`));
+            video.addEventListener('canplay', () => log(`${videoId}: Может воспроизводиться`));
+            video.addEventListener('play', () => log(`${videoId}: Воспроизведение началось`));
+            video.addEventListener('pause', () => log(`${videoId}: Пауза`));
+            video.addEventListener('ended', () => log(`${videoId}: Завершено`));
+            video.addEventListener('error', (e) => {
+                log(`${videoId}: ОШИБКА - ${e.target.error ? e.target.error.message : 'Неизвестная ошибка'}`);
+                console.error('Video error:', e.target.error);
+            });
+
+            log(`${videoId}: Src = ${video.src}`);
+            log(`${videoId}: ReadyState = ${video.readyState}`);
+            log(`${videoId}: NetworkState = ${video.networkState}`);
+        }
+
+        function playVideo(videoId) {
+            const video = document.getElementById(videoId);
+            video.play().then(() => {
+                log(`${videoId}: Воспроизведение запущено успешно`);
+            }).catch(e => {
+                log(`${videoId}: Ошибка воспроизведения - ${e.message}`);
+            });
+        }
+
+        function pauseVideo(videoId) {
+            const video = document.getElementById(videoId);
+            video.pause();
+            log(`${videoId}: Пауза`);
+        }
+
+        // Автоматическое тестирование при загрузке
+        window.addEventListener('load', () => {
+            log('Страница загружена, начинаем тестирование...');
+            setTimeout(() => testVideo('waiting-video'), 1000);
+            setTimeout(() => testVideo('test-video'), 2000);
+        });
+    </script>
+</body>
+</html>

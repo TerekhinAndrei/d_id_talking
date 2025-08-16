@@ -3,44 +3,18 @@ import { useState, useCallback, useEffect } from 'react';
 export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
   const [isMuted, setIsMuted] = useState(true);
   const [isWaitingVideoLoaded, setIsWaitingVideoLoaded] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [testMode, setTestMode] = useState(false);
+  const [testStreamActive, setTestStreamActive] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
 
-  // Инициализация видео ожидания
+  // Инициализация видео ожидания (теперь только для заглушки)
   const initializeWaitingVideo = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    console.log('🎬 Initializing waiting video...');
-    
-    // Reset video element
-    video.srcObject = null;
-    video.src = '/Waiting.mp4';
-    video.loop = true;
-    video.muted = true;
-    video.controls = false;
-    
-    // Add event listeners for debugging
-    video.addEventListener('loadstart', () => console.log('📥 Video load started'));
-    video.addEventListener('loadeddata', () => console.log('✅ Video data loaded'));
-    video.addEventListener('canplay', () => console.log('🎯 Video can play'));
-    video.addEventListener('error', (e) => {
-      console.error('❌ Video error:', e, video.error);
-    });
-    
-    // Load and play the video when it's ready
-    video.muted = true;
-    video.load();
-    
-    // Play when data is loaded
-    video.addEventListener('loadeddata', () => {
-      video.play().catch(() => {
-        console.log('🎬 Waiting video will play when ready');
-      });
-    }, { once: true });
-    
-    console.log('🎬 Waiting video initialized');
+    console.log('🎬 Waiting video is handled by placeholder layer');
     setIsWaitingVideoLoaded(true);
+    setIsInitialized(true);
     onVideoReady();
-  }, [videoRef, onVideoReady]);
+  }, [onVideoReady, isInitialized]);
 
   // Обработка перехода к стриму
   const handleStreamTransition = useCallback(async () => {
@@ -48,6 +22,9 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
     if (!video || !stream) return;
 
     console.log('🎬 Transitioning to live stream...');
+    
+    // Сброс состояния инициализации при переходе к стриму
+    setIsInitialized(false);
     
     try {
       // Set new stream
@@ -89,41 +66,13 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
     }
   }, [videoRef, stream, onVideoReady]);
 
-  // Возврат к видео ожидания при отключении стрима
+  // Возврат к видео ожидания при отключении стрима (теперь управляется CSS)
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if ((!stream || !isConnected) && isWaitingVideoLoaded) {
-      console.log('🔄 Returning to waiting video');
-      
-      const transitionToWaiting = async () => {
-        try {
-          video.style.opacity = '0.5';
-          await new Promise(resolve => setTimeout(resolve, 300));
-          
-          video.srcObject = null;
-          video.src = '/Waiting.mp4';
-          video.loop = true;
-          video.muted = true;
-          
-          video.addEventListener('loadeddata', () => {
-            video.play().catch(() => {
-              console.log('🎬 Waiting video will play when ready');
-            });
-          }, { once: true });
-          
-          video.style.opacity = '1';
-          console.log('✅ Returning to waiting video');
-        } catch (error) {
-          console.warn('⚠️ Error returning to waiting video:', error);
-          video.style.opacity = '1';
-        }
-      };
-
-      transitionToWaiting();
+    if (!stream || !isConnected) {
+      console.log('🔄 Returning to waiting video (CSS controlled)');
+      setIsInitialized(false);
     }
-  }, [stream, isConnected, isWaitingVideoLoaded, videoRef]);
+  }, [stream, isConnected]);
 
   // Управление звуком на основе статуса стрима
   useEffect(() => {
@@ -161,10 +110,68 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
     console.log(`🔊 Manual ${newMutedState ? 'muted' : 'unmuted'} video`);
   }, [videoRef]);
 
+  // Тестовые функции для переключения видеослоев
+  const testShowWaiting = useCallback(() => {
+    console.log('🧪 TEST: Показываем видео ожидания');
+    setTestMode(true);
+    setTestStreamActive(false);
+    setIsPlaying(false);
+    
+    // Принудительно перезагружаем видео
+    const video = document.querySelector('.placeholder-video');
+    if (video) {
+      video.load();
+      // Пытаемся воспроизвести с задержкой
+      setTimeout(() => {
+        video.play().then(() => {
+          console.log('✅ Waiting.mp4 успешно запущено');
+          setIsPlaying(true);
+        }).catch(e => {
+          console.log('❌ Не удалось запустить Waiting.mp4:', e);
+          setIsPlaying(false);
+        });
+      }, 100);
+    }
+  }, []);
+
+  const testShowStream = useCallback(() => {
+    console.log('🧪 TEST: Показываем стрим');
+    setTestMode(true);
+    setTestStreamActive(true);
+    setIsPlaying(false);
+    
+    // Принудительно перезагружаем видео
+    const video = document.querySelector('.placeholder-video');
+    if (video) {
+      video.load();
+      // Пытаемся воспроизвести с задержкой
+      setTimeout(() => {
+        video.play().then(() => {
+          console.log('✅ Test.mp4 успешно запущено');
+          setIsPlaying(true);
+        }).catch(e => {
+          console.log('❌ Не удалось запустить Test.mp4:', e);
+          setIsPlaying(false);
+        });
+      }, 100);
+    }
+  }, []);
+
+  // Определяем текущее состояние для отображения
+  const shouldShowStream = testMode ? testStreamActive : (isConnected && stream);
+  const shouldShowWaiting = testMode ? !testStreamActive : (!isConnected || !stream);
+
   return {
     isMuted,
     toggleMute,
     initializeWaitingVideo,
-    handleStreamTransition
+    handleStreamTransition,
+    testShowStream,
+    testShowWaiting,
+    shouldShowStream,
+    shouldShowWaiting,
+    testMode,
+    testStreamActive,
+    isPlaying
   };
 };
