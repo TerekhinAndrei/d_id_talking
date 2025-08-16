@@ -1,17 +1,21 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { apiService } from '../services/api';
+import { useDIdStreaming } from '../hooks/useDIdStreaming';
 import { useDIdMicrophoneTalk } from '../hooks/useDIdMicrophoneTalk';
 
 const DIdStreamingTester = ({ selectedVoice }) => {
+  // Используем основной хук для D-ID streaming
+  const {
+    streamState,
+    createStream: createStreamHook,
+    startStream: startStreamHook,
+    createTalk: createTalkHook,
+    closeStream: closeStreamHook,
+    resetState: resetStreamState
+  } = useDIdStreaming();
+
   const [testState, setTestState] = useState({
     step: 0,
-    streamId: null,
-    sessionId: null,
-    sdpOffer: null,
-    iceServers: null,
-    peerConnection: null,
-    isConnected: false,
-    error: null,
     logs: [],
     talkMode: 'text', // 'text' or 'audio'
     audioUrl: 'https://res.cloudinary.com/daeoqig4w/video/upload/v1754932884/d_id_talking/audio/audio_processed_audio_1754932883244.mp3.mp3'
@@ -47,20 +51,14 @@ const DIdStreamingTester = ({ selectedVoice }) => {
   }, []);
 
   const resetTest = useCallback(() => {
+    resetStreamState();
     setTestState({
       step: 0,
-      streamId: null,
-      sessionId: null,
-      sdpOffer: null,
-      iceServers: null,
-      peerConnection: null,
-      isConnected: false,
-      error: null,
       logs: [],
       talkMode: 'text',
       audioUrl: 'https://res.cloudinary.com/daeoqig4w/video/upload/v1754770303/1-second-of-silence_l1un5v.mp3'
     });
-  }, []);
+  }, [resetStreamState]);
 
   // Step 1: Create a new stream
   const createStream = useCallback(async () => {
@@ -76,220 +74,100 @@ const DIdStreamingTester = ({ selectedVoice }) => {
         if (!imageCheck.ok) {
           addLog(`❌ Изображение не найдено: ${imageUrl}`, 'error');
           addLog('⚠️ Статус: 404 - Resource not found', 'error');
-          setTestState(prev => ({ ...prev, error: 'Изображение не найдено. Проверьте URL.' }));
           return;
         }
         addLog('✅ Изображение доступно', 'success');
       } catch (imageError) {
         addLog(`❌ Ошибка проверки изображения: ${imageError.message}`, 'error');
-        setTestState(prev => ({ ...prev, error: 'Не удалось проверить изображение.' }));
         return;
       }
       
-      const response = await apiService.createDIdStream(imageUrl, 'Test stream from frontend D-ID tester');
+      const result = await createStreamHook(imageUrl);
       
-      if (response.success) {
+      if (result.success) {
         addLog('✅ Stream created successfully!', 'success');
-        addLog(`📊 Stream ID: ${response.stream_id}`, 'info');
-        addLog(`📊 Session ID: ${response.session_id}`, 'info');
-        addLog(`📊 Has SDP Offer: ${!!response.sdp_offer}`, 'info');
-        addLog(`📊 Has ICE Servers: ${!!response.ice_servers}`, 'info');
+        addLog(`📊 Stream ID: ${result.streamId}`, 'info');
+        addLog(`📊 Session ID: ${result.sessionId}`, 'info');
+        addLog(`📊 Has SDP Offer: ${!!result.sdpOffer}`, 'info');
+        addLog(`📊 Has ICE Servers: ${!!result.iceServers}`, 'info');
         
         setTestState(prev => ({
           ...prev,
-          step: 1,
-          streamId: response.stream_id,
-          sessionId: response.session_id,
-          sdpOffer: response.sdp_offer,
-          iceServers: response.ice_servers,
-          error: null
+          step: 1
         }));
-                   } else {
-               let errorMessage = response.error;
-               
-               // Check for specific backend errors
-               if (response.error && response.error.includes('_create_session_if_needed')) {
-                 errorMessage = 'Бэкенд не полностью реализован. Некоторые методы D-ID API отсутствуют.';
-               } else if (response.error && response.error.includes('Authentication failed')) {
-                 errorMessage = 'Ошибка аутентификации D-ID API.';
-               } else if (response.error && response.error.includes('SDP exchange failed')) {
-                 errorMessage = 'D-ID API отклонил запрос. Проверьте формат данных.';
-               }
-               
-               addLog(`❌ Failed to create stream: ${errorMessage}`, 'error');
-               setTestState(prev => ({ ...prev, error: errorMessage }));
-             }
+      } else {
+        addLog(`❌ Failed to create stream: ${result.error}`, 'error');
+      }
     } catch (error) {
       addLog(`❌ Error creating stream: ${error.message}`, 'error');
-      setTestState(prev => ({ ...prev, error: error.message }));
     }
-  }, [addLog]);
+  }, [createStreamHook, addLog]);
 
   // Step 2: Start the stream (WebRTC setup)
   const startStream = useCallback(async () => {
     try {
       addLog('🔗 Step 2: Starting stream with WebRTC...', 'info');
       
-      if (!testState.sdpOffer || !testState.iceServers) {
+      if (!streamState.sdpOffer || !streamState.iceServers) {
         addLog('❌ Missing SDP offer or ICE servers', 'error');
         return;
       }
 
-      // Create WebRTC peer connection
-      const peerConnection = new RTCPeerConnection({ 
-        iceServers: testState.iceServers 
-      });
-
-      // Set up event listeners
-      peerConnection.addEventListener('icecandidate', (event) => {
-        if (event.candidate) {
-          addLog('🧊 ICE candidate generated', 'info');
-          // Submit ICE candidate
-          submitIceCandidate(event.candidate);
-        }
-      });
-
-      peerConnection.addEventListener('iceconnectionstatechange', () => {
-        addLog(`🔗 ICE connection state: ${peerConnection.iceConnectionState}`, 'info');
-        if (peerConnection.iceConnectionState === 'connected') {
-          addLog('✅ WebRTC connection established!', 'success');
-          setTestState(prev => ({ ...prev, isConnected: true }));
-        }
-      });
-
-      peerConnection.addEventListener('track', (event) => {
-        addLog('🎬 Received video track!', 'success');
-        // Handle video stream
-        const videoElement = document.getElementById('test-video');
-        if (videoElement && event.streams[0]) {
-          videoElement.srcObject = event.streams[0];
-        }
-      });
-
-      // Set remote description (SDP offer)
-      await peerConnection.setRemoteDescription({
-        type: 'offer',
-        sdp: testState.sdpOffer
-      });
-
-      // Create answer
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-
-      addLog('📝 SDP answer created', 'info');
-
-      // Submit SDP answer
-      const sdpResponse = await apiService.startDIdStream(
-        testState.streamId,
-        testState.sessionId,
-        answer.sdp
+      const result = await startStreamHook(
+        streamState.streamId,
+        streamState.sessionId,
+        streamState.sdpOffer,
+        streamState.iceServers
       );
 
-                   if (sdpResponse.success) {
-               addLog('✅ SDP answer submitted successfully!', 'success');
-               setTestState(prev => ({
-                 ...prev,
-                 step: 2,
-                 peerConnection,
-                 error: null
-               }));
-             } else {
-               let errorMessage = sdpResponse.error;
-               
-               // Check for specific backend errors
-               if (sdpResponse.error && sdpResponse.error.includes('_create_session_if_needed')) {
-                 errorMessage = 'Бэкенд не полностью реализован. Метод SDP submission отсутствует.';
-               }
-               
-               addLog(`❌ Failed to submit SDP answer: ${errorMessage}`, 'error');
-             }
-
+      if (result.success) {
+        addLog('✅ Stream started successfully!', 'success');
+        setTestState(prev => ({
+          ...prev,
+          step: 2
+        }));
+      } else {
+        addLog(`❌ Failed to start stream: ${result.error}`, 'error');
+      }
     } catch (error) {
       addLog(`❌ Error starting stream: ${error.message}`, 'error');
-      setTestState(prev => ({ ...prev, error: error.message }));
     }
-  }, [testState, addLog]);
-
-  // Submit ICE candidate
-  const submitIceCandidate = useCallback(async (candidate) => {
-    try {
-      console.log('🎬 submitIceCandidate called with:', {
-        streamId: testState.streamId,
-        sessionId: testState.sessionId,
-        candidate: candidate.candidate,
-        sdpMid: candidate.sdpMid,
-        sdpMLineIndex: candidate.sdpMLineIndex
-      });
-      
-      const response = await apiService.submitDIdIceCandidate(
-        testState.streamId,
-        testState.sessionId,
-        candidate.candidate,
-        candidate.sdpMid,
-        candidate.sdpMLineIndex
-      );
-
-                   if (response.success) {
-               addLog('✅ ICE candidate submitted', 'success');
-             } else {
-               let errorMessage = response.error;
-               
-               // Check for specific backend errors
-               if (response.error && response.error.includes('_create_session_if_needed')) {
-                 errorMessage = 'Бэкенд не полностью реализован. Метод ICE submission отсутствует.';
-               }
-               
-               addLog(`❌ Failed to submit ICE candidate: ${errorMessage}`, 'error');
-             }
-    } catch (error) {
-      addLog(`❌ Error submitting ICE candidate: ${error.message}`, 'error');
-    }
-  }, [testState, addLog]);
+  }, [streamState, startStreamHook, addLog]);
 
   // Step 4: Create talk stream
   const createTalk = useCallback(async () => {
     try {
       addLog('🎤 Step 4: Creating talk stream...', 'info');
       
-      // Use text script format that works with D-ID API
-      const textScript = {
-        type: "text",
-        input: "Hello! This is a test message from D-ID streaming.",
-        provider: {
-          type: "microsoft",
-          voice_id: "en-US-JennyNeural"
-        }
-      };
-
-      const response = await apiService.createDIdTalk(
-        testState.streamId,
-        testState.sessionId,
-        textScript
+      const voiceId = selectedVoice?.voice_id || selectedVoice?.id || 'en-US-JennyNeural';
+      
+      const result = await createTalkHook(
+        streamState.streamId,
+        streamState.sessionId,
+        voiceId
       );
 
-      if (response.success) {
+      if (result.success) {
         addLog('✅ Talk stream created successfully!', 'success');
-        addLog(`📝 Text: ${textScript.input}`, 'info');
-        addLog(`📋 Talk ID: ${response.talk_id || 'N/A'}`, 'info');
-        setTestState(prev => ({ ...prev, step: 4, error: null }));
+        addLog(`📝 Voice ID: ${voiceId}`, 'info');
+        setTestState(prev => ({ ...prev, step: 4 }));
       } else {
-        addLog(`❌ Failed to create talk: ${response.error}`, 'error');
-        setTestState(prev => ({ ...prev, error: response.error }));
+        addLog(`❌ Failed to create talk: ${result.error}`, 'error');
       }
     } catch (error) {
       addLog(`❌ Error creating talk: ${error.message}`, 'error');
-      setTestState(prev => ({ ...prev, error: error.message }));
     }
-  }, [testState, addLog]);
+  }, [streamState, selectedVoice, createTalkHook, addLog]);
 
   // Step 4: Create talk stream with audio
   const createTalkAudio = useCallback(async () => {
     try {
       addLog('🎵 Step 4: Creating talk stream with audio...', 'info');
       
+      // Используем API напрямую для аудио, так как в хуке нет специального метода
       const response = await apiService.createDIdTalkAudio(
-        testState.streamId,
-        testState.sessionId,
+        streamState.streamId,
+        streamState.sessionId,
         testState.audioUrl,
         "en-US-JennyNeural"
       );
@@ -298,16 +176,14 @@ const DIdStreamingTester = ({ selectedVoice }) => {
         addLog('✅ Talk stream with audio created successfully!', 'success');
         addLog(`🎵 Audio URL: ${testState.audioUrl}`, 'info');
         addLog(`📋 Talk ID: ${response.talk_id || 'N/A'}`, 'info');
-        setTestState(prev => ({ ...prev, step: 4, error: null }));
+        setTestState(prev => ({ ...prev, step: 4 }));
       } else {
         addLog(`❌ Failed to create talk with audio: ${response.error}`, 'error');
-        setTestState(prev => ({ ...prev, error: response.error }));
       }
     } catch (error) {
       addLog(`❌ Error creating talk with audio: ${error.message}`, 'error');
-      setTestState(prev => ({ ...prev, error: error.message }));
     }
-  }, [testState, addLog]);
+  }, [streamState, testState.audioUrl, addLog]);
 
   // useEffect для управления таймером заглушки
   useEffect(() => {
@@ -397,6 +273,17 @@ const DIdStreamingTester = ({ selectedVoice }) => {
     };
   }, []);
 
+  // useEffect для установки видео потока в элемент
+  useEffect(() => {
+    if (streamState.videoStream) {
+      const videoElement = document.getElementById('test-video');
+      if (videoElement) {
+        videoElement.srcObject = streamState.videoStream;
+        addLog('🎬 Video stream set to video element', 'success');
+      }
+    }
+  }, [streamState.videoStream, addLog]);
+
   // Step 4: Create talk stream with microphone
   const handleCreateTalkMic = useCallback(async () => {
     try {
@@ -404,17 +291,17 @@ const DIdStreamingTester = ({ selectedVoice }) => {
       addLog('🔍 Checking prerequisites...', 'info');
       
       // Проверяем необходимые условия
-      if (!testState.streamId) {
+      if (!streamState.streamId) {
         addLog('❌ Stream ID not available', 'error');
         return;
       }
       
-      if (!testState.sessionId) {
+      if (!streamState.sessionId) {
         addLog('❌ Session ID not available', 'error');
         return;
       }
       
-      if (!testState.isConnected) {
+      if (!streamState.isConnected) {
         addLog('❌ WebRTC connection not established', 'error');
         return;
       }
@@ -428,43 +315,29 @@ const DIdStreamingTester = ({ selectedVoice }) => {
       addLog(`🎵 Selected voice: ${selectedVoice}`, 'info');
       
       // Используем новый хук для микрофонного talk
-      await createTalkMic(testState.streamId, testState.sessionId, selectedVoice);
+      await createTalkMic(streamState.streamId, streamState.sessionId, selectedVoice);
       
     } catch (error) {
       addLog(`❌ Error creating talk with microphone: ${error.message}`, 'error');
       addLog(`🔍 Error details: ${error.stack || 'No stack trace available'}`, 'error');
       setTestState(prev => ({ ...prev, error: error.message }));
     }
-  }, [testState, selectedVoice, createTalkMic, addLog]);
+  }, [streamState, selectedVoice, createTalkMic, addLog]);
 
   // Step 5: Close stream
   const closeStream = useCallback(async () => {
     try {
       addLog('🔚 Step 5: Closing stream...', 'info');
       
-      const response = await apiService.closeDIdStream(
-        testState.streamId,
-        testState.sessionId
-      );
+      await closeStreamHook();
 
-      if (response.success) {
-        addLog('✅ Stream closed successfully!', 'success');
-        setTestState(prev => ({ ...prev, step: 5, error: null }));
-      } else {
-        addLog(`❌ Failed to close stream: ${response.error}`, 'error');
-      }
-
-      // Close WebRTC connection
-      if (testState.peerConnection) {
-        testState.peerConnection.close();
-        addLog('🔚 WebRTC connection closed', 'info');
-      }
+      addLog('✅ Stream closed successfully!', 'success');
+      setTestState(prev => ({ ...prev, step: 0 }));
 
     } catch (error) {
       addLog(`❌ Error closing stream: ${error.message}`, 'error');
-      setTestState(prev => ({ ...prev, error: error.message }));
     }
-  }, [testState, addLog]);
+  }, [closeStreamHook, addLog]);
 
   return (
     <div className="d-id-streaming-tester">
@@ -489,7 +362,7 @@ const DIdStreamingTester = ({ selectedVoice }) => {
         
         <button 
           onClick={createTalk}
-          disabled={testState.step < 2 || !testState.isConnected}
+          disabled={testState.step < 2 || !streamState.isConnected}
           className="test-btn"
         >
           Create Talk (Text)
@@ -497,7 +370,7 @@ const DIdStreamingTester = ({ selectedVoice }) => {
         
         <button 
           onClick={createTalkAudio}
-          disabled={testState.step < 2 || !testState.isConnected}
+          disabled={testState.step < 2 || !streamState.isConnected}
           className="test-btn"
         >
           Create Talk (Audio)
@@ -505,7 +378,7 @@ const DIdStreamingTester = ({ selectedVoice }) => {
         
         <button 
           onClick={handleCreateTalkMic}
-          disabled={testState.step < 2 || !testState.isConnected || !selectedVoice || isMicProcessing}
+          disabled={testState.step < 2 || !streamState.isConnected || !selectedVoice || isMicProcessing}
           className="test-btn"
         >
           {isMicRecording ? 'Stop Talk (Mic)' : 'Create Talk (Mic)'}
@@ -526,7 +399,7 @@ const DIdStreamingTester = ({ selectedVoice }) => {
         
         <button 
           onClick={closeStream}
-          disabled={testState.step < 4}
+          disabled={!streamState.streamId}
           className="test-btn"
         >
           Close Stream
@@ -549,22 +422,22 @@ const DIdStreamingTester = ({ selectedVoice }) => {
           </div>
           <div className="status-item">
             <span className="label">Stream ID:</span>
-            <span className="value">{testState.streamId || 'N/A'}</span>
+            <span className="value">{streamState.streamId || 'N/A'}</span>
           </div>
                            <div className="status-item">
                    <span className="label">Session ID:</span>
                    <span className="value">
-                     {testState.sessionId ? 
-                       testState.sessionId.length > 50 ? 
-                         `${testState.sessionId.substring(0, 50)}...` : 
-                         testState.sessionId 
+                     {streamState.sessionId ? 
+                       streamState.sessionId.length > 50 ? 
+                         `${streamState.sessionId.substring(0, 50)}...` : 
+                         streamState.sessionId 
                        : 'N/A'
                      }
                    </span>
                  </div>
           <div className="status-item">
             <span className="label">WebRTC Connected:</span>
-            <span className="value">{testState.isConnected ? '✅ Yes' : '❌ No'}</span>
+            <span className="value">{streamState.isConnected ? '✅ Yes' : '❌ No'}</span>
           </div>
         </div>
       </div>
