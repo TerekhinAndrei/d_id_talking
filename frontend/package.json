@@ -13,11 +13,16 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.7",
+    "@heroicons/react": "^2.2.0",
+    "@tanstack/react-query": "^5.85.3",
     "axios": "^1.11.0",
+    "framer-motion": "^12.23.12",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "socket.io-client": "^4.7.4",
-    "webrtc-adapter": "^8.2.3"
+    "webrtc-adapter": "^8.2.3",
+    "zustand": "^5.0.7"
   },
   "devDependencies": {
     "@babel/core": "^7.28.0",
