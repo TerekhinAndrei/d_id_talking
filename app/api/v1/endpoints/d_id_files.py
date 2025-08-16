@@ -7,22 +7,15 @@ from fastapi import APIRouter, HTTPException, status, UploadFile, File, Depends
 from typing import List, Dict, Any
 
 from app.models.common import BaseResponse
-from app.core.factory import get_service_container
-from app.core.base import ConfigurationProvider
-from app.core.config import settings as config
+from app.core.endpoint_base import BaseEndpoint
+from app.core.error_handler import ServiceErrorHandler
 from app.core.interfaces import DIdFileUploadRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-def get_services():
-    """Dependency injection for services"""
-    config_provider = ConfigurationProvider(config)
-    container = get_service_container(config_provider)
-    return {
-        "d_id_file_service": container.get_d_id_file_service(),
-        "config_provider": config_provider
-    }
+# Use the base endpoint class to eliminate duplication
+get_services = BaseEndpoint.get_services
 
 @router.post("/upload/image", response_model=BaseResponse)
 async def upload_image_to_d_id(
@@ -35,9 +28,8 @@ async def upload_image_to_d_id(
         
         # Validate file type
         if not file.content_type.startswith('image/'):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File must be an image"
+            raise ServiceErrorHandler.handle_validation_error(
+                "file", "File must be an image"
             )
         
         # Read file content
@@ -71,10 +63,7 @@ async def upload_image_to_d_id(
         raise
     except Exception as e:
         logger.error(f"Unexpected error uploading image to D-ID: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error: {str(e)}"
-        )
+        raise ServiceErrorHandler.handle_service_error(e)
 
 @router.post("/upload/audio", response_model=BaseResponse)
 async def upload_audio_to_d_id(
