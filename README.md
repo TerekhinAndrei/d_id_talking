@@ -19,6 +19,21 @@
 
 ### Установка и запуск
 
+#### Быстрый запуск (рекомендуется)
+```bash
+# Клонирование репозитория
+git clone <repository-url>
+cd talking-head
+
+# Настройка переменных окружения
+cp env.example .env
+# Отредактируйте .env с вашими API ключами
+
+# Запуск всего проекта
+./scripts/start-all.sh
+```
+
+#### Ручная установка
 1. **Клонирование репозитория**
 ```bash
 git clone <repository-url>
@@ -35,7 +50,7 @@ cp env.example .env
 # Отредактируйте .env с вашими API ключами
 
 # Запуск сервера
-python -m uvicorn app.main:app --host 0.0.0.0 --port 3001
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 3. **Настройка frontend**
@@ -43,6 +58,31 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 3001
 cd frontend
 npm install
 npm run dev
+```
+
+#### Управление проектом
+```bash
+# Запуск всего проекта
+./scripts/start-all.sh
+
+# Остановка всего проекта
+./scripts/stop-all.sh
+
+# Перезапуск всего проекта
+./scripts/restart-all.sh
+
+# Проверка статуса
+./scripts/status.sh
+
+# Только бэкенд
+./scripts/start-backend.sh
+./scripts/stop-backend.sh
+./scripts/restart-backend.sh
+
+# Только фронтенд
+./scripts/start-frontend.sh
+./scripts/stop-frontend.sh
+./scripts/restart-frontend.sh
 ```
 
 ## 📚 Документация
