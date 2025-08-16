@@ -204,9 +204,32 @@ class Settings(BaseSettings):
         if not self.is_d_id_configured():
             raise ValueError("D-ID API key не настроен")
         
-        # D-ID API ключ уже в правильном формате
+        # Handle different API key formats
+        api_key = self.D_ID_API_KEY.strip()
+        
+        # Normalize the API key to Basic format
+        if api_key.lower().startswith("basic "):
+            # Already in Basic format
+            auth_header = api_key
+        elif ":" in api_key:
+            # Format: email:token
+            left, right = api_key.split(":", 1)
+            try:
+                # Try to decode left part as base64
+                import base64
+                email = base64.b64decode(left).decode("utf-8")
+                token = base64.b64encode(f"{email}:{right}".encode("utf-8")).decode("utf-8")
+                auth_header = f"Basic {token}"
+            except Exception:
+                # If decoding fails, encode the whole key
+                token = base64.b64encode(api_key.encode("utf-8")).decode("utf-8")
+                auth_header = f"Basic {token}"
+        else:
+            # Plain key, add Basic prefix
+            auth_header = f"Basic {api_key}"
+        
         return {
-            "Authorization": f"Basic {self.D_ID_API_KEY}",
+            "Authorization": auth_header,
             "Content-Type": "application/json",
             "Accept": "application/json"
         }

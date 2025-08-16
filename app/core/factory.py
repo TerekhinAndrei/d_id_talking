@@ -7,13 +7,14 @@ import logging
 
 from app.core.interfaces import (
     ITTSService, IVideoGenerator, IStorageService, ITaskManager, 
-    IAudioProcessor, IConfigurationProvider, IHTTPClient
+    IAudioProcessor, IConfigurationProvider, IHTTPClient, IDIdFileService
 )
 from app.core.base import (
     AsyncHTTPClient, ConfigurationProvider, TaskManager, AudioProcessor
 )
 from app.services.elevenlabs_service import ElevenLabsService
 from app.services.d_id_service import DIdService
+from app.services.d_id_file_service import DIdFileService
 from app.services.d_id_websocket_service import DIdWebSocketService
 from app.services.webrtc_service import WebRTCService
 
@@ -80,6 +81,19 @@ class ServiceFactory:
         
         return self._services[service_key]
     
+    def get_d_id_file_service(self) -> IDIdFileService:
+        """Get D-ID file service instance"""
+        service_key = "d_id_file_service"
+        
+        if service_key not in self._services:
+            self.logger.info("Creating D-ID file service")
+            self._services[service_key] = DIdFileService(
+                config_provider=self.config_provider,
+                http_client=self.http_client
+            )
+        
+        return self._services[service_key]
+    
     def get_task_manager(self) -> ITaskManager:
         """Get task manager instance"""
         service_key = "task_manager"
@@ -126,6 +140,7 @@ class ServiceFactory:
             "tts": self.get_tts_service,
             "video_generator": self.get_video_generator,
             "storage": self.get_storage_service,
+            "d_id_file": self.get_d_id_file_service,
             "task_manager": self.get_task_manager,
             "audio_processor": self.get_audio_processor,
         }
@@ -166,6 +181,14 @@ class ServiceFactory:
             self.logger.error(f"Storage service initialization failed: {e}")
             results["storage"] = {"status": "error", "message": str(e)}
         
+        # Test D-ID file service
+        try:
+            d_id_file_service = self.get_d_id_file_service()
+            results["d_id_file"] = await d_id_file_service.test_authentication()
+        except Exception as e:
+            self.logger.error(f"D-ID file service initialization failed: {e}")
+            results["d_id_file"] = {"status": "error", "message": str(e)}
+        
         self.logger.info("Service initialization completed")
         return results
     
@@ -204,6 +227,10 @@ class ServiceContainer:
     def get_storage_service(self) -> IStorageService:
         """Get storage service"""
         return self.factory.get_storage_service()
+    
+    def get_d_id_file_service(self) -> IDIdFileService:
+        """Get D-ID file service"""
+        return self.factory.get_d_id_file_service()
     
     def get_task_manager(self) -> ITaskManager:
         """Get task manager"""
@@ -270,3 +297,9 @@ def get_audio_processor(config_provider: IConfigurationProvider) -> IAudioProces
     """Get audio processor instance"""
     container = get_service_container(config_provider)
     return container.get_audio_processor()
+
+
+def get_d_id_file_service(config_provider: IConfigurationProvider) -> IDIdFileService:
+    """Get D-ID file service instance"""
+    container = get_service_container(config_provider)
+    return container.get_d_id_file_service()

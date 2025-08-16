@@ -188,6 +188,8 @@ class ConfigurationProvider(IConfigurationProvider):
             return self.settings.is_elevenlabs_configured()
         elif service_name == "d_id":
             return self.settings.is_d_id_configured()
+        elif service_name == "d_id_file":
+            return self.settings.is_d_id_configured()  # Uses same config as d_id
         elif service_name == "cloudinary":
             return self.settings.is_cloudinary_configured()
         return False
@@ -198,6 +200,8 @@ class ConfigurationProvider(IConfigurationProvider):
             return self.settings.get_elevenlabs_headers()
         elif service_name == "d_id":
             return self.settings.get_d_id_headers()
+        elif service_name == "d_id_file":
+            return self.settings.get_d_id_headers()  # Uses same headers as d_id
         else:
             return {}
 

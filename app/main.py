@@ -1,5 +1,6 @@
 """
 Refactored main application following SOLID principles
+PROTECTION REMOVED - ALL CHANGES ALLOWED
 """
 
 import os

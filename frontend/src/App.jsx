@@ -12,6 +12,7 @@ import Features from './components/Features';
 import Technologies from './components/Technologies';
 import StatusGrid from './components/StatusGrid';
 import ElevenLabsTester from './components/ElevenLabsTester';
+import StorageInfo from './components/StorageInfo';
 
 import DIdStreamingTester from './components/DIdStreamingTester';
 
@@ -25,6 +26,7 @@ import { DEFAULT_AVATAR_URL, DEFAULT_VOICE_ID } from './constants';
 
 // Services
 import { apiService } from './services/api';
+import { fileService } from './services/FileService';
 
 function App() {
   const [selectedImage, setSelectedImage] = useState(null);
@@ -38,6 +40,10 @@ function App() {
   // Video streaming state
   const [videoStream, setVideoStream] = useState(null);
   const [isVideoReady, setIsVideoReady] = useState(false);
+  
+  // File upload state
+  const [uploadedImageUrl, setUploadedImageUrl] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
   
   // Microphone streaming state (disabled for D-ID streaming)
   // const [microphoneStatus, setMicrophoneStatus] = useState('idle');
@@ -64,11 +70,25 @@ function App() {
     setSelectedImage(file);
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
+    setUploadError(null);
   };
 
   const handleImageRemove = () => {
     setSelectedImage(null);
     setPreviewUrl(DEFAULT_AVATAR_URL);
+    setUploadedImageUrl(null);
+    setUploadError(null);
+  };
+
+  const handleImageUploadSuccess = (result) => {
+    console.log('✅ Image uploaded successfully:', result);
+    setUploadedImageUrl(result.data?.url || result.data?.secure_url);
+    setUploadError(null);
+  };
+
+  const handleImageUploadError = (error) => {
+    console.error('❌ Image upload failed:', error);
+    setUploadError(error);
   };
 
   const handleVoiceChange = (event) => {
@@ -98,55 +118,6 @@ function App() {
     // setMicrophoneStatus(status);
   };
 
-  const uploadImageToCloudinary = async (imageFile) => {
-    try {
-      console.log('📤 Загружаем изображение в Cloudinary...');
-      
-      const formData = new FormData();
-      formData.append('file', imageFile);
-      
-      const uploadResponse = await apiService.uploadToCloudinary(formData);
-      console.log('📥 Получен ответ от Cloudinary:', uploadResponse);
-      
-      if (uploadResponse.success && uploadResponse.url) {
-        console.log('✅ Изображение загружено в Cloudinary:', uploadResponse.url);
-        return uploadResponse.url;
-      } else {
-        throw new Error('Не удалось загрузить изображение в Cloudinary');
-      }
-    } catch (error) {
-      console.error('❌ Ошибка загрузки изображения в Cloudinary:', error);
-      throw error;
-    }
-  };
-
-  const uploadDefaultImage = async () => {
-    try {
-      console.log('📤 Загружаем дефолтное изображение в Cloudinary...');
-      
-      // Получаем дефолтное изображение как файл
-      const defaultImageUrl = `${window.location.origin}${DEFAULT_AVATAR_URL}`;
-      console.log('📸 Загружаем дефолтное изображение с URL:', defaultImageUrl);
-      console.log('📸 window.location.origin:', window.location.origin);
-      console.log('📸 DEFAULT_AVATAR_URL:', DEFAULT_AVATAR_URL);
-      
-      const response = await fetch(defaultImageUrl);
-      console.log('📸 Fetch response status:', response.status);
-      console.log('📸 Fetch response ok:', response.ok);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch default image: ${response.status}`);
-      }
-      
-      const blob = await response.blob();
-      const file = new File([blob], 'default_avatar.jpg', { type: 'image/jpeg' });
-      
-      return await uploadImageToCloudinary(file);
-    } catch (error) {
-      console.error('❌ Ошибка загрузки дефолтного изображения:', error);
-      throw error;
-    }
-  };
-
   const handleCreateStream = async () => {
     try {
       setIsCreating(true);
@@ -154,13 +125,14 @@ function App() {
       
       // Upload image to Cloudinary
       let imageUrl;
-      if (selectedImage) {
-        console.log('📸 Загружаем выбранное пользователем изображение в Cloudinary...');
-        imageUrl = await uploadImageToCloudinary(selectedImage);
-      } else {
-        console.log('📸 Загружаем дефолтное изображение в Cloudinary...');
-        imageUrl = await uploadDefaultImage();
-      }
+              if (selectedImage) {
+          console.log('📸 Загружаем выбранное пользователем изображение...');
+          const uploadResult = await fileService.uploadImage(selectedImage);
+          imageUrl = uploadResult.data?.url || uploadResult.data?.secure_url;
+        } else {
+          console.log('📸 Используем дефолтное изображение...');
+          imageUrl = uploadedImageUrl || DEFAULT_AVATAR_URL;
+        }
       
       console.log('📸 Используем изображение:', selectedImage ? 'загруженное пользователем' : 'по умолчанию');
       console.log('📸 Создание стрима с изображением:', imageUrl);
@@ -265,7 +237,17 @@ function App() {
                 previewUrl={previewUrl}
                 onImageSelect={handleImageSelect}
                 onImageRemove={handleImageRemove}
+                onUploadSuccess={handleImageUploadSuccess}
+                onUploadError={handleImageUploadError}
               />
+              {uploadError && (
+                <div className="alert alert-danger mt-3">
+                  Ошибка загрузки изображения: {uploadError.message}
+                </div>
+              )}
+              
+              {/* Информация о хранилищах */}
+              <StorageInfo />
             </div>
 
             {/* Video Player */}

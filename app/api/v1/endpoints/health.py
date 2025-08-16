@@ -3,6 +3,10 @@ from pydantic import BaseModel
 from typing import Dict, Any
 import time
 
+from app.core.factory import get_service_container
+from app.core.base import ConfigurationProvider
+from app.core.config import settings as config
+
 router = APIRouter()
 
 
@@ -72,4 +76,29 @@ async def config_check() -> Dict[str, Any]:
         "status": "config_loaded",
         "timestamp": time.time(),
         "config": config_status
-    } 
+    }
+
+
+@router.get("/health/d-id")
+async def d_id_health_check() -> Dict[str, Any]:
+    """
+    Test D-ID service authentication
+    """
+    try:
+        config_provider = ConfigurationProvider(config)
+        container = get_service_container(config_provider)
+        d_id_service = container.get_video_generator()
+        
+        auth_result = await d_id_service.test_authentication()
+        
+        return {
+            "status": "d_id_test_completed",
+            "timestamp": time.time(),
+            "d_id_result": auth_result
+        }
+    except Exception as e:
+        return {
+            "status": "d_id_test_failed",
+            "timestamp": time.time(),
+            "error": str(e)
+        } 

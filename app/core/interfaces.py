@@ -331,3 +331,52 @@ class IHTTPClient(ABC):
     ) -> Dict[str, Any]:
         """Make HTTP request"""
         pass
+
+# ============================================================================
+# D-ID File Management Interfaces
+# ============================================================================
+
+@dataclass
+class DIdFileUploadRequest:
+    """D-ID file upload request"""
+    file_data: bytes
+    filename: str
+    content_type: str
+
+
+@dataclass
+class DIdFileUploadResponse:
+    """D-ID file upload response"""
+    file_id: str
+    url: str
+    created_at: str
+    expires_at: Optional[str] = None
+
+
+class IDIdFileService(ABC):
+    """Interface for D-ID file management services"""
+    
+    @abstractmethod
+    async def upload_image(self, request: DIdFileUploadRequest) -> DIdFileUploadResponse:
+        """Upload image to D-ID temporary storage"""
+        pass
+    
+    @abstractmethod
+    async def upload_audio(self, request: DIdFileUploadRequest) -> DIdFileUploadResponse:
+        """Upload audio file to D-ID temporary storage"""
+        pass
+    
+    @abstractmethod
+    async def delete_image(self, file_id: str) -> bool:
+        """Delete image from D-ID storage"""
+        pass
+    
+    @abstractmethod
+    async def delete_audio(self, file_id: str) -> bool:
+        """Delete audio file from D-ID storage"""
+        pass
+    
+    @abstractmethod
+    async def test_authentication(self) -> Dict[str, Any]:
+        """Test D-ID API authentication"""
+        pass

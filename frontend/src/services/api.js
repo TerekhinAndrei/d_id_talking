@@ -222,6 +222,86 @@ class ApiService {
     });
   }
 
+  // D-ID File API (New)
+  async uploadImageToDId(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return this.request('/d-id-files/upload/image', {
+      method: 'POST',
+      headers: {}, // Let browser set Content-Type for FormData
+      body: formData,
+    });
+  }
+
+  async uploadAudioToDId(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return this.request('/d-id-files/upload/audio', {
+      method: 'POST',
+      headers: {}, // Let browser set Content-Type for FormData
+      body: formData,
+    });
+  }
+
+  async deleteImageFromDId(fileId) {
+    return this.request(`/d-id-files/images/${fileId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async deleteAudioFromDId(fileId) {
+    return this.request(`/d-id-files/audios/${fileId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async testDIdAuthentication() {
+    return this.request('/d-id-files/test-auth');
+  }
+
+  // Hybrid Storage API (with D-ID option)
+  async uploadImageHybrid(file, useDId = false) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const url = useDId 
+      ? '/storage/upload/image?use_d_id=true'
+      : '/storage/upload/image';
+
+    return this.request(url, {
+      method: 'POST',
+      headers: {}, // Let browser set Content-Type for FormData
+      body: formData,
+    });
+  }
+
+  async uploadAudioHybrid(file, useDId = false) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const url = useDId 
+      ? '/storage/upload/audio?use_d_id=true'
+      : '/storage/upload/audio';
+
+    return this.request(url, {
+      method: 'POST',
+      headers: {}, // Let browser set Content-Type for FormData
+      body: formData,
+    });
+  }
+
+  async deleteFileHybrid(fileId, storageType = 'cloudinary') {
+    const url = storageType === 'd_id'
+      ? `/storage/files/${fileId}?storage_type=d_id`
+      : `/storage/files/${fileId}`;
+
+    return this.request(url, {
+      method: 'DELETE',
+    });
+  }
+
   // Video Generation
   async generateVideo(imageFile, audioFile, voiceId = null, settings = null) {
     const formData = new FormData();

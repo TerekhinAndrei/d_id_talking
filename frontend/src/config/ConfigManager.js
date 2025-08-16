@@ -13,9 +13,23 @@ export class ConfigManager {
   loadConfig() {
     const defaultConfig = {
       api: {
-        baseUrl: process.env.REACT_APP_API_BASE_URL || '/api/v1',
+        baseUrl: import.meta.env.VITE_API_BASE_URL || '/api/v1',
         timeout: 30000,
         retries: 3
+      },
+      storage: {
+        defaultProvider: 'd_id', // 'cloudinary' or 'd_id'
+        dId: {
+          enabled: true,
+          autoCleanup: true,
+          maxFileSize: 10 * 1024 * 1024, // 10MB
+          supportedImageTypes: ['image/jpeg', 'image/png'],
+          supportedAudioTypes: ['audio/mpeg', 'audio/wav', 'audio/webm', 'audio/ogg']
+        },
+        cloudinary: {
+          enabled: true,
+          fallback: true
+        }
       },
       streaming: {
         defaultImageUrl: '/default_avatar.jpg',
@@ -202,6 +216,55 @@ export class ConfigManager {
    */
   getApiConfig() {
     return this.getSection('api');
+  }
+
+  /**
+   * Получает конфигурацию хранилища
+   */
+  getStorageConfig() {
+    return this.getSection('storage');
+  }
+
+  /**
+   * Получает провайдера хранилища по умолчанию
+   */
+  getDefaultStorageProvider() {
+    return this.get('storage.defaultProvider', 'd_id');
+  }
+
+  /**
+   * Проверяет, включен ли D-ID провайдер
+   */
+  isDIdEnabled() {
+    return this.get('storage.dId.enabled', true);
+  }
+
+  /**
+   * Проверяет, включен ли Cloudinary провайдер
+   */
+  isCloudinaryEnabled() {
+    return this.get('storage.cloudinary.enabled', true);
+  }
+
+  /**
+   * Получает максимальный размер файла для D-ID
+   */
+  getDIdMaxFileSize() {
+    return this.get('storage.dId.maxFileSize', 10 * 1024 * 1024);
+  }
+
+  /**
+   * Получает поддерживаемые типы изображений для D-ID
+   */
+  getDIdSupportedImageTypes() {
+    return this.get('storage.dId.supportedImageTypes', ['image/jpeg', 'image/png']);
+  }
+
+  /**
+   * Получает поддерживаемые типы аудио для D-ID
+   */
+  getDIdSupportedAudioTypes() {
+    return this.get('storage.dId.supportedAudioTypes', ['audio/mpeg', 'audio/wav', 'audio/webm', 'audio/ogg']);
   }
 
   /**

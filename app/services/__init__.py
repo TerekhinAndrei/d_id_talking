@@ -25,6 +25,14 @@ from .d_id_service import (
     DIdConfig
 )
 
+# D-ID File Service
+from .d_id_file_service import (
+    DIdFileService,
+    DIdFileServiceError,
+    DIdFileConfigurationError,
+    DIdFileAPIError
+)
+
 # Storage Service
 from .storage_service import (
     LocalStorageService,
@@ -57,6 +65,12 @@ __all__ = [
     "DIdProviderType",
     "DIdScript",
     "DIdConfig",
+    
+    # D-ID File
+    "DIdFileService",
+    "DIdFileServiceError",
+    "DIdFileConfigurationError",
+    "DIdFileAPIError",
     
     # Storage
     "LocalStorageService",
