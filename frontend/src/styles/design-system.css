@@ -217,6 +217,48 @@ body {
   .lg\:col-span-2 { grid-column: span 2 / span 2; }
 }
 
+/* ===== VIDEO PLAYER STYLES ===== */
+.video-player {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.video-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--color-shadow-lg);
+}
+
+.video-element {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity var(--transition-normal);
+}
+
+.video-default {
+  opacity: 1;
+  z-index: 1;
+}
+
+.video-stream {
+  opacity: 0;
+  z-index: 2;
+}
+
+.video-stream.active {
+  opacity: 1;
+}
+
 /* ===== COMPONENT STYLES ===== */
 .btn {
   display: inline-flex;
