@@ -1,5 +1,6 @@
 import React from 'react';
 import Layout from './components/layout/Layout';
+import Header from './components/Header';
 import VideoPlayer from './components/VideoPlayer';
 import { Card, CardContent } from './components/ui/Card';
 
@@ -10,18 +11,13 @@ const App: React.FC = () => {
 
   return (
     <Layout onNewStream={handleNewStream}>
+      <Header />
+      
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content */}
         <div className="lg:col-span-2">
           <Card>
             <CardContent>
-              <h2 className="text-3xl font-bold text-primary mb-4">
-                Welcome to Talking Head
-              </h2>
-              <p className="text-lg text-secondary mb-6">
-                Create AI-powered video streams with real-time voice synthesis and facial animation.
-              </p>
-              
               <VideoPlayer 
                 defaultVideoSrc="/Waiting.mp4"
                 streamVideoSrc={null}
