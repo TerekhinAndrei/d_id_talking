@@ -17,6 +17,7 @@ import DIdStreamingTester from './components/DIdStreamingTester';
 // import VoiceSelector from './components/new/VoiceSelector';
 // import StreamControls from './components/new/StreamControls';
 // import TestingPanel from './components/new/TestingPanel';
+import StatusPanel from './components/new/StatusPanel';
 
 function AppNew() {
   // === STORES ===
@@ -323,12 +324,22 @@ function AppNew() {
           </AnimatePresence>
         </motion.div>
 
+        {/* Панель статуса новой архитектуры */}
+        <motion.div 
+          className="status-section"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+        >
+          <StatusPanel />
+        </motion.div>
+
         {/* Кнопка сброса */}
         <motion.div 
           className="reset-section"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
+          transition={{ duration: 0.5, delay: 0.5 }}
         >
           <motion.button 
             className="reset-btn"
