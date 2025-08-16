@@ -47,9 +47,16 @@ npm run dev
 
 ## 📚 Документация
 
-- **[Руководство по Backend](BACKEND_GUIDE.md)** - настройка и разработка backend
-- **[Руководство по Frontend](FRONTEND_GUIDE.md)** - настройка и разработка frontend  
-- **[Git Workflow](GIT_WORKFLOW.md)** - организация веток и процесса разработки
+Полная документация проекта организована в папке [docs/](docs/README.md):
+
+- **[Архитектурная документация](docs/architecture/)** - аудиты и отчеты по архитектуре
+- **[Интеграционная документация](docs/integration/)** - отчеты по интеграции сервисов
+- **[Техническая документация](docs/technical/)** - руководства и технические детали
+
+### Быстрые ссылки
+- [Руководство по Backend](docs/technical/BACKEND_GUIDE.md) - настройка и разработка backend
+- [Руководство по Frontend](docs/technical/FRONTEND_GUIDE.md) - настройка и разработка frontend  
+- [Git Workflow](docs/technical/GIT_WORKFLOW.md) - организация веток и процесса разработки
 
 ## 🎯 Основные возможности
 

@@ -30,4 +30,14 @@ Thumbs.db
 uploads/
 
 # Test files
-test_files/ 
+test_files/
+
+# Pytest cache
+.pytest_cache/
+
+# Node modules (for puppeteer scripts)
+scripts/puppeteer_runner/node_modules/
+
+# Temporary files
+*.tmp
+*.temp 
