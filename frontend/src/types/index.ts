@@ -135,3 +135,30 @@ export interface VoiceEvent {
   data?: any;
   timestamp: Date;
 }
+
+// ===== D-ID API TYPES =====
+
+export interface DIdFileUploadResponse {
+  file_id: string;
+  url: string;
+  created_at: string;
+  expires_at?: string;
+}
+
+export interface DIdStreamResponse {
+  stream_id: string;
+  session_id: string;
+  sdp_offer: string;
+  ice_servers: any[];
+}
+
+export interface DIdTalkResponse {
+  talk_id: string;
+  status: string;
+}
+
+export interface DIdAuthenticationResponse {
+  authenticated: boolean;
+  message: string;
+  data?: any;
+}

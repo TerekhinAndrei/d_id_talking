@@ -1,6 +1,7 @@
 import React from 'react';
 import Header from './components/Header';
 import VideoPlayer from './components/VideoPlayer';
+import DIdApiTester from './components/DIdApiTester';
 
 const App: React.FC = () => {
   return (
@@ -8,12 +9,15 @@ const App: React.FC = () => {
       <div className="container">
         <Header />
         
-        <VideoPlayer 
-          defaultVideoSrc="/Waiting.mp4"
-          streamVideoSrc={null}
-          isStreamActive={false}
-          className="mt-8"
-        />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+          <VideoPlayer 
+            defaultVideoSrc="/Waiting.mp4"
+            streamVideoSrc={null}
+            isStreamActive={false}
+          />
+          
+          <DIdApiTester />
+        </div>
       </div>
     </div>
   );
