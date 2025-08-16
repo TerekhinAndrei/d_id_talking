@@ -2,18 +2,8 @@ import React, { useState, useRef } from 'react';
 import './App.css';
 
 // Components
-import Header from './components/Header';
-import ImageUpload from './components/ImageUpload';
-import VoiceSelector from './components/VoiceSelector';
-import CreateStreamButton from './components/CreateStreamButton';
 import VideoPlayer from './components/VideoPlayer';
-// import MicrophoneInput from './components/MicrophoneInput';
-import Features from './components/Features';
-import Technologies from './components/Technologies';
-import StatusGrid from './components/StatusGrid';
 import ElevenLabsTester from './components/ElevenLabsTester';
-import StorageInfo from './components/StorageInfo';
-
 import DIdStreamingTester from './components/DIdStreamingTester';
 
 // Hooks
@@ -221,191 +211,75 @@ function App() {
   return (
     <div className="App">
       <div className="container">
-        <Header />
+        {/* Заголовок приложения */}
+        <div className="app-header">
+          <h1 className="app-title">СОЗДАНИЕ АВАТАРА</h1>
+          <p className="app-subtitle">Интерактивные видео-стримы с анимированными аватарами</p>
+        </div>
 
-        {/* Block 1: Image Selection + Video */}
-        <div className="block-1">
-          <div className="image-video-container">
-            {/* Секция выбора изображения */}
-            <div className="image-section">
-              <h2>Изображение (необязательно)</h2>
-              <p className="text-muted mb-3">
-                Загрузите изображение для стрима или используйте изображение по умолчанию.
-              </p>
-              <ImageUpload
-                selectedImage={selectedImage}
-                previewUrl={previewUrl}
-                onImageSelect={handleImageSelect}
-                onImageRemove={handleImageRemove}
-                onUploadSuccess={handleImageUploadSuccess}
-                onUploadError={handleImageUploadError}
-              />
-              {uploadError && (
-                <div className="alert alert-danger mt-3">
-                  Ошибка загрузки изображения: {uploadError.message}
-                </div>
-              )}
+        {/* Основной видеоплеер с элементами управления */}
+        <div className="main-video-section">
+          <VideoPlayer
+            stream={streamState.videoStream}
+            isConnected={streamState.isConnected && streamState.isActive}
+            connectionStatus={streamState.status}
+            onVideoReady={() => setIsVideoReady(true)}
+            className="main-video-player"
+            isStreamActive={streamState.isConnected && streamState.isActive && streamState.videoStream}
+            // Элементы управления
+            selectedImage={selectedImage}
+            previewUrl={previewUrl}
+            onImageSelect={handleImageSelect}
+            onImageRemove={handleImageRemove}
+            onUploadSuccess={handleImageUploadSuccess}
+            onUploadError={handleImageUploadError}
+            uploadError={uploadError}
+            selectedVoice={selectedVoice}
+            voices={voices}
+            loadingVoices={loadingVoices}
+            voicesError={voicesError}
+            isPlaying={isPlaying}
+            onVoiceChange={handleVoiceChange}
+            onPlayVoice={handlePlayVoice}
+            onRetryVoices={retryFetchVoices}
+            isCreating={isCreating}
+            hasAudioTrack={!!streamState.audioStream}
+            onCreateStream={handleCreateStream}
+            onCloseStream={handleCloseStream}
+          />
+        </div>
+
+        {/* Панель тестирования */}
+        <div className="testing-section">
+          <div className="section-header">
+            <h2>Панель тестирования</h2>
+            <div className="tester-buttons">
+              <button 
+                className="toggle-tester-btn"
+                onClick={() => setShowElevenLabsTester(!showElevenLabsTester)}
+              >
+                {showElevenLabsTester ? 'Скрыть' : 'Показать'} ElevenLabs Тестер
+              </button>
               
-              {/* Информация о хранилищах */}
-              <StorageInfo />
-            </div>
-
-            {/* Video Player */}
-            <div className="video-section">
-              <VideoPlayer
-                stream={streamState.videoStream}
-                isConnected={streamState.isConnected && streamState.isActive}
-                connectionStatus={streamState.status}
-                onVideoReady={() => setIsVideoReady(true)}
-                className="main-video-player"
-                isStreamActive={streamState.isConnected && streamState.isActive && streamState.videoStream}
-              />
+              <button 
+                className="toggle-tester-btn"
+                onClick={() => setShowDIdStreamingTester(!showDIdStreamingTester)}
+              >
+                {showDIdStreamingTester ? 'Скрыть' : 'Показать'} D-ID Streaming Тестер
+              </button>
             </div>
           </div>
-        </div>
-
-        {/* Block 2: Stream Controls */}
-        <div className="block-2">
-          <div className="stream-controls">
-            <div className="controls-header">
-              <h2>Инструменты управления стримом</h2>
-            </div>
-            
-            <div className="controls-row">
-              {/* Кнопка создания стрима */}
-              <div className="control-item create-stream-item">
-                <CreateStreamButton
-                  selectedImage={selectedImage}
-                  selectedVoice={selectedVoice}
-                  isCreating={isCreating}
-                  isStreamActive={streamState.isConnected && streamState.isActive}
-                  hasAudioTrack={!!streamState.audioStream}
-                  onCreateStream={handleCreateStream}
-                  onCloseStream={handleCloseStream}
-                />
-              </div>
-
-              {/* Выбор голоса */}
-              <div className="control-item voice-item">
-                <label>Голос:</label>
-                <VoiceSelector
-                  selectedVoice={selectedVoice}
-                  voices={voices}
-                  loadingVoices={loadingVoices}
-                  voicesError={voicesError}
-                  isPlaying={isPlaying}
-                  onVoiceChange={handleVoiceChange}
-                  onPlayVoice={handlePlayVoice}
-                  onRetryVoices={retryFetchVoices}
-                />
-              </div>
-
-              {/* Микрофон - скрыт для D-ID стриминга */}
-              {/* <div className="control-item microphone-item">
-                <label>Микрофон:</label>
-                <MicrophoneInput
-                  ref={microphoneRef}
-                  voiceId={selectedVoice}
-                  voiceName={voices.find(v => v.voice_id === selectedVoice)?.name}
-                  onAudioReceived={handleAudioReceived}
-                  onError={handleMicrophoneError}
-                  onStatusChange={handleMicrophoneStatusChange}
-                  autoPlay={false}
-                  autoInitialize={false}
-                  chunkDuration={2000}
-                />
-                <p className="text-muted mt-2">
-                  ℹ️ Микрофон будет автоматически активирован при создании стрима
-                </p>
-              </div> */}
-
-              {/* Статус микрофона */}
-              {/* {microphoneStatus !== 'idle' && (
-                <div className="control-item status-item">
-                  <span className="status-label">Статус:</span>
-                  <span className={`status-value ${microphoneStatus}`}>
-                    {microphoneStatus}
-                  </span>
-                  {processedAudio && (
-                    <span className="audio-info">
-                      ({processedAudio.size} байт)
-                    </span>
-                  )}
-                </div>
-              )} */}
-            </div>
-          </div>
-        </div>
-
-        {/* Block 3: Other Sections */}
-        <div className="block-3">
-          {/* Статус стрима */}
-          {streamState.status !== 'idle' && (
-            <div className="section">
-              <h2>Статус стрима</h2>
-              <div className={`stream-status ${streamState.status}`}>
-                <p><strong>Статус:</strong> {streamState.status}</p>
-                {streamState.streamId && (
-                  <p><strong>Stream ID:</strong> {streamState.streamId}</p>
-                )}
-                {streamState.error && (
-                  <p className="error"><strong>Ошибка:</strong> {streamState.error}</p>
-                )}
-                {streamState.isConnected && (
-                  <button 
-                    className="btn btn-secondary"
-                    onClick={handleCloseStream}
-                  >
-                    Закрыть стрим
-                  </button>
-                )}
-              </div>
-            </div>
+          
+          {showElevenLabsTester && (
+            <ElevenLabsTester 
+              voices={voices}
+              loadingVoices={loadingVoices}
+            />
           )}
-
-          {/* Testing Panel Section */}
-          <div className="section">
-            <div className="section-header">
-              <h2>Панель тестирования</h2>
-              <div className="tester-buttons">
-                <button 
-                  className="toggle-tester-btn"
-                  onClick={() => setShowElevenLabsTester(!showElevenLabsTester)}
-                >
-                  {showElevenLabsTester ? 'Скрыть' : 'Показать'} ElevenLabs Тестер
-                </button>
-                
-                <button 
-                  className="toggle-tester-btn"
-                  onClick={() => setShowDIdStreamingTester(!showDIdStreamingTester)}
-                >
-                  {showDIdStreamingTester ? 'Скрыть' : 'Показать'} D-ID Streaming Тестер
-                </button>
-              </div>
-            </div>
-            
-            {showElevenLabsTester && (
-              <ElevenLabsTester 
-                voices={voices}
-                loadingVoices={loadingVoices}
-              />
-            )}
-            
-                  {showDIdStreamingTester && (
-        <DIdStreamingTester selectedVoice={selectedVoice} />
-      )}
-
-            {/* Доп. тестеры доступны по кнопке выше; основной флоу не требует доп. кликов */}
-          </div>
-
-          <div className="section">
-            <h2>Добро пожаловать</h2>
-            <p>Это приложение для создания интерактивных видео-стримов с использованием D-ID API и ElevenLabs.</p>
-          </div>
-
-          <StatusGrid />
-          <Features />
-          <Technologies />
+          
+          {showDIdStreamingTester && (
+            <DIdStreamingTester selectedVoice={selectedVoice} />
+          )}
         </div>
       </div>
     </div>

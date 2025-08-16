@@ -96,38 +96,30 @@ const VoiceSelector = ({
   // Show ElevenLabs processing state
   const isActuallyPlaying = isPlaying || isElevenLabsProcessing;
 
-  return (
-    <div className="voice-selection-container">
+    return (
       <div className="voice-controls">
-        <div className="voice-dropdown-container">
-          <select 
-            className="voice-dropdown"
-            value={selectedVoice}
-            onChange={onVoiceChange}
-            disabled={loadingVoices}
-          >
-            {loadingVoices ? (
-              <option value="">Загрузка голосов...</option>
-            ) : (
-              voices && voices.length > 0 && voices.map((voice) => (
-                <option key={voice.voice_id} value={voice.voice_id}>
-                  {voice.name} - {voice.description}
-                </option>
-              ))
-            )}
-          </select>
-          {loadingVoices && (
-            <div className="loading-indicator">
-              <span className="loading-spinner">⏳</span>
-            </div>
+        <select 
+          className="voice-dropdown"
+          value={selectedVoice}
+          onChange={onVoiceChange}
+          disabled={loadingVoices}
+        >
+          {loadingVoices ? (
+            <option value="">Загрузка голосов...</option>
+          ) : (
+            voices && voices.length > 0 && voices.map((voice) => (
+              <option key={voice.voice_id} value={voice.voice_id}>
+                {voice.name}
+              </option>
+            ))
           )}
-        </div>
+        </select>
         
         <button 
           className={`btn btn-success ${isActuallyPlaying ? 'playing' : ''}`}
           onClick={handlePlayVoice}
           disabled={!selectedVoice || isActuallyPlaying || loadingVoices}
-          title="Прослушать пример голоса (ElevenLabs)"
+          title="Прослушать пример голоса"
         >
           {isActuallyPlaying ? (
             <span className="loading-spinner">⏳</span>
@@ -135,38 +127,24 @@ const VoiceSelector = ({
             <span className="speaker-icon">🔊</span>
           )}
         </button>
+        
+        {/* Show ElevenLabs errors */}
+        {elevenLabsError && (
+          <ErrorMessage 
+            message={`Ошибка ElevenLabs: ${elevenLabsError}`} 
+            onRetry={() => clearState()}
+          />
+        )}
+        
+        {/* Show voice loading errors */}
+        {voicesError && (
+          <ErrorMessage 
+            message={voicesError} 
+            onRetry={onRetryVoices}
+          />
+        )}
       </div>
-      
-      {/* Show ElevenLabs errors */}
-      {elevenLabsError && (
-        <ErrorMessage 
-          message={`Ошибка ElevenLabs: ${elevenLabsError}`} 
-          onRetry={() => clearState()}
-        />
-      )}
-      
-      {/* Show voice loading errors */}
-      {voicesError && (
-        <ErrorMessage 
-          message={voicesError} 
-          onRetry={onRetryVoices}
-        />
-      )}
-      
-      {selectedVoice && (
-        <div className="voice-info">
-          <p className="selected-voice">
-            Выбран: <strong>{voices.find(v => v.voice_id === selectedVoice)?.name}</strong>
-          </p>
-          {audioData && (
-            <p className="voice-preview-status">
-              Аудио пример готов к воспроизведению
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
+    );
 };
 
 export default VoiceSelector;

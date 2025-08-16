@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import './VideoPlayer.css';
+import ImageUpload from './ImageUpload';
+import VoiceSelector from './VoiceSelector';
+import CreateStreamButton from './CreateStreamButton';
 
 const VideoPlayer = ({ 
   stream, 
@@ -7,7 +10,27 @@ const VideoPlayer = ({
   connectionStatus,
   onVideoReady,
   className = "",
-  isStreamActive = false
+  isStreamActive = false,
+  // Элементы управления
+  selectedImage,
+  previewUrl,
+  onImageSelect,
+  onImageRemove,
+  onUploadSuccess,
+  onUploadError,
+  uploadError,
+  selectedVoice,
+  voices,
+  loadingVoices,
+  voicesError,
+  isPlaying,
+  onVoiceChange,
+  onPlayVoice,
+  onRetryVoices,
+  isCreating,
+  hasAudioTrack,
+  onCreateStream,
+  onCloseStream
 }) => {
   const videoRef = useRef(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -272,27 +295,7 @@ const VideoPlayer = ({
 
   return (
     <div className={`video-player ${className}`}>
-      {/* Status Messages */}
-      {statusMessages[connectionStatus] && (
-        <div className="status-message">
-          <div className="status-content">
-            {isLoading && <div className="loading-spinner" />}
-            <span className="status-text">{statusMessages[connectionStatus]}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Message Overlay */}
-      {showOverlay && message && (
-        <div className="message-overlay">
-          <div className="message-content">
-            <h3>{messageType === 'error' ? '⚠️ Ошибка' : 'ℹ️ Информация'}</h3>
-            <p>{message}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Video Element */}
+      {/* Видео контейнер */}
       <div className="video-container">
         <video
           ref={videoRef}
@@ -302,49 +305,92 @@ const VideoPlayer = ({
           controls={isConnected && stream}
         />
         
-        {/* Video Overlay */}
+        {/* Оверлей статуса */}
         <div className="video-overlay">
           {videoError && (
             <div className="error-overlay">
-              <div className="error-content">
-                <span className="error-icon">⚠️</span>
-                <span className="error-text">{videoError}</span>
-              </div>
+              <span className="error-text">{videoError}</span>
             </div>
           )}
           
           {!stream && !isConnected && !videoError && (
             <div className="waiting-overlay">
-              <div className="waiting-content">
-                <span className="waiting-text">Ожидание сессии...</span>
-              </div>
+              <span className="waiting-text">Ожидание сессии...</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Video Controls Info */}
-      <div className="video-info">
-        <div className="video-status">
-          <span className={`status-indicator ${isConnected ? 'connected' : 'waiting'}`}>
-            {isConnected ? '🔴 В эфире' : '⏸️ Ожидание'}
-          </span>
-          {stream && (
-            <span className="stream-info">
-              Прямой эфир с D-ID
+      {/* Компактная панель управления */}
+      <div className="control-panel">
+        <div className="control-row">
+          {/* Статус */}
+          <div className="status-indicator">
+            <span className={`status-dot ${isConnected ? 'connected' : 'waiting'}`}></span>
+            <span className="status-text">
+              {isConnected ? 'В эфире' : 'Ожидание'}
             </span>
+          </div>
+
+          {/* Элементы управления */}
+          <div className="controls-group">
+            {/* Выбор изображения */}
+            <div className="image-selector">
+              <ImageUpload
+                selectedImage={selectedImage}
+                previewUrl={previewUrl}
+                onImageSelect={onImageSelect}
+                onImageRemove={onImageRemove}
+                onUploadSuccess={onUploadSuccess}
+                onUploadError={onUploadError}
+              />
+            </div>
+
+            {/* Выбор голоса */}
+            <div className="voice-selector">
+              <VoiceSelector
+                selectedVoice={selectedVoice}
+                voices={voices}
+                loadingVoices={loadingVoices}
+                voicesError={voicesError}
+                isPlaying={isPlaying}
+                onVoiceChange={onVoiceChange}
+                onPlayVoice={onPlayVoice}
+                onRetryVoices={onRetryVoices}
+              />
+            </div>
+
+            {/* Кнопка стрима */}
+            <div className="stream-button">
+              <CreateStreamButton
+                selectedImage={selectedImage}
+                selectedVoice={selectedVoice}
+                isCreating={isCreating}
+                isStreamActive={isStreamActive}
+                hasAudioTrack={hasAudioTrack}
+                onCreateStream={onCreateStream}
+                onCloseStream={onCloseStream}
+              />
+            </div>
+          </div>
+
+          {/* Аудио контроль */}
+          {stream && isConnected && (
+            <button 
+              onClick={toggleMute}
+              className="audio-btn"
+              title={isMuted ? 'Включить звук' : 'Выключить звук'}
+            >
+              {isMuted ? '🔇' : '🔊'}
+            </button>
           )}
         </div>
-        
-        {/* Audio Control Button */}
-        {stream && isConnected && (
-          <button 
-            onClick={toggleMute}
-            className="audio-control-btn"
-            title={isMuted ? 'Включить звук' : 'Выключить звук'}
-          >
-            {isMuted ? '🔇' : '🔊'}
-          </button>
+
+        {/* Ошибки */}
+        {uploadError && (
+          <div className="error-message">
+            {uploadError.message}
+          </div>
         )}
       </div>
     </div>
