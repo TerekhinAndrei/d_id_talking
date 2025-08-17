@@ -45,7 +45,7 @@ class CreateStreamResponse(BaseResponse):
 
 class StartStreamRequest(BaseModel):
     """Request model for starting a stream"""
-    image_url: HttpUrl = Field(..., description="URL of the image to use for streaming")
+    image_url: str = Field(..., description="URL or D-ID file ID of the image to use for streaming")
     presenter_id: Optional[str] = Field(None, description="D-ID presenter ID")
 
 
@@ -70,7 +70,7 @@ class SdpResponse(BaseResponse):
 
 class WebRTCSessionRequest(BaseModel):
     """Request model for WebRTC session"""
-    image_url: HttpUrl = Field(..., description="URL of the image to use")
+    image_url: str = Field(..., description="URL or D-ID file ID of the image to use")
     presenter_id: Optional[str] = Field(None, description="D-ID presenter ID")
 
 

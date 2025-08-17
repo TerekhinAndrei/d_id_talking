@@ -23,6 +23,7 @@ class BaseEndpoint:
             "video_generator": container.get_video_generator(),
             "storage_service": container.get_storage_service(),
             "d_id_file_service": container.get_d_id_file_service(),
+            "d_id_service": container.get_d_id_service(),
             "task_manager": container.get_task_manager(),
             "audio_processor": container.get_audio_processor(),
             "websocket_service": container.get_websocket_service(),

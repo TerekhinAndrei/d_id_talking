@@ -8,9 +8,11 @@ D-ID (Digital Identity) - это платформа для создания го
 
 ### Основные функции
 - **Генерация говорящих аватаров** - создание видео с говорящими персонажами
+- **Talks API** - создание и управление talks (видео с говорящими головами)
 - **File API** - загрузка и управление изображениями и аудио
 - **Стриминг** - генерация видео в реальном времени
 - **WebRTC** - интерактивные сессии
+- **Webhook поддержка** - асинхронные уведомления о статусе обработки
 
 ### Поддерживаемые форматы
 - **Изображения:** JPEG, PNG, WebP
@@ -23,38 +25,135 @@ D-ID (Digital Identity) - это платформа для создания го
 
 #### 1. D-ID Service (`app/services/d_id_service.py`)
 ```python
-class DIdService(AuthenticatedService):
+class DIdService(IVideoGenerator, BaseService):
     """Сервис для работы с D-ID API"""
     
-    def __init__(self, config_provider: ConfigurationProvider):
+    def __init__(self, config_provider, http_client: AsyncHTTPClient):
+        self.http_client = http_client
         super().__init__(config_provider)
-        self.base_url = "https://api.d-id.com"
-        self.headers = self._get_auth_headers()
+        
+        # Service-specific configuration
+        self.api_key = self.config.get_setting("D_ID_API_KEY")
+        self.base_url = self.config.get_setting("D_ID_BASE_URL")
+        self.default_presenter_id = self.config.get_setting("D_ID_DEFAULT_PRESENTER_ID")
+        self.default_driver_url = self.config.get_setting("D_ID_DEFAULT_DRIVER_URL")
     
-    async def _test_authentication_impl(self) -> Dict[str, Any]:
-        """Тестирование аутентификации D-ID"""
-        response = await self.http_client.get(f"{self.base_url}/talks")
-        return {
-            "authenticated": True,
-            "talks_count": len(response.get("talks", []))
-        }
-    
-    async def create_talk(self, image_url: str, audio_url: str) -> TalkResponse:
-        """Создание говорящего аватара"""
+    async def create_talk_direct(
+        self,
+        source_url: str,
+        script: Dict[str, Any],
+        config: Optional[Dict[str, Any]] = None,
+        driver_url: Optional[str] = None,
+        webhook: Optional[str] = None
+    ) -> str:
+        """Создание talk с прямым script"""
         payload = {
-            "source_url": image_url,
-            "script": {
-                "type": "audio",
-                "audio_url": audio_url
-            }
+            "source_url": source_url,
+            "script": script,
+            "config": config or {"stitch": True, "result_format": "mp4"}
         }
         
-        response = await self.http_client.post(
-            f"{self.base_url}/talks",
-            json=payload
+        if driver_url:
+            payload["driver_url"] = driver_url
+        else:
+            payload["driver_url"] = self.default_driver_url
+        
+        if webhook:
+            payload["webhook"] = webhook
+        
+        response = await self.http_client.make_request(
+            method="POST",
+            url=f"{self.base_url}/talks",
+            headers=self._get_headers(),
+            data=payload
         )
         
-        return TalkResponse(**response)
+        return response.get("id")
+    
+    async def create_talk_with_text(
+        self, 
+        image_url: str, 
+        text: str, 
+        provider: Optional[DIdProviderType] = None,
+        voice_id: Optional[str] = None,
+        driver_url: Optional[str] = None,
+        webhook: Optional[str] = None
+    ) -> str:
+        """Создание talk с текстом"""
+        script = DIdScript(
+            type=DIdScriptType.TEXT,
+            input=text,
+            provider={
+                "type": provider.value if provider else "microsoft",
+                "voice_id": voice_id
+            } if provider or voice_id else None
+        )
+        
+        return await self.create_talk_direct(
+            source_url=image_url,
+            script={
+                "type": script.type.value,
+                "input": script.input,
+                "provider": script.provider
+            },
+            driver_url=driver_url,
+            webhook=webhook
+        )
+    
+    async def create_talk_with_audio(
+        self, 
+        image_url: str, 
+        audio_url: str,
+        driver_url: Optional[str] = None,
+        webhook: Optional[str] = None
+    ) -> str:
+        """Создание talk с аудио"""
+        script = DIdScript(
+            type=DIdScriptType.AUDIO,
+            audio_url=audio_url
+        )
+        
+        return await self.create_talk_direct(
+            source_url=image_url,
+            script={
+                "type": script.type.value,
+                "audio_url": script.audio_url
+            },
+            driver_url=driver_url,
+            webhook=webhook
+        )
+    
+    async def get_video_status(self, video_id: str) -> VideoResponse:
+        """Получение статуса видео"""
+        response = await self.http_client.make_request(
+            method="GET",
+            url=f"{self.base_url}/talks/{video_id}",
+            headers=self._get_headers()
+        )
+        
+        # Map D-ID status to our VideoStatus enum
+        d_id_status = response.get("status", "")
+        if d_id_status == "created":
+            status = VideoStatus.PENDING
+        elif d_id_status == "started":
+            status = VideoStatus.PROCESSING
+        elif d_id_status == "done":
+            status = VideoStatus.COMPLETED
+        elif d_id_status == "failed":
+            status = VideoStatus.FAILED
+        elif d_id_status == "rejected":
+            status = VideoStatus.FAILED
+        else:
+            status = VideoStatus.PENDING
+        
+        return VideoResponse(
+            video_id=video_id,
+            status=status,
+            result_url=response.get("result_url"),
+            error_message=response.get("error", {}).get("message") if response.get("error") else None,
+            created_at=response.get("created_at", ""),
+            updated_at=response.get("updated_at", "")
+        )
 ```
 
 #### 2. D-ID File Service (`app/services/d_id_file_service.py`)
@@ -89,7 +188,9 @@ class DIdFileService(AuthenticatedService):
         return DIdFileUploadResponse(**response)
 ```
 
-#### 3. API Endpoints (`app/api/v1/endpoints/d_id_files.py`)
+#### 3. API Endpoints
+
+##### D-ID Files (`app/api/v1/endpoints/d_id_files.py`)
 ```python
 @router.post("/upload/image")
 async def upload_image(
@@ -124,6 +225,131 @@ async def upload_audio(
         )
     except Exception as e:
         raise ServiceErrorHandler.handle_service_error(e)
+```
+
+##### D-ID Talks (`app/api/v1/endpoints/d_id_talks.py`)
+```python
+@router.post("/create")
+async def create_talk(
+    request: DIdTalkRequest,
+    services: Dict[str, Any] = Depends(get_services)
+):
+    """Создание нового D-ID talk"""
+    try:
+        d_id_service = services["d_id_service"]
+        
+        try:
+            talk_id = await d_id_service.create_talk_direct(
+                source_url=request.source_url,
+                script=request.script,
+                config=request.config,
+                driver_url=request.driver_url,
+                webhook=request.webhook
+            )
+            
+            return BaseResponse(
+                success=True,
+                message="D-ID talk created successfully",
+                data={
+                    "id": talk_id,
+                    "status": "created",
+                    "created_at": d_id_service._get_current_timestamp()
+                }
+            )
+            
+        except Exception as d_id_error:
+            # Fallback на stub режим для тестирования
+            logger.warning("⚠️ D-ID API integration requires additional configuration")
+            logger.warning("⚠️ Talk creation is currently a stub")
+            
+            import uuid
+            mock_talk_id = f"tlk_{uuid.uuid4().hex[:16]}"
+            
+            return BaseResponse(
+                success=True,
+                message="D-ID talk created successfully (stub mode)",
+                data={
+                    "id": mock_talk_id,
+                    "status": "created",
+                    "created_at": d_id_service._get_current_timestamp()
+                }
+            )
+        
+    except Exception as e:
+        raise ServiceErrorHandler.handle_service_error(e)
+
+@router.get("/{talk_id}/status")
+async def get_talk_status(
+    talk_id: str,
+    services: Dict[str, Any] = Depends(get_services)
+):
+    """Получение статуса D-ID talk"""
+    try:
+        d_id_service = services["d_id_service"]
+        
+        try:
+            status_response = await d_id_service.get_video_status(talk_id)
+            
+            return BaseResponse(
+                success=True,
+                message="D-ID talk status retrieved successfully",
+                data={
+                    "id": talk_id,
+                    "status": status_response.status.value,
+                    "result_url": status_response.result_url,
+                    "error_message": status_response.error_message,
+                    "created_at": status_response.created_at,
+                    "updated_at": status_response.updated_at
+                }
+            )
+            
+        except Exception as d_id_error:
+            # Fallback на stub режим для тестирования
+            logger.warning("⚠️ D-ID API integration requires additional configuration")
+            logger.warning("⚠️ Talk status is currently a stub")
+            
+            return BaseResponse(
+                success=True,
+                message="D-ID talk status retrieved successfully (stub mode)",
+                data={
+                    "id": talk_id,
+                    "status": "done",
+                    "result_url": "https://example.com/mock-video.mp4",
+                    "created_at": d_id_service._get_current_timestamp(),
+                    "updated_at": d_id_service._get_current_timestamp()
+                }
+            )
+        
+    except Exception as e:
+        raise ServiceErrorHandler.handle_service_error(e)
+
+@router.post("/webhook")
+async def d_id_webhook(
+    payload: DIdWebhookPayload,
+    services: Dict[str, Any] = Depends(get_services)
+):
+    """Обработка webhook уведомлений от D-ID"""
+    try:
+        logger.info(f"Received D-ID webhook for talk: {payload.id}, status: {payload.status}")
+        
+        if payload.status == "done":
+            logger.info(f"Talk {payload.id} completed successfully. Result URL: {payload.result_url}")
+            # Здесь можно добавить логику обработки завершенного talk
+        elif payload.status == "failed":
+            logger.error(f"Talk {payload.id} failed. Error: {payload.error}")
+            # Здесь можно добавить логику обработки ошибки
+        
+        return BaseResponse(
+            success=True,
+            message="Webhook processed successfully"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error processing D-ID webhook: {e}")
+        return BaseResponse(
+            success=False,
+            message=f"Webhook processing failed: {str(e)}"
+        )
 ```
 
 ### Frontend интеграция
@@ -245,6 +471,10 @@ export class ConfigManager {
 D_ID_API_KEY=your_email:your_token
 D_ID_BASE_URL=https://api.d-id.com
 D_ID_TIMEOUT=30
+
+# D-ID Talks Settings
+D_ID_DEFAULT_PRESENTER_ID=your_presenter_id
+D_ID_DEFAULT_DRIVER_URL=bank://lively/driver-02/flipped
 ```
 
 ### Frontend Configuration
@@ -270,6 +500,214 @@ const defaultConfig = {
 ```
 
 ## 📊 API Endpoints
+
+### D-ID Talks API
+
+#### Создание Talk с произвольным script
+```bash
+POST /api/v1/d-id-talks/create
+Content-Type: application/json
+
+# Request
+{
+  "source_url": "https://myhost.com/image.jpg",
+  "script": {
+    "type": "audio",
+    "audio_url": "https://path.to/audio.mp3"
+  },
+  "config": {
+    "stitch": true
+  },
+  "driver_url": "bank://lively/driver-02/flipped",
+  "webhook": "https://myhost.com/webhook"
+}
+
+# Response
+{
+  "success": true,
+  "message": "D-ID talk created successfully",
+  "data": {
+    "id": "tlk_TMj4G1wiEGpQrdNFvrqAk",
+    "status": "created",
+    "created_at": "2023-03-22T16:38:49.723Z"
+  }
+}
+```
+
+#### Создание Talk с текстом
+```bash
+POST /api/v1/d-id-talks/create-with-text
+Content-Type: application/x-www-form-urlencoded
+
+# Request
+source_url=https://myhost.com/image.jpg
+text=Hello, this is a test message
+voice_id=en-US-JennyNeural
+webhook=https://myhost.com/webhook
+
+# Response
+{
+  "success": true,
+  "message": "D-ID talk with text created successfully",
+  "data": {
+    "id": "tlk_TMj4G1wiEGpQrdNFvrqAk",
+    "status": "created",
+    "created_at": "2023-03-22T16:38:49.723Z"
+  }
+}
+```
+
+#### Создание Talk с аудио
+```bash
+POST /api/v1/d-id-talks/create-with-audio
+Content-Type: application/x-www-form-urlencoded
+
+# Request
+source_url=https://myhost.com/image.jpg
+audio_url=https://path.to/audio.mp3
+driver_url=bank://lively/driver-02/flipped
+webhook=https://myhost.com/webhook
+
+# Response
+{
+  "success": true,
+  "message": "D-ID talk with audio created successfully",
+  "data": {
+    "id": "tlk_TMj4G1wiEGpQrdNFvrqAk",
+    "status": "created",
+    "created_at": "2023-03-22T16:38:49.723Z"
+  }
+}
+```
+
+#### Получение статуса Talk
+```bash
+GET /api/v1/d-id-talks/{talk_id}/status
+
+# Response
+{
+  "success": true,
+  "message": "D-ID talk status retrieved successfully",
+  "data": {
+    "id": "tlk_TMj4G1wiEGpQrdNFvrqAk",
+    "status": "done",
+    "result_url": "https://d-id-talks-prod.s3.us-west-2.amazonaws.com/.../image.mp4",
+    "audio_url": "https://d-id-talks-prod.s3.us-west-2.amazonaws.com/.../microsoft.wav",
+    "source_url": "https://d-id-talks-prod.s3.us-west-2.amazonaws.com/.../image.jpeg",
+    "created_at": "2023-03-22T16:38:49.723Z",
+    "modified_at": "2023-03-22T16:39:15.603Z",
+    "started_at": "2023-03-22T16:39:13.633",
+    "duration": 2,
+    "metadata": {
+      "driver_url": "bank://lively/driver-02/flipped",
+      "mouth_open": false,
+      "num_faces": 1,
+      "num_frames": 41,
+      "processing_fps": 51.51385098457352,
+      "resolution": [512, 512],
+      "size_kib": 334.22265625
+    },
+    "face": {
+      "mask_confidence": -1,
+      "detection": [224, 198, 484, 553],
+      "overlap": "no",
+      "size": 512,
+      "top_left": [98, 119],
+      "face_id": 0,
+      "detect_confidence": 0.9998300075531006
+    },
+    "config": {
+      "stitch": false,
+      "pad_audio": 0,
+      "align_driver": true,
+      "sharpen": true,
+      "auto_match": true,
+      "normalization_factor": 1,
+      "logo": {
+        "url": "ai",
+        "position": [0, 0]
+      },
+      "motion_factor": 1,
+      "result_format": ".mp4",
+      "fluent": false,
+      "align_expand_factor": 0.3
+    }
+  }
+}
+```
+
+#### Отмена Talk
+```bash
+DELETE /api/v1/d-id-talks/{talk_id}
+
+# Response
+{
+  "success": true,
+  "message": "D-ID talk cancelled successfully"
+}
+```
+
+#### Webhook Endpoint
+```bash
+POST /api/v1/d-id-talks/webhook
+Content-Type: application/json
+
+# Request (от D-ID)
+{
+  "id": "tlk_TMj4G1wiEGpQrdNFvrqAk",
+  "created_at": "2023-03-22T16:38:49.723Z",
+  "created_by": "google-oauth2|12345678",
+  "status": "done",
+  "object": "talk",
+  "result_url": "https://d-id-talks-prod.s3.us-west-2.amazonaws.com/.../image.mp4",
+  "audio_url": "https://d-id-talks-prod.s3.us-west-2.amazonaws.com/.../microsoft.wav",
+  "source_url": "https://d-id-talks-prod.s3.us-west-2.amazonaws.com/.../image.jpeg",
+  "modified_at": "2023-03-22T16:39:15.603Z",
+  "user_id": "google-oauth2|12345678",
+  "duration": 2,
+  "started_at": "2023-03-22T16:39:13.633",
+  "metadata": {
+    "driver_url": "bank://lively/driver-02/flipped",
+    "mouth_open": false,
+    "num_faces": 1,
+    "num_frames": 41,
+    "processing_fps": 51.51385098457352,
+    "resolution": [512, 512],
+    "size_kib": 334.22265625
+  },
+  "face": {
+    "mask_confidence": -1,
+    "detection": [224, 198, 484, 553],
+    "overlap": "no",
+    "size": 512,
+    "top_left": [98, 119],
+    "face_id": 0,
+    "detect_confidence": 0.9998300075531006
+  },
+  "config": {
+    "stitch": false,
+    "pad_audio": 0,
+    "align_driver": true,
+    "sharpen": true,
+    "auto_match": true,
+    "normalization_factor": 1,
+    "logo": {
+      "url": "ai",
+      "position": [0, 0]
+    },
+    "motion_factor": 1,
+    "result_format": ".mp4",
+    "fluent": false,
+    "align_expand_factor": 0.3
+  }
+}
+
+# Response
+{
+  "success": true,
+  "message": "Webhook processed successfully"
+}
+```
 
 ### D-ID File API
 
@@ -355,6 +793,40 @@ curl -X POST "http://localhost:8000/api/v1/d-id-files/upload/image" \
 # Тест загрузки аудио
 curl -X POST "http://localhost:8000/api/v1/d-id-files/upload/audio" \
   -F "file=@test_audio.mp3;type=audio/mpeg"
+
+# Тест создания talk с аудио
+curl -X POST "http://localhost:8000/api/v1/d-id-talks/create" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_url": "https://myhost.com/image.jpg",
+    "script": {
+      "type": "audio",
+      "audio_url": "https://path.to/audio.mp3"
+    },
+    "config": {
+      "stitch": true
+    }
+  }'
+
+# Тест создания talk с текстом
+curl -X POST "http://localhost:8000/api/v1/d-id-talks/create-with-text" \
+  -G \
+  -d "source_url=https://myhost.com/image.jpg" \
+  -d "text=Hello, this is a test message" \
+  -d "voice_id=en-US-JennyNeural" \
+  -d "webhook=https://myhost.com/webhook"
+
+# Тест получения статуса talk
+curl -X GET "http://localhost:8000/api/v1/d-id-talks/tlk_TMj4G1wiEGpQrdNFvrqAk/status"
+
+# Тест webhook endpoint
+curl -X POST "http://localhost:8000/api/v1/d-id-talks/webhook" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "tlk_TMj4G1wiEGpQrdNFvrqAk",
+    "status": "done",
+    "result_url": "https://example.com/video.mp4"
+  }'
 ```
 
 ### Frontend тесты

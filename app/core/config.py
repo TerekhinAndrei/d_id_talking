@@ -208,7 +208,7 @@ class Settings(BaseSettings):
         if not self.is_d_id_configured():
             raise ValueError("D-ID API key не настроен")
         
-        # Handle different API key formats
+        # Handle different API key formats using the same logic as in tests
         api_key = self.D_ID_API_KEY.strip()
         
         # Normalize the API key to Basic format
@@ -219,7 +219,7 @@ class Settings(BaseSettings):
             # Format: email:token
             left, right = api_key.split(":", 1)
             try:
-                # Try to decode left part as base64
+                # Try to decode left part as base64 (same as in tests)
                 import base64
                 email = base64.b64decode(left).decode("utf-8")
                 token = base64.b64encode(f"{email}:{right}".encode("utf-8")).decode("utf-8")

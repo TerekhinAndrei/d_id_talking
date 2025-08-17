@@ -305,47 +305,94 @@ class DIdService(IVideoGenerator, BaseService):
             raise DIdServiceError(f"Failed to create talk with text: {str(e)}")
     
     async def create_talk_with_audio(
-        self, 
-        image_url: str, 
+        self,
+        image_url: str,
         audio_url: str,
         driver_url: Optional[str] = None,
         webhook: Optional[str] = None
     ) -> str:
         """Create talk with audio input"""
         try:
-            # Create script with audio
-            script = DIdScript(
-                type=DIdScriptType.AUDIO,
-                audio_url=audio_url
-            )
+            # Create script configuration for audio
+            script = {
+                "type": "audio",
+                "audio_url": audio_url
+            }
             
-            # Create audio data placeholder
-            audio_data = AudioData(
-                data=b"",  # Placeholder
-                format=None,
-                sample_rate=44100,
-                bitrate="128k"
-            )
+            # Create config
+            config = {
+                "stitch": True,
+                "result_format": "mp4"
+            }
             
-            # Create video request
-            request = VideoRequest(
-                image_url=image_url,
-                audio_data=audio_data,
+            # Use create_talk_direct with proper script
+            return await self.create_talk_direct(
+                source_url=image_url,
+                script=script,
+                config=config,
                 driver_url=driver_url,
-                webhook=webhook,
-                config={
-                    "script": {
-                        "type": script.type.value,
-                        "audio_url": script.audio_url
-                    }
-                }
+                webhook=webhook
             )
-            
-            return await self.create_video(request)
             
         except Exception as e:
             self.logger.error(f"Error creating talk with audio: {e}")
             raise DIdServiceError(f"Failed to create talk with audio: {str(e)}")
+    
+    async def create_talk_direct(
+        self,
+        source_url: str,
+        script: Dict[str, Any],
+        config: Optional[Dict[str, Any]] = None,
+        driver_url: Optional[str] = None,
+        webhook: Optional[str] = None
+    ) -> str:
+        """Create talk directly with script configuration"""
+        try:
+            # Validate request
+            if not source_url:
+                raise DIdServiceError("Source URL is required")
+            
+            if not script:
+                raise DIdServiceError("Script configuration is required")
+            
+            # Prepare request payload
+            payload = {
+                "source_url": source_url,
+                "script": script,
+                "config": config or {"stitch": True, "result_format": "mp4"}
+            }
+            
+            if driver_url:
+                payload["driver_url"] = driver_url
+            else:
+                payload["driver_url"] = self.default_driver_url
+            
+            if webhook:
+                payload["webhook"] = webhook
+            
+            endpoint = f"{self.base_url}/talks"
+            headers = self._get_headers()
+            
+            response = await self.http_client.make_request(
+                method="POST",
+                url=endpoint,
+                headers=headers,
+                data=payload
+            )
+            
+            video_id = response.get("id")
+            if not video_id:
+                raise DIdServiceError("No video ID returned from D-ID API")
+            
+            self.logger.info(f"Created D-ID talk with ID: {video_id}")
+            return video_id
+            
+        except APIError as e:
+            self.logger.error(f"D-ID create talk API error: {e}")
+            raise DIdAPIError(e.status_code, e.message)
+        except Exception as e:
+            self.logger.error(f"Unexpected error creating talk: {e}")
+            raise DIdServiceError(f"Talk creation failed: {str(e)}")
     
     def _get_current_timestamp(self) -> str:
         """Get current timestamp"""

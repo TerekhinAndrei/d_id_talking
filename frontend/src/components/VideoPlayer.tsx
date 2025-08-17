@@ -7,11 +7,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   isStreamActive = false,
   className = ''
 }) => {
+  console.log('🎬 VideoPlayer render - defaultVideoSrc:', defaultVideoSrc);
+  
   return (
     <div className={`video-player ${className}`}>
       <div className="video-container">
         {/* Default Video - всегда видимый */}
         <video 
+          key={defaultVideoSrc} // Добавляем key для принудительного обновления
           className="video-element video-default"
           autoPlay 
           playsInline
@@ -22,6 +25,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         
         {/* Stream Video - перекрывает дефолтное при активном стриме */}
         <video 
+          key={streamVideoSrc || 'no-stream'} // Добавляем key для принудительного обновления
           className={`video-element video-stream ${isStreamActive ? 'active' : ''}`}
           autoPlay 
           playsInline

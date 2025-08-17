@@ -146,19 +146,171 @@ export interface DIdFileUploadResponse {
 }
 
 export interface DIdStreamResponse {
+  success: boolean;
   stream_id: string;
   session_id: string;
   sdp_offer: string;
   ice_servers: any[];
+  error?: string;
 }
 
 export interface DIdTalkResponse {
-  talk_id: string;
-  status: string;
+  success: boolean;
+  talk_id?: string;
+  status?: string;
+  error?: string;
+}
+
+export interface DIdIceCandidateResponse {
+  success: boolean;
+  stream_id: string;
+  message?: string;
+  error?: string;
 }
 
 export interface DIdAuthenticationResponse {
   authenticated: boolean;
   message: string;
   data?: any;
+}
+
+// ===== D-ID TALKS API TYPES =====
+
+export interface DIdTalkRequest {
+  source_url: string;
+  script: {
+    type: 'audio' | 'text';
+    audio_url?: string;
+    input?: string;
+    provider?: {
+      type: string;
+      voice_id: string;
+    };
+  };
+  config?: {
+    stitch?: boolean;
+    result_format?: string;
+    [key: string]: any;
+  };
+  driver_url?: string;
+  webhook?: string;
+  presenter_id?: string;
+  session_id?: string;
+}
+
+export interface DIdTalkCreateResponse {
+  success: boolean;
+  message: string;
+  data: {
+    id: string;
+    status: string;
+    created_at: string;
+  };
+}
+
+export interface DIdTalkStatusResponse {
+  success: boolean;
+  message: string;
+  data: {
+    id: string;
+    status: string;
+    result_url?: string;
+    audio_url?: string;
+    source_url?: string;
+    created_at: string;
+    modified_at?: string;
+    started_at?: string;
+    duration?: number;
+    metadata?: {
+      driver_url?: string;
+      mouth_open?: boolean;
+      num_faces?: number;
+      num_frames?: number;
+      processing_fps?: number;
+      resolution?: number[];
+      size_kib?: number;
+    };
+    face?: {
+      mask_confidence?: number;
+      detection?: number[];
+      overlap?: string;
+      size?: number;
+      top_left?: number[];
+      face_id?: number;
+      detect_confidence?: number;
+    };
+    config?: {
+      stitch?: boolean;
+      pad_audio?: number;
+      align_driver?: boolean;
+      sharpen?: boolean;
+      auto_match?: boolean;
+      normalization_factor?: number;
+      logo?: {
+        url: string;
+        position: number[];
+      };
+      motion_factor?: number;
+      result_format?: string;
+      fluent?: boolean;
+      align_expand_factor?: number;
+    };
+    error?: {
+      message?: string;
+      code?: string;
+    };
+  };
+}
+
+export interface DIdWebhookPayload {
+  id: string;
+  status: string;
+  result_url?: string;
+  audio_url?: string;
+  source_url?: string;
+  created_at: string;
+  modified_at?: string;
+  started_at?: string;
+  duration?: number;
+  metadata?: {
+    driver_url?: string;
+    mouth_open?: boolean;
+    num_faces?: number;
+    num_frames?: number;
+    processing_fps?: number;
+    resolution?: number[];
+    size_kib?: number;
+  };
+  face?: {
+    mask_confidence?: number;
+    detection?: number[];
+    overlap?: string;
+    size?: number;
+    top_left?: number[];
+    face_id?: number;
+    detect_confidence?: number;
+  };
+  config?: {
+    stitch?: boolean;
+    pad_audio?: number;
+    align_driver?: boolean;
+    sharpen?: boolean;
+    auto_match?: boolean;
+    normalization_factor?: number;
+    logo?: {
+      url: string;
+      position: number[];
+    };
+    motion_factor?: number;
+    result_format?: string;
+    fluent?: boolean;
+    align_expand_factor?: number;
+  };
+  created_by?: string;
+  user_id?: string;
+  driver_url?: string;
+  error?: {
+    message?: string;
+    code?: string;
+  };
 }

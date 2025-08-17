@@ -94,6 +94,19 @@ class ServiceFactory:
         
         return self._services[service_key]
     
+    def get_d_id_service(self) -> DIdService:
+        """Get D-ID service instance"""
+        service_key = "d_id_service"
+        
+        if service_key not in self._services:
+            self.logger.info("Creating D-ID service")
+            self._services[service_key] = DIdService(
+                config_provider=self.config_provider,
+                http_client=self.http_client
+            )
+        
+        return self._services[service_key]
+    
     def get_task_manager(self) -> ITaskManager:
         """Get task manager instance"""
         service_key = "task_manager"
@@ -232,6 +245,10 @@ class ServiceContainer:
         """Get D-ID file service"""
         return self.factory.get_d_id_file_service()
     
+    def get_d_id_service(self) -> DIdService:
+        """Get D-ID service"""
+        return self.factory.get_d_id_service()
+    
     def get_task_manager(self) -> ITaskManager:
         """Get task manager"""
         return self.factory.get_task_manager()
@@ -303,3 +320,9 @@ def get_d_id_file_service(config_provider: IConfigurationProvider) -> IDIdFileSe
     """Get D-ID file service instance"""
     container = get_service_container(config_provider)
     return container.get_d_id_file_service()
+
+
+def get_d_id_service(config_provider: IConfigurationProvider) -> DIdService:
+    """Get D-ID service instance"""
+    container = get_service_container(config_provider)
+    return container.get_d_id_service()

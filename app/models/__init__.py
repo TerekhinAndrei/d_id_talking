@@ -43,6 +43,12 @@ from .generation import (
     GenerationResponse,
     GenerationStatusResponse,
     GenerationErrorResponse,
+    
+    # D-ID Talks Models
+    DIdTalkRequest,
+    DIdTalkResponse,
+    DIdTalkStatusResponse,
+    DIdWebhookPayload,
 )
 
 __all__ = [
@@ -72,4 +78,10 @@ __all__ = [
     "GenerationResponse",
     "GenerationStatusResponse",
     "GenerationErrorResponse",
+    
+    # D-ID Talks Models
+    "DIdTalkRequest",
+    "DIdTalkResponse",
+    "DIdTalkStatusResponse",
+    "DIdWebhookPayload",
 ] 

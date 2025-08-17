@@ -59,4 +59,62 @@ class GenerationErrorResponse(BaseModel):
     """Error response model for generation operations"""
     error: str = Field(..., description="Error message")
     detail: Optional[str] = Field(None, description="Detailed error information")
-    task_id: Optional[str] = Field(None, description="Task ID if available") 
+    task_id: Optional[str] = Field(None, description="Task ID if available")
+
+
+# D-ID Talks Models
+class DIdTalkRequest(BaseModel):
+    """Request model for creating D-ID talk"""
+    source_url: str = Field(..., description="URL of the source image")
+    script: Dict[str, Any] = Field(..., description="Script configuration")
+    config: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Talk configuration")
+    driver_url: Optional[str] = Field(None, description="Driver URL for animation")
+    webhook: Optional[str] = Field(None, description="Webhook URL for notifications")
+    presenter_id: Optional[str] = Field(None, description="Presenter ID")
+    session_id: Optional[str] = Field(None, description="Session identifier")
+
+
+class DIdTalkResponse(BaseModel):
+    """Response model for D-ID talk creation"""
+    id: str = Field(..., description="Talk ID")
+    created_at: str = Field(..., description="Creation timestamp")
+    created_by: str = Field(..., description="Creator ID")
+    status: str = Field(..., description="Talk status")
+    object: str = Field(..., description="Object type")
+
+
+class DIdTalkStatusResponse(BaseModel):
+    """Response model for D-ID talk status"""
+    id: str = Field(..., description="Talk ID")
+    status: str = Field(..., description="Talk status")
+    result_url: Optional[str] = Field(None, description="Result video URL")
+    audio_url: Optional[str] = Field(None, description="Audio URL")
+    source_url: Optional[str] = Field(None, description="Source image URL")
+    created_at: str = Field(..., description="Creation timestamp")
+    modified_at: Optional[str] = Field(None, description="Last modification timestamp")
+    started_at: Optional[str] = Field(None, description="Processing start timestamp")
+    duration: Optional[float] = Field(None, description="Video duration in seconds")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Processing metadata")
+    face: Optional[Dict[str, Any]] = Field(None, description="Face detection data")
+    config: Optional[Dict[str, Any]] = Field(None, description="Talk configuration")
+    error: Optional[Dict[str, Any]] = Field(None, description="Error information")
+
+
+class DIdWebhookPayload(BaseModel):
+    """Webhook payload from D-ID"""
+    id: str = Field(..., description="Talk ID")
+    status: str = Field(..., description="Talk status")
+    result_url: Optional[str] = Field(None, description="Result video URL")
+    audio_url: Optional[str] = Field(None, description="Audio URL")
+    source_url: Optional[str] = Field(None, description="Source image URL")
+    created_at: str = Field(..., description="Creation timestamp")
+    modified_at: Optional[str] = Field(None, description="Last modification timestamp")
+    started_at: Optional[str] = Field(None, description="Processing start timestamp")
+    duration: Optional[float] = Field(None, description="Video duration in seconds")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Processing metadata")
+    face: Optional[Dict[str, Any]] = Field(None, description="Face detection data")
+    config: Optional[Dict[str, Any]] = Field(None, description="Talk configuration")
+    created_by: Optional[str] = Field(None, description="Creator ID")
+    user_id: Optional[str] = Field(None, description="User ID")
+    driver_url: Optional[str] = Field(None, description="Driver URL")
+    error: Optional[Dict[str, Any]] = Field(None, description="Error information") 

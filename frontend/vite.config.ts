@@ -15,9 +15,5 @@ export default defineConfig({
         secure: false,
       }
     }
-  },
-  define: {
-    'import.meta.env.VITE_API_BASE_URL': JSON.stringify('http://localhost:3001'),
-    'import.meta.env.VITE_API_TIMEOUT': JSON.stringify('30000'),
-  },
+  }
 })
