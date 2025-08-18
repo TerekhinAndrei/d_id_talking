@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     
     # CORS settings
-    ALLOWED_HOSTS: str = "http://localhost:3000,http://localhost:3001,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,testserver,localhost,localhost:3001"
+    ALLOWED_HOSTS: str = "http://localhost:3000,http://localhost:3001,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,testserver,localhost,localhost:3001,https://talking-head-frontend.onrender.com,https://talking-head.onrender.com"
     
     # Database settings
     DATABASE_URL: Optional[str] = None
@@ -113,7 +113,7 @@ class Settings(BaseSettings):
     @classmethod
     def assemble_cors_origins(cls, v: str) -> List[str]:
         if v.strip() == "":
-            return ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176", "testserver", "localhost", "localhost:3001"]
+            return ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176", "testserver", "localhost", "localhost:3001", "https://talking-head-frontend.onrender.com", "https://talking-head.onrender.com"]
         return [i.strip() for i in v.split(",")]
     
     @field_validator("FALLBACK_VOICES", mode="after")
