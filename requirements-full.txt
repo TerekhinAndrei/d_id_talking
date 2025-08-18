@@ -7,5 +7,5 @@ python-dotenv==1.0.0
 elevenlabs>=2.9.1
 numpy>=1.24.0
 cloudinary==1.36.0
-# ffmpeg-python==0.2.0  # Requires system FFmpeg
-# aiortc==1.7.0  # Requires system FFmpeg libraries
+ffmpeg-python==0.2.0
+aiortc==1.7.0
