@@ -2,6 +2,13 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://talking-head.onrender.com';
 const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT || '30000');
 
+// Debug: Log the actual URL being used
+console.log('🔧 API Configuration:', {
+  VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+  API_BASE_URL: API_BASE_URL,
+  API_TIMEOUT: API_TIMEOUT
+});
+
 export const API_CONFIG = {
   baseURL: API_BASE_URL,
   timeout: API_TIMEOUT,
