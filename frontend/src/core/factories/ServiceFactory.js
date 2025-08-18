@@ -19,7 +19,7 @@ export class ServiceFactory {
       case 'did':
         // Импортируем динамически для избежания циклических зависимостей
         return import('../../services/streaming/DIdStreamingService.js')
-          .then(module => new module.DIdStreamingService(apiClient));
+          .then(module => new module.default(apiClient));
       case 'custom':
         return import('../../services/streaming/CustomStreamingService.js')
           .then(module => new module.CustomStreamingService(apiClient));
@@ -78,7 +78,7 @@ export class ServiceFactory {
     switch (type) {
       case 'fetch':
         return import('../../services/api/FetchApiClient.js')
-          .then(module => new module.FetchApiClient(baseUrl));
+          .then(module => new module.default(baseUrl));
       case 'axios':
         return import('../../services/api/AxiosApiClient.js')
           .then(module => new module.AxiosApiClient(baseUrl));

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { apiService } from '../services/api';
-import { DidWebRtcSession } from '../services/webrtc/DidWebRtcSession';
+import DidWebRtcSession from '../services/webrtc/DidWebRtcSession';
 
 export const useDIdStreaming = () => {
   const [streamState, setStreamState] = useState({
