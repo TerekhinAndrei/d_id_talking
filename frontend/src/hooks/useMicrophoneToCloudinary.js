@@ -131,7 +131,7 @@ export const useMicrophoneToCloudinary = (options = {}) => {
   const connectWebSocket = useCallback(() => {
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//localhost:8000/ws/stream`;
+      const wsUrl = `${protocol}//talking-head.onrender.com/ws/stream`;
       
       websocketRef.current = new WebSocket(wsUrl);
       
