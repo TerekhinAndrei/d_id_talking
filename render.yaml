@@ -24,7 +24,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: ALLOWED_HOSTS
-        value: https://talking-head-frontend.onrender.com,https://talking-head-backend.onrender.com
+        value: https://talking-head-frontend.onrender.com,https://talking-head.onrender.com
       - key: CLIENT_URL
         value: https://talking-head-frontend.onrender.com
       - key: FRONTEND_URL
@@ -45,6 +45,6 @@ services:
     staticPublishPath: frontend/dist
     envVars:
       - key: VITE_API_BASE_URL
-        value: https://talking-head-backend.onrender.com
+        value: https://talking-head.onrender.com
       - key: VITE_API_TIMEOUT
         value: 30000
