@@ -77,12 +77,11 @@ FRONTEND_URL=https://talking-head-frontend.onrender.com
 - Убедитесь, что `requirements.txt` в корне проекта
 - Убедитесь, что `package.json` в папке `frontend/`
 
-### Ошибки FFmpeg
-Если видите ошибку `Package libavformat was not found`:
-- Убедитесь, что в Build Command установлен системный FFmpeg:
-  ```
-  apt-get update && apt-get install -y ffmpeg && pip install -r requirements.txt
-  ```
+### Ошибки системных пакетов
+Если видите ошибку `Read-only file system`:
+- В бесплатном плане Render нельзя использовать `apt-get`
+- Используйте только: `pip install -r requirements.txt`
+- FFmpeg конвертация будет недоступна в бесплатном плане
 
 ### CORS ошибки
 - Проверьте `ALLOWED_HOSTS` в бэкенде

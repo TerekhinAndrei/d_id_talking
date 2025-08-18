@@ -4,11 +4,7 @@ services:
     name: talking-head-backend
     env: python
     plan: free
-    buildCommand: |
-      # Install system FFmpeg for audio conversion
-      apt-get update && apt-get install -y ffmpeg
-      # Install Python dependencies
-      pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --reload
     envVars:
       - key: PYTHON_VERSION

@@ -159,14 +159,16 @@ Access to fetch at '...' from origin '...' has been blocked by CORS policy
 #### 4. WebSocket соединения не работают
 **Решение**: Убедитесь, что URL в `WS_ENDPOINTS` использует правильный протокол (wss://)
 
-#### 5. Ошибка установки ffmpeg-python
+#### 5. Ошибка установки системных пакетов
 ```
-Package libavformat was not found in the pkg-config search path
+E: List directory /var/lib/apt/lists/partial is missing. - Acquire (30: Read-only file system)
 ```
-**Решение**: Убедитесь, что в Build Command установлен системный FFmpeg:
+**Решение**: В бесплатном плане Render нельзя использовать `apt-get`. Используйте только Python зависимости:
 ```
-apt-get update && apt-get install -y ffmpeg && pip install -r requirements.txt
+pip install -r requirements.txt
 ```
+
+**Примечание**: FFmpeg конвертация аудио будет недоступна в бесплатном плане. Для полной функциональности перейдите на платный план.
 
 ### Проверка конфигурации
 
@@ -206,8 +208,15 @@ Render автоматически предоставляет SSL сертифи�
 ### Планы Render
 
 - **Free**: Подходит для разработки и тестирования
+  - ✅ API endpoints
+  - ✅ ElevenLabs TTS
+  - ✅ D-ID streaming
+  - ✅ WebSocket соединения
+  - ❌ FFmpeg конвертация аудио
 - **Starter**: $7/месяц - для небольших проектов
+  - ✅ Все функции включая FFmpeg
 - **Standard**: $25/месяц - для продакшена
+  - ✅ Все функции + автомасштабирование
 
 ### Автомасштабирование
 
