@@ -89,10 +89,12 @@ export const WS_ENDPOINTS = {
 
 class ApiService {
   async request(endpoint, options = {}) {
+    console.log('🔧 request called with endpoint:', endpoint);
     // Add timestamp to bypass cache
     const timestamp = Date.now();
     const separator = endpoint.includes('?') ? '&' : '?';
     const url = `${API_CONFIG.baseURL}${endpoint}${separator}_t=${timestamp}`;
+    console.log('🔧 request final URL:', url);
     const config = {
       headers: {
         'Content-Type': 'application/json',
@@ -444,6 +446,7 @@ class ApiService {
 
   // Streaming API
   async createStream(imageUrl, description = 'D-ID streaming session') {
+    console.log('🔧 createStream called with endpoint:', API_ENDPOINTS.streamingStart);
     return this.request(API_ENDPOINTS.streamingStart, {
       method: 'POST',
       body: JSON.stringify({
