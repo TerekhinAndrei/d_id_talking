@@ -1,13 +1,18 @@
 // API configuration
 const API_BASE_URL = 'https://talking-head.onrender.com';
+const API_VERSION = 'v1.0.1'; // Force cache refresh
 const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT || '30000');
 
 // Debug: Log the actual URL being used
 console.log('🔧 API Configuration:', {
   VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
   API_BASE_URL: API_BASE_URL,
-  API_TIMEOUT: API_TIMEOUT
+  API_TIMEOUT: API_TIMEOUT,
+  API_VERSION: API_VERSION
 });
+
+// Test the voices endpoint directly
+console.log('🔧 Testing voices endpoint:', `${API_BASE_URL}/api/v1/voices/`);
 
 export const API_CONFIG = {
   baseURL: API_BASE_URL,
