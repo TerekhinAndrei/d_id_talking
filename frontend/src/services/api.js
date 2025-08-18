@@ -27,27 +27,52 @@ export const API_ENDPOINTS = {
   voiceById: (id) => `/api/v1/voices/${id}`,
   
   // TTS
-  tts: '/api/v1/tts',
-  ttsStream: '/api/v1/tts/stream',
+  ttsGenerate: '/api/v1/tts/generate',
+  ttsPlay: '/api/v1/tts/play',
   
   // Video
-  video: '/api/v1/video',
-  videoStream: '/api/v1/video/stream',
+  videoGenerate: '/api/v1/video/generate',
+  videoStatus: (taskId) => `/api/v1/video/status/${taskId}`,
   
-  // D-ID
-  didStream: '/api/v1/streaming/did',
-  didFiles: '/api/v1/did/files',
+  // Streaming
+  streamingSessions: '/api/v1/streaming/sessions',
+  streamingStart: '/api/v1/streaming/start',
+  streamingById: (streamId) => `/api/v1/streaming/${streamId}`,
+  streamingIce: (streamId) => `/api/v1/streaming/${streamId}/ice`,
+  streamingSdp: (streamId) => `/api/v1/streaming/${streamId}/sdp`,
+  streamingStatus: (streamId) => `/api/v1/streaming/${streamId}/status`,
+  streamingTalk: (streamId) => `/api/v1/streaming/${streamId}/talk`,
+  streamingTalkAudio: (streamId) => `/api/v1/streaming/${streamId}/talk-audio`,
+  
+  // D-ID Files
+  didFilesTestAuth: '/api/v1/d-id-files/test-auth',
+  didFilesUploadAudio: '/api/v1/d-id-files/upload/audio',
+  didFilesUploadImage: '/api/v1/d-id-files/upload/image',
+  didFilesAudio: (fileId) => `/api/v1/d-id-files/audios/${fileId}`,
+  didFilesImage: (fileId) => `/api/v1/d-id-files/images/${fileId}`,
   
   // Storage
-  storage: '/api/v1/storage',
+  storageFiles: '/api/v1/storage/files',
+  storageFileById: (fileId) => `/api/v1/storage/files/${fileId}`,
+  storageUploadAudio: '/api/v1/storage/upload/audio',
+  storageUploadImage: '/api/v1/storage/upload/image',
   
   // Tasks
-  tasks: '/api/v1/tasks',
+  tasks: '/api/v1/tasks/',
   taskById: (id) => `/api/v1/tasks/${id}`,
+  taskStart: (id) => `/api/v1/tasks/${id}/start`,
+  taskComplete: (id) => `/api/v1/tasks/${id}/complete`,
+  taskProgress: (id) => `/api/v1/tasks/${id}/progress`,
+  tasksStatsOverview: '/api/v1/tasks/stats/overview',
   
   // Users
-  users: '/api/v1/users',
+  users: '/api/v1/users/',
   userById: (id) => `/api/v1/users/${id}`,
+  
+  // Health
+  healthConfig: '/api/v1/health/config',
+  healthDid: '/api/v1/health/d-id',
+  healthDetailed: '/api/v1/health/detailed',
 };
 
 // WebSocket endpoints

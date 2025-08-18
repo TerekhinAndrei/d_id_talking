@@ -48,7 +48,7 @@ class FetchApiClient {
 
   // TTS
   async generateTTS(text, voiceId, options = {}) {
-    return this.request(API_ENDPOINTS.tts, {
+    return this.request(API_ENDPOINTS.ttsGenerate, {
       method: 'POST',
       body: JSON.stringify({
         text,
@@ -60,7 +60,7 @@ class FetchApiClient {
 
   // Video
   async generateVideo(audioUrl, presenterId, options = {}) {
-    return this.request(API_ENDPOINTS.video, {
+    return this.request(API_ENDPOINTS.videoGenerate, {
       method: 'POST',
       body: JSON.stringify({
         audio_url: audioUrl,
