@@ -153,7 +153,7 @@ class ApiService {
 
   // Voices Management
   async getVoices() {
-    return this.request('/voices/');
+    return this.request(API_ENDPOINTS.voices);
   }
 
   async getVoice(voiceId) {
@@ -201,7 +201,7 @@ class ApiService {
       requestBody.voice_settings = settings;
     }
 
-    const response = await fetch(`${API_BASE_URL}/tts/generate`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/tts/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -297,7 +297,7 @@ class ApiService {
       text: previewText
     };
 
-    const response = await fetch(`${API_BASE_URL}/tts/play`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/tts/play`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -321,7 +321,7 @@ class ApiService {
     const formData = new FormData();
     formData.append('file', file);
 
-    return this.request('/storage/upload/image', {
+    return this.request(API_ENDPOINTS.storageUploadImage, {
       method: 'POST',
       headers: {}, // Let browser set Content-Type for FormData
       body: formData,
@@ -332,7 +332,7 @@ class ApiService {
     const formData = new FormData();
     formData.append('file', file);
 
-    return this.request('/storage/upload/audio', {
+    return this.request(API_ENDPOINTS.storageUploadAudio, {
       method: 'POST',
       headers: {}, // Let browser set Content-Type for FormData
       body: formData,
@@ -344,7 +344,7 @@ class ApiService {
     const formData = new FormData();
     formData.append('file', file);
 
-    return this.request('/d-id-files/upload/image', {
+    return this.request(API_ENDPOINTS.didFilesUploadImage, {
       method: 'POST',
       headers: {}, // Let browser set Content-Type for FormData
       body: formData,
@@ -355,7 +355,7 @@ class ApiService {
     const formData = new FormData();
     formData.append('file', file);
 
-    return this.request('/d-id-files/upload/audio', {
+    return this.request(API_ENDPOINTS.didFilesUploadAudio, {
       method: 'POST',
       headers: {}, // Let browser set Content-Type for FormData
       body: formData,
@@ -375,7 +375,7 @@ class ApiService {
   }
 
   async testDIdAuthentication() {
-    return this.request('/d-id-files/test-auth');
+    return this.request(API_ENDPOINTS.didFilesTestAuth);
   }
 
   // Hybrid Storage API (with D-ID option)
@@ -384,8 +384,8 @@ class ApiService {
     formData.append('file', file);
 
     const url = useDId 
-      ? '/storage/upload/image?use_d_id=true'
-      : '/storage/upload/image';
+      ? `${API_ENDPOINTS.storageUploadImage}?use_d_id=true`
+      : API_ENDPOINTS.storageUploadImage;
 
     return this.request(url, {
       method: 'POST',
@@ -431,7 +431,7 @@ class ApiService {
       formData.append('settings', JSON.stringify(settings));
     }
 
-    return this.request('/video/generate', {
+    return this.request(API_ENDPOINTS.videoGenerate, {
       method: 'POST',
       headers: {}, // Let browser set Content-Type for FormData
       body: formData,
@@ -439,12 +439,12 @@ class ApiService {
   }
 
   async getTaskStatus(taskId) {
-    return this.request(`/video/status/${taskId}`);
+    return this.request(API_ENDPOINTS.videoStatus(taskId));
   }
 
   // Streaming API
   async createStream(imageUrl, description = 'D-ID streaming session') {
-    return this.request('/streaming/start', {
+    return this.request(API_ENDPOINTS.streamingStart, {
       method: 'POST',
       body: JSON.stringify({
         image_url: imageUrl
@@ -453,7 +453,7 @@ class ApiService {
   }
 
   async startStream(streamId, sessionId, sdpAnswer) {
-    return this.request(`/streaming/${streamId}/sdp`, {
+    return this.request(API_ENDPOINTS.streamingSdp(streamId), {
       method: 'POST',
       body: JSON.stringify({
         sdp_answer: sdpAnswer,
@@ -463,7 +463,7 @@ class ApiService {
   }
 
   async submitIceCandidate(streamId, sessionId, candidate, sdpMid, sdpMLineIndex) {
-    return this.request(`/streaming/${streamId}/ice`, {
+    return this.request(API_ENDPOINTS.streamingIce(streamId), {
       method: 'POST',
       body: JSON.stringify({
         candidate: candidate,
@@ -481,7 +481,7 @@ class ApiService {
     // Extract voice_id from script object if available
     const voiceId = typeof script === 'object' && script.voice_id ? script.voice_id : null;
     
-    return this.request(`/streaming/${streamId}/talk`, {
+    return this.request(API_ENDPOINTS.streamingTalk(streamId), {
       method: 'POST',
       body: JSON.stringify({
         text: text,
@@ -492,7 +492,7 @@ class ApiService {
   }
 
   async closeStream(streamId, sessionId) {
-    return this.request(`/streaming/${streamId}`, {
+    return this.request(API_ENDPOINTS.streamingById(streamId), {
       method: 'DELETE',
       body: JSON.stringify({
         session_id: sessionId
@@ -501,7 +501,7 @@ class ApiService {
   }
 
   async getStreamStatus(streamId) {
-    return this.request(`/streaming/${streamId}/status`);
+    return this.request(API_ENDPOINTS.streamingStatus(streamId));
   }
 
 
@@ -513,7 +513,7 @@ class ApiService {
     formData.append('voice_id', voiceId);
     formData.append('model_id', modelId);
 
-    return this.request('/tts/stream-audio-realtime', {
+    return this.request('/api/v1/tts/stream-audio-realtime', {
       method: 'POST',
       headers: {}, // Let browser set Content-Type for FormData
       body: formData,
@@ -522,7 +522,7 @@ class ApiService {
 
   // Health Check
   async healthCheck() {
-    return this.request('/health');
+    return this.request(API_ENDPOINTS.health);
   }
 
   // Legacy methods for backward compatibility
@@ -535,7 +535,7 @@ class ApiService {
   async createDIdStream(imageUrl, description = 'D-ID streaming session', config = null) {
     if (config) {
       // Если передана конфигурация, используем её
-      return this.request('/streaming/start', {
+      return this.request(API_ENDPOINTS.streamingStart, {
         method: 'POST',
         body: JSON.stringify({
           image_url: imageUrl,
@@ -570,7 +570,7 @@ class ApiService {
   }
 
   async createDIdTalkAudio(streamId, sessionId, audioUrl, voiceId = null) {
-    return this.request(`/streaming/${streamId}/talk-audio`, {
+    return this.request(API_ENDPOINTS.streamingTalkAudio(streamId), {
       method: 'POST',
       body: JSON.stringify({
         text: audioUrl, // We use text field to pass audio URL
