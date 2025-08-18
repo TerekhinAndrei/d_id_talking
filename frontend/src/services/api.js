@@ -89,7 +89,10 @@ export const WS_ENDPOINTS = {
 
 class ApiService {
   async request(endpoint, options = {}) {
-    const url = `${API_CONFIG.baseURL}${endpoint}`;
+    // Add timestamp to bypass cache
+    const timestamp = Date.now();
+    const separator = endpoint.includes('?') ? '&' : '?';
+    const url = `${API_CONFIG.baseURL}${endpoint}${separator}_t=${timestamp}`;
     const config = {
       headers: {
         'Content-Type': 'application/json',
