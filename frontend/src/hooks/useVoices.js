@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { FALLBACK_VOICES } from '../constants';
+import FetchApiClient from '../services/api/FetchApiClient';
 
 export const useVoices = () => {
   const [voices, setVoices] = useState([]);
   const [loadingVoices, setLoadingVoices] = useState(true);
   const [voicesError, setVoicesError] = useState(null);
+  const apiClient = new FetchApiClient();
 
   const fetchVoices = async () => {
       try {
@@ -12,19 +14,8 @@ export const useVoices = () => {
         setVoicesError(null);
         
         console.log('🔄 Загружаю голоса из API...');
-        console.log('📡 URL:', '/api/v1/voices/');
         
-        const response = await fetch('/api/v1/voices/');
-        console.log('📡 Response status:', response.status);
-        console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('❌ HTTP Error:', response.status, errorText);
-          throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-        }
-        
-        const data = await response.json();
+        const data = await apiClient.getVoices();
         console.log('📦 Response data:', data);
         console.log('📦 Data type:', typeof data);
         console.log('📦 Is array:', Array.isArray(data));
