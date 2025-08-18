@@ -74,11 +74,12 @@ class ApplicationManager:
             allow_headers=["*"],
         )
         
-        # Trusted host middleware
-        self.app.add_middleware(
-            TrustedHostMiddleware,
-            allowed_hosts=config.ALLOWED_HOSTS,
-        )
+        # Trusted host middleware - only in development
+        if config.ENVIRONMENT == "development":
+            self.app.add_middleware(
+                TrustedHostMiddleware,
+                allowed_hosts=config.ALLOWED_HOSTS,
+            )
     
     def _setup_routes(self):
         """Setup application routes"""
