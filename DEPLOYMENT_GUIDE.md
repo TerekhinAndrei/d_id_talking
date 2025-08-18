@@ -44,8 +44,7 @@ Build Command: pip install -r requirements.txt
 Start Command: uvicorn app.main:app --host 0.0.0.0 --port $PORT --reload
 ```
 
-**Примечание**: Если вам нужна поддержка FFmpeg (для конвертации аудио), используйте:
-- Build Command: `apt-get update && apt-get install -y pkg-config libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev ffmpeg && pip install -r requirements-full.txt`
+
 
 4. В разделе **Environment Variables** добавьте:
 
@@ -160,17 +159,14 @@ Access to fetch at '...' from origin '...' has been blocked by CORS policy
 #### 4. WebSocket соединения не работают
 **Решение**: Убедитесь, что URL в `WS_ENDPOINTS` использует правильный протокол (wss://)
 
-#### 5. Ошибка установки aiortc или av
+#### 5. Ошибка установки ffmpeg-python
 ```
 Package libavformat was not found in the pkg-config search path
 ```
-**Решение**: 
-- Используйте `requirements.txt` без FFmpeg зависимостей для базового деплоя
-- Или используйте `requirements-full.txt` с системными зависимостями FFmpeg
-- Для установки FFmpeg добавьте в Build Command:
-  ```
-  apt-get update && apt-get install -y pkg-config libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev ffmpeg && pip install -r requirements-full.txt
-  ```
+**Решение**: Убедитесь, что в Build Command установлен системный FFmpeg:
+```
+apt-get update && apt-get install -y ffmpeg && pip install -r requirements.txt
+```
 
 ### Проверка конфигурации
 

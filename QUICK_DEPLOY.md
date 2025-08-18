@@ -77,12 +77,11 @@ FRONTEND_URL=https://talking-head-frontend.onrender.com
 - Убедитесь, что `requirements.txt` в корне проекта
 - Убедитесь, что `package.json` в папке `frontend/`
 
-### Ошибки FFmpeg/aiortc
+### Ошибки FFmpeg
 Если видите ошибку `Package libavformat was not found`:
-- Используйте `requirements.txt` (без FFmpeg) для базового деплоя
-- Или добавьте системные зависимости в Build Command:
+- Убедитесь, что в Build Command установлен системный FFmpeg:
   ```
-  apt-get update && apt-get install -y pkg-config libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev ffmpeg && pip install -r requirements-full.txt
+  apt-get update && apt-get install -y ffmpeg && pip install -r requirements.txt
   ```
 
 ### CORS ошибки
