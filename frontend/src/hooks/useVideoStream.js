@@ -21,7 +21,7 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
     const video = videoRef.current;
     if (!video || !stream) return;
 
-    console.log('🎬 Transitioning to live stream...');
+
     
     // Сброс состояния инициализации при переходе к стриму
     setIsInitialized(false);
@@ -32,9 +32,11 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
       video.src = '';
       video.loop = false;
       
+
+      
       // Wait for video to be ready
       const handleStreamReady = () => {
-        console.log('✅ Stream is ready to play');
+
         if (onVideoReady) {
           onVideoReady();
         }
@@ -50,7 +52,7 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
       // Try to play the stream
       try {
         await video.play();
-        console.log('✅ Successfully transitioned to live stream');
+
       } catch (playError) {
         console.warn('⚠️ Auto-play failed, but stream is ready:', playError);
         handleStreamReady();
@@ -81,12 +83,12 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
 
     if (stream && isConnected) {
       const audioTracks = stream.getAudioTracks();
-      console.log('🎵 Audio tracks in stream:', audioTracks.length);
+
       
       if (audioTracks.length > 0) {
         video.muted = false;
         setIsMuted(false);
-        console.log('🔊 Unmuted video for active stream with audio');
+
       } else {
         console.log('⚠️ Stream has no audio tracks, keeping muted');
         video.muted = true;

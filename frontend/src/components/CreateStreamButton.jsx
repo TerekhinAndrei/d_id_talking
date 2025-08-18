@@ -9,12 +9,7 @@ const CreateStreamButton = ({
   onCreateStream,
   onCloseStream
 }) => {
-  console.log('🔘 CreateStreamButton props:', {
-    isCreating,
-    isStreamActive,
-    hasSelectedVoice: !!selectedVoice,
-    hasAudioTrack
-  });
+
   
   const isDisabled = !selectedVoice || isCreating;
 
@@ -30,10 +25,7 @@ const CreateStreamButton = ({
           Создание...
         </>
       ) : isStreamActive ? (
-        <>
-          {hasAudioTrack && <span className="audio-indicator">🎤</span>}
-          Остановить
-        </>
+        'Остановить стрим'
       ) : (
         'Создать стрим'
       )}

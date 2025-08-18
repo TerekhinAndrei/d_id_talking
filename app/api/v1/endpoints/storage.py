@@ -215,6 +215,30 @@ async def upload_audio(
                     else:
                         raise ValueError("Invalid CLOUDINARY_URL format")
                 else:
+                    # Cloudinary URL not configured, check individual fields
+                    logger.info(f"Cloudinary URL not configured, checking individual fields: CLOUD_NAME={config.CLOUDINARY_CLOUD_NAME}, API_KEY={bool(config.CLOUDINARY_API_KEY)}, API_SECRET={bool(config.CLOUDINARY_API_SECRET)}")
+                    if not config.CLOUDINARY_CLOUD_NAME or not config.CLOUDINARY_API_KEY or not config.CLOUDINARY_API_SECRET:
+                        # Fallback to local storage
+                        logger.info("Cloudinary not configured, falling back to local storage")
+                        storage_service = services["storage_service"]
+                        logger.info("About to call storage_service.upload_file...")
+                        metadata = await storage_service.upload_file(file_content, file.filename, file.content_type)
+                        
+                        logger.info(f"Successfully uploaded to local storage: {metadata.filename}")
+                        response = BaseResponse(
+                            success=True,
+                            message="Audio uploaded successfully to local storage",
+                            data={
+                                "url": metadata.url,
+                                "public_id": metadata.filename,
+                                "secure_url": metadata.url,
+                                "storage_type": "local"
+                            }
+                        )
+                        logger.info("About to return response from local storage...")
+                        return response
+                    
+                    logger.info("Cloudinary individual fields configured, proceeding with Cloudinary upload")
                     # Fallback to individual config fields
                     cloudinary.config(
                         cloud_name=config.CLOUDINARY_CLOUD_NAME,
@@ -223,6 +247,7 @@ async def upload_audio(
                     )
                 
                 # Upload to Cloudinary
+                logger.info("About to upload to Cloudinary...")
                 result = cloudinary.uploader.upload(
                     file_content,
                     folder="d_id_talking/audio",

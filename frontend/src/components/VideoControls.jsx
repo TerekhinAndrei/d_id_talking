@@ -27,7 +27,10 @@ const VideoControls = ({
   isCreating,
   hasAudioTrack,
   onCreateStream,
-  onCloseStream
+  onCloseStream,
+  // Zoom controls
+  zoomLevel,
+  onZoomChange
 }) => {
   return (
     <div className="control-panel">
@@ -74,7 +77,7 @@ const VideoControls = ({
               selectedImage={selectedImage}
               selectedVoice={selectedVoice}
               isCreating={isCreating}
-              isStreamActive={isConnected && stream}
+              isStreamActive={isConnected}
               hasAudioTrack={hasAudioTrack}
               onCreateStream={onCreateStream}
               onCloseStream={onCloseStream}

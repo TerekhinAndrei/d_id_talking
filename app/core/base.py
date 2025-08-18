@@ -192,6 +192,9 @@ class ConfigurationProvider(IConfigurationProvider):
             return self.settings.is_d_id_configured()  # Uses same config as d_id
         elif service_name == "cloudinary":
             return self.settings.is_cloudinary_configured()
+        elif service_name == "storage":
+            # Storage service is always available for local storage
+            return True
         return False
     
     def get_service_headers(self, service_name: str) -> Dict[str, str]:

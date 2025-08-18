@@ -603,13 +603,16 @@
 /* Stream Button */
 .stream-button {
   height: 56px;
+  width: 160px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .stream-button .btn {
-  min-width: 140px !important;
+  width: 160px !important;
+  min-width: 160px !important;
   height: 40px !important;
   font-size: 0.9rem;
   font-weight: 600;
@@ -623,11 +626,28 @@
   margin: 0 !important;
   padding: 0 16px !important;
   box-sizing: border-box !important;
+  white-space: nowrap;
 }
 
 .stream-button .btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Loading spinner for stream button */
+.stream-button .btn .loading-spinner {
+  margin-right: 8px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Audio indicator for stream button */
+.stream-button .btn .audio-indicator {
+  margin-right: 8px;
 }
 
 /* Audio Button */
@@ -666,5 +686,141 @@
   color: var(--error);
   font-size: 0.85rem;
   text-align: center;
+}
+
+/* Zoom Control */
+.zoom-control {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.zoom-slider-overlay {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 10;
+}
+
+.zoom-slider-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  height: 24px;
+  min-width: 100px;
+}
+
+.zoom-label {
+  font-size: 1rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+  padding: 0;
+}
+
+.zoom-slider {
+  flex: 1;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.3);
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  min-width: 40px;
+}
+
+.zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.zoom-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.zoom-slider:hover::-webkit-slider-thumb {
+  background: rgba(255, 255, 255, 1);
+  transform: scale(1.1);
+}
+
+.zoom-slider:hover::-moz-range-thumb {
+  background: rgba(255, 255, 255, 1);
+  transform: scale(1.1);
+}
+
+.zoom-value {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+  min-width: 25px;
+  text-align: center;
+  user-select: none;
+  margin: 0;
+  padding: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Responsive adjustments for zoom control */
+@media (max-width: 768px) {
+  .zoom-slider-overlay {
+    bottom: 15px;
+    right: 15px;
+  }
+  
+  .zoom-slider-container {
+    min-width: 80px;
+    padding: 3px 6px;
+    height: 20px;
+  }
+  
+  .zoom-slider {
+    min-width: 35px;
+  }
+  
+  .zoom-value {
+    font-size: 0.65rem;
+    min-width: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .zoom-slider-overlay {
+    bottom: 10px;
+    right: 10px;
+  }
+  
+  .zoom-slider-container {
+    min-width: 70px;
+    padding: 2px 4px;
+    height: 18px;
+  }
+  
+  .zoom-slider {
+    min-width: 30px;
+  }
+  
+  .zoom-value {
+    font-size: 0.6rem;
+    min-width: 18px;
+  }
 }
 

@@ -47,6 +47,8 @@ class StartStreamRequest(BaseModel):
     """Request model for starting a stream"""
     image_url: HttpUrl = Field(..., description="URL of the image to use for streaming")
     presenter_id: Optional[str] = Field(None, description="D-ID presenter ID")
+    config: Optional[Dict[str, Any]] = Field(None, description="Configuration options")
+    description: Optional[str] = Field(None, description="Stream description")
 
 
 class StartStreamResponse(BaseResponse):

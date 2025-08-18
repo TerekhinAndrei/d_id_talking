@@ -1,8 +1,58 @@
-const API_BASE_URL = '/api/v1';
+// API configuration
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT || '30000');
+
+export const API_CONFIG = {
+  baseURL: API_BASE_URL,
+  timeout: API_TIMEOUT,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+};
+
+// API endpoints
+export const API_ENDPOINTS = {
+  // Health check
+  health: '/api/v1/health',
+  
+  // Voices
+  voices: '/api/v1/voices',
+  voiceById: (id) => `/api/v1/voices/${id}`,
+  
+  // TTS
+  tts: '/api/v1/tts',
+  ttsStream: '/api/v1/tts/stream',
+  
+  // Video
+  video: '/api/v1/video',
+  videoStream: '/api/v1/video/stream',
+  
+  // D-ID
+  didStream: '/api/v1/streaming/did',
+  didFiles: '/api/v1/did/files',
+  
+  // Storage
+  storage: '/api/v1/storage',
+  
+  // Tasks
+  tasks: '/api/v1/tasks',
+  taskById: (id) => `/api/v1/tasks/${id}`,
+  
+  // Users
+  users: '/api/v1/users',
+  userById: (id) => `/api/v1/users/${id}`,
+};
+
+// WebSocket endpoints
+export const WS_ENDPOINTS = {
+  test: `${API_BASE_URL.replace('http', 'ws')}/ws/test`,
+  simpleStream: `${API_BASE_URL.replace('http', 'ws')}/ws/simple-stream`,
+  stream: `${API_BASE_URL.replace('http', 'ws')}/ws/stream`,
+};
 
 class ApiService {
   async request(endpoint, options = {}) {
-    const url = `${API_BASE_URL}${endpoint}`;
+    const url = `${API_CONFIG.baseURL}${endpoint}`;
     const config = {
       headers: {
         'Content-Type': 'application/json',
@@ -12,7 +62,19 @@ class ApiService {
     };
 
     try {
-      console.log(`🌐 API Request: ${url}`, config);
+      console.log(`🌐 API Request: ${url}`);
+      if (config.body instanceof FormData) {
+        console.log(`📤 Request body: FormData (${config.body.entries().length} entries)`);
+      } else if (config.body) {
+        try {
+          console.log(`📤 Request body:`, JSON.parse(config.body));
+        } catch (e) {
+          console.log(`📤 Request body: (not JSON)`, config.body);
+        }
+      } else {
+        console.log(`📤 Request body: No body`);
+      }
+      console.log(`📤 Request config:`, config);
       const response = await fetch(url, config);
       
       console.log(`📡 API Response status: ${response.status}`);
@@ -20,13 +82,28 @@ class ApiService {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error(`❌ API Error (${endpoint}):`, errorData);
+        console.error(`❌ Error details:`, JSON.stringify(errorData, null, 2));
+        if (errorData.detail && Array.isArray(errorData.detail)) {
+          console.error(`❌ Validation errors:`, errorData.detail);
+        }
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
       
-      const data = await response.json();
-      console.log(`✅ API Response (${endpoint}):`, data);
-      console.log(`🔍 Response data.success:`, data.success);
-      console.log(`🔍 Response data type:`, typeof data.success);
+      const responseText = await response.text();
+      console.log(`📄 Raw response text:`, responseText);
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log(`✅ API Response (${endpoint}):`, data);
+        console.log(`🔍 Response data.success:`, data.success);
+        console.log(`🔍 Response data type:`, typeof data.success);
+      } catch (parseError) {
+        console.error(`❌ JSON Parse error:`, parseError);
+        console.error(`❌ Response text:`, responseText);
+        throw new Error(`Invalid JSON response: ${responseText}`);
+      }
+      
       return data;
     } catch (error) {
       console.error(`❌ API Error (${endpoint}):`, error);
@@ -330,11 +407,7 @@ class ApiService {
     return this.request('/streaming/start', {
       method: 'POST',
       body: JSON.stringify({
-        image_url: imageUrl,
-        description: description,
-        config: {
-          output_resolution: 512 // Стандартное разрешение для квадратного видео
-        }
+        image_url: imageUrl
       }),
     });
   }

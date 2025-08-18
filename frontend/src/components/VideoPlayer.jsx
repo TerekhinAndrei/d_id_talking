@@ -4,6 +4,7 @@ import VideoControls from './VideoControls';
 import VideoOverlay from './VideoOverlay';
 import { useVideoStream } from '../hooks/useVideoStream';
 import { useVideoState } from '../hooks/useVideoState';
+import { useVideoPlayback } from '../hooks/useVideoPlayback';
 
 const VideoPlayer = ({ 
   stream, 
@@ -33,12 +34,18 @@ const VideoPlayer = ({
 }) => {
   const videoRef = useRef(null);
   const [placeholderOpacity, setPlaceholderOpacity] = useState(0);
+  const [zoomLevel, setZoomLevel] = useState(1); // Добавляем состояние для zoom
   
   // Используем кастомные хуки для разделения ответственности
   const { 
     videoError, 
     handleVideoError 
   } = useVideoState();
+  
+  // Определяем, проигрывается ли видео из стрима
+  const { isPlaying: isVideoPlaying, playbackInfo } = useVideoPlayback(videoRef, stream);
+  
+
   
   const {
     isMuted,
@@ -69,6 +76,38 @@ const VideoPlayer = ({
     }
   }, [stream, isConnected, handleStreamTransition]);
 
+  // Управление прозрачностью видео элементов
+  useEffect(() => {
+    const mainVideo = document.getElementById('main-video-player');
+    const placeholderVideo = document.querySelector('.placeholder-video');
+
+
+    
+    if (stream && isConnected) {
+      // Управляем прозрачность main-video-player на основе проигрывания видео
+      if (mainVideo) {
+        const mainVideoOpacity = isVideoPlaying ? 1 : 0;
+        mainVideo.style.opacity = mainVideoOpacity;
+
+      }
+      
+      // Placeholder всегда видимый когда есть стрим
+      if (placeholderVideo) {
+        placeholderVideo.style.opacity = 1;
+        setPlaceholderOpacity(1);
+      }
+    } else {
+      // Нет стрима - скрываем основной видео элемент, показываем placeholder
+      if (mainVideo) {
+        mainVideo.style.opacity = 0;
+      }
+      if (placeholderVideo) {
+        placeholderVideo.style.opacity = 1;
+        setPlaceholderOpacity(1);
+      }
+    }
+  }, [isVideoPlaying, stream, isConnected, playbackInfo]);
+
   return (
     <div className={`video-player ${className}`}>
       {/* Видео контейнер */}
@@ -76,11 +115,11 @@ const VideoPlayer = ({
           {/* Основной видеоэлемент для стрима */}
           <video
             ref={videoRef}
+            id="main-video-player"
             className="video-element"
             onError={handleVideoError}
             playsInline
             autoPlay
-            loop
             muted
             controls={shouldShowStream}
             style={{ 
@@ -89,12 +128,11 @@ const VideoPlayer = ({
               left: 0,
               width: '100%',
               height: '100%',
-              opacity: 1,
+              opacity: stream && isConnected ? 1 : 0,
               zIndex: 1,
               objectFit: 'contain',
               border: '2px solid blue'
             }}
-            src="/Waiting.mp4"
           />
           
           {/* Видео ожидания */}
@@ -113,7 +151,9 @@ const VideoPlayer = ({
               opacity: placeholderOpacity,
               zIndex: 2,
               objectFit: 'contain',
-              border: '2px solid green'
+              border: '2px solid green',
+              transform: `scale(${zoomLevel})`, // Применяем zoom
+              transformOrigin: 'center center' // Центрируем масштабирование
             }}
             src={testMode && testStreamActive ? "/Test.mp4" : "/Waiting.mp4"}
             onLoadStart={() => console.log('🎬 Загрузка видео:', testMode && testStreamActive ? "Test.mp4" : "Waiting.mp4")}
@@ -148,6 +188,23 @@ const VideoPlayer = ({
           isConnected={isConnected}
           videoError={videoError}
         />
+
+        {/* Zoom слайдер - абсолютное позиционирование внизу */}
+        <div className="zoom-slider-overlay">
+          <div className="zoom-slider-container">
+            <input
+              type="range"
+              min="0.5"
+              max="3"
+              step="0.1"
+              value={zoomLevel}
+              onChange={(e) => setZoomLevel(parseFloat(e.target.value))}
+              className="zoom-slider"
+              title={`Zoom: ${zoomLevel.toFixed(1)}x`}
+            />
+            <span className="zoom-value">{zoomLevel.toFixed(1)}x</span>
+          </div>
+        </div>
       </div>
 
       {/* Панель управления */}
@@ -176,102 +233,25 @@ const VideoPlayer = ({
         hasAudioTrack={hasAudioTrack}
         onCreateStream={onCreateStream}
         onCloseStream={onCloseStream}
+        // Zoom controls
+        zoomLevel={zoomLevel}
+        onZoomChange={setZoomLevel}
       />
 
-                        {/* Тестовые кнопки для переключения видеослоев */}
-                  <div style={{ 
-                    position: 'absolute', 
-                    top: '10px', 
-                    right: '10px', 
-                    zIndex: 1000,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px'
-                  }}>
-                    <div style={{ 
-                      fontSize: '10px', 
-                      color: 'white', 
-                      background: 'rgba(0,0,0,0.7)', 
-                      padding: '2px 6px', 
-                      borderRadius: '3px',
-                      textAlign: 'center'
-                    }}>
-                      {testMode ? '🧪 ТЕСТОВЫЙ РЕЖИМ' : '🎬 ОБЫЧНЫЙ РЕЖИМ'}
-                    </div>
-                    {testMode && (
-                      <div style={{ 
-                        fontSize: '9px', 
-                        color: 'white', 
-                        background: 'rgba(0,0,0,0.7)', 
-                        padding: '2px 6px', 
-                        borderRadius: '3px',
-                        textAlign: 'center'
-                      }}>
-                        {testStreamActive ? '📺 Test.mp4' : '🎬 Waiting.mp4'} {isTestVideoPlaying ? '▶️' : '⏸️'}
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                    <button 
-                      onClick={testShowWaiting}
-                      style={{
-                        padding: '8px 12px',
-                        background: shouldShowWaiting ? '#ff6b6b' : '#ccc',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px'
-                      }}
-                    >
-                      🎬 Waiting.mp4 {shouldShowWaiting && '(активно)'}
-                    </button>
-                    <button 
-                      onClick={testShowStream}
-                      style={{
-                        padding: '8px 12px',
-                        background: shouldShowStream ? '#4ecdc4' : '#ccc',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px'
-                      }}
-                    >
-                      📺 Test.mp4 {shouldShowStream && '(активно)'}
-                    </button>
-                    </div>
-                    
-                    {/* Слайдер opacity для второго слоя */}
-                    <div style={{ 
-                      background: 'rgba(0,0,0,0.7)', 
-                      padding: '8px', 
-                      borderRadius: '4px',
-                      minWidth: '200px'
-                    }}>
-                      <div style={{ 
-                        fontSize: '10px', 
-                        color: 'white', 
-                        marginBottom: '4px',
-                        textAlign: 'center'
-                      }}>
-                        🎚️ Opacity слоя 2 (зеленый): {Math.round(placeholderOpacity * 100)}%
-                      </div>
-                      <input 
-                        type="range" 
-                        min="0" 
-                        max="1" 
-                        step="0.01" 
-                        value={placeholderOpacity}
-                        onChange={(e) => setPlaceholderOpacity(parseFloat(e.target.value))}
-                        style={{
-                          width: '100%',
-                          height: '20px',
-                          background: 'transparent',
-                          outline: 'none'
-                        }}
-                      />
-                    </div>
-                  </div>
+                        {/* Тестовые кнопки отключены */}
+                        {/* 
+                        <div style={{ 
+                          position: 'absolute', 
+                          top: '10px', 
+                          right: '10px', 
+                          zIndex: 1000,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '5px'
+                        }}>
+                          Тестовые кнопки и слайдер opacity отключены
+                        </div>
+                        */}
     </div>
   );
 };

@@ -5,11 +5,13 @@ import './App.css';
 import VideoPlayer from './components/VideoPlayer';
 import ElevenLabsTester from './components/ElevenLabsTester';
 import DIdStreamingTester from './components/DIdStreamingTester';
+import VoiceToAvatarTester from './components/VoiceToAvatarTester';
 
 // Hooks
 import { useVoices } from './hooks/useVoices';
 import { useDIdStreaming } from './hooks/useDIdStreaming';
 import { useElevenLabsDidBridge } from './hooks/useElevenLabsDidBridge';
+import { useVoiceToAvatar } from './hooks/useVoiceToAvatar';
 
 // Constants
 import { DEFAULT_AVATAR_URL, DEFAULT_VOICE_ID } from './constants';
@@ -26,6 +28,7 @@ function App() {
   const [isCreating, setIsCreating] = useState(false);
   const [showElevenLabsTester, setShowElevenLabsTester] = useState(false);
   const [showDIdStreamingTester, setShowDIdStreamingTester] = useState(false);
+  const [showVoiceToAvatarTester, setShowVoiceToAvatarTester] = useState(false);
   
   // Video streaming state
   const [videoStream, setVideoStream] = useState(null);
@@ -55,6 +58,17 @@ function App() {
 
   // Unified bridge: ElevenLabs → D-ID (starts/stops with main flow)
   const bridge = useElevenLabsDidBridge();
+
+  // Voice to Avatar hook for main video player
+  const {
+    streamState: voiceStreamState,
+    setupStream: setupVoiceStream,
+    startVoiceToAvatar,
+    stopVoiceToAvatar,
+    closeStream: closeVoiceStream,
+    reset: resetVoiceStream,
+    logs: voiceLogs
+  } = useVoiceToAvatar('main-video-player', uploadedImageUrl || DEFAULT_AVATAR_URL);
 
   const handleImageSelect = (file) => {
     setSelectedImage(file);
@@ -111,76 +125,39 @@ function App() {
   const handleCreateStream = async () => {
     try {
       setIsCreating(true);
-      console.log('🚀 Начинаем флоу D-ID стриминга (до Step 3 включительно)');
+      console.log('🚀 Начинаем флоу Voice to Avatar стриминга');
       
-      // Upload image to Cloudinary
-      let imageUrl;
-              if (selectedImage) {
-          console.log('📸 Загружаем выбранное пользователем изображение...');
-          const uploadResult = await fileService.uploadImage(selectedImage);
-          imageUrl = uploadResult.data?.url || uploadResult.data?.secure_url;
-        } else {
-          console.log('📸 Используем дефолтное изображение...');
-          imageUrl = uploadedImageUrl || DEFAULT_AVATAR_URL;
-        }
-      
-      console.log('📸 Используем изображение:', selectedImage ? 'загруженное пользователем' : 'по умолчанию');
-      console.log('📸 Создание стрима с изображением:', imageUrl);
-      
-      // Step 1: Create stream - EXACT SAME AS DIdStreamingTester
-      console.log('🎬 Step 1: Creating D-ID stream with image:', imageUrl);
-      const streamResult = await createStream(imageUrl);
-      console.log(' Результат создания стрима:', streamResult);
-      
-      if (!streamResult.success) {
-        throw new Error('Не удалось создать стрим');
-      }
-      
-      console.log('✅ Стрим создан:', streamResult.streamId);
-      
-      // Step 2: Start stream - EXACT SAME AS DIdStreamingTester
-      console.log('🔗 Запуск стрима');
-      const startResult = await startStream(
-        streamResult.streamId,
-        streamResult.sessionId,
-        streamResult.sdpOffer,
-        streamResult.iceServers
-      );
-      
-      if (!startResult.success) {
-        throw new Error('Не удалось запустить стрим');
-      }
-      
-      console.log('✅ Стрим запущен');
-      
-      // Step 3: SDP exchange completed
-      console.log('🌐 SDP exchange завершен - стрим готов к работе');
-      console.log('✅ Stream state updated to connected');
-      console.log('🔍 Current streamState:', streamState);
-      console.log('🔍 streamState.videoStream:', streamState.videoStream);
-      console.log('🔍 streamState.isConnected:', streamState.isConnected);
-      
-      // Автоматически запускаем мост ElevenLabs → D-ID
-      try {
-        await bridge.start({
-          streamId: streamResult.streamId,
-          sessionId: streamResult.sessionId,
-          voiceId: selectedVoice
-        });
-        console.log('🔊 Мост ElevenLabs → D-ID запущен');
-      } catch (e) {
-        console.warn('⚠️ Не удалось запустить мост ElevenLabs → D-ID:', e);
-      }
 
-      // Force video re-render
-      setIsVideoReady(true);
       
-      console.log('🎉 Стрим успешно создан и готов к использованию!');
-      console.log('🎤 Говорите в микрофон - аватар будет анимироваться с синтезированной речью');
+      // Используем новый хук для автоматической настройки стрима
+      console.log('🎬 Запуск автоматической настройки стрима...');
+      
+      // Определяем URL изображения для стрима
+      let streamImageUrl;
+      if (selectedImage) {
+        // Используем загруженное изображение
+        const uploadResult = await fileService.uploadImage(selectedImage);
+        streamImageUrl = uploadResult.data?.url || uploadResult.data?.secure_url;
+        setUploadedImageUrl(streamImageUrl);
+      } else {
+        // Используем дефолтное или уже загруженное изображение
+        streamImageUrl = uploadedImageUrl || DEFAULT_AVATAR_URL;
+      }
+      
+      const success = await setupVoiceStream(selectedVoice, streamImageUrl);
+      
+      if (success) {
+        console.log('✅ Voice to Avatar стрим успешно настроен!');
+        console.log('🎤 Говорите в микрофон - аватар будет анимироваться с вашим голосом');
+        
+        // Force video re-render
+        setIsVideoReady(true);
+      } else {
+        throw new Error('Не удалось настроить Voice to Avatar стрим');
+      }
       
     } catch (error) {
       console.error('❌ Ошибка создания стрима:', error);
-      // Ошибку уже видно в консоли; состояние хука тут недоступно
     } finally {
       setIsCreating(false);
       console.log('✅ Stream creation completed');
@@ -191,14 +168,10 @@ function App() {
     try {
       // Останавливаем мост до закрытия стрима
       try { bridge.stop(); } catch (_) {}
-      // Stop microphone if it's active (now handled by WebRTC)
-      // if (microphoneRef.current) {
-      //   console.log('🎤 Останавливаем микрофон...');
-      //   microphoneRef.current.stopMicrophone();
-      // }
       
-      await closeStream();
-      console.log('✅ Стрим закрыт');
+      // Закрываем Voice to Avatar стрим
+      await closeVoiceStream();
+      console.log('✅ Voice to Avatar стрим закрыт');
       
       // Reset video stream state
       setVideoStream(null);
@@ -220,12 +193,27 @@ function App() {
         {/* Основной видеоплеер с элементами управления */}
         <div className="main-video-section">
           <VideoPlayer
-            stream={streamState.videoStream}
-            isConnected={streamState.isConnected && streamState.isActive}
-            connectionStatus={streamState.status}
+            stream={voiceStreamState.peerConnection ? (() => {
+              // Получаем все треки из peerConnection
+              const receivers = voiceStreamState.peerConnection.getReceivers();
+              
+              // Создаем новый MediaStream из всех треков
+              const tracks = receivers
+                .map(r => r.track)
+                .filter(track => track !== null);
+              
+              if (tracks.length > 0) {
+                const stream = new MediaStream(tracks);
+                return stream;
+              }
+              
+              return null;
+            })() : null}
+            isConnected={voiceStreamState.isConnected}
+            connectionStatus={voiceStreamState.status}
             onVideoReady={() => setIsVideoReady(true)}
             className="main-video-player"
-            isStreamActive={streamState.isConnected && streamState.isActive && streamState.videoStream}
+            isStreamActive={voiceStreamState.isConnected && voiceStreamState.status === 'connected'}
             // Элементы управления
             selectedImage={selectedImage}
             previewUrl={previewUrl}
@@ -243,7 +231,7 @@ function App() {
             onPlayVoice={handlePlayVoice}
             onRetryVoices={retryFetchVoices}
             isCreating={isCreating}
-            hasAudioTrack={!!streamState.audioStream}
+            hasAudioTrack={voiceStreamState.peerConnection ? !!voiceStreamState.peerConnection.getReceivers().find(r => r.track?.kind === 'audio')?.track : false}
             onCreateStream={handleCreateStream}
             onCloseStream={handleCloseStream}
           />
@@ -267,6 +255,13 @@ function App() {
               >
                 {showDIdStreamingTester ? 'Скрыть' : 'Показать'} D-ID Streaming Тестер
               </button>
+              
+              <button 
+                className="toggle-tester-btn"
+                onClick={() => setShowVoiceToAvatarTester(!showVoiceToAvatarTester)}
+              >
+                {showVoiceToAvatarTester ? 'Скрыть' : 'Показать'} Voice to Avatar Тестер
+              </button>
             </div>
           </div>
           
@@ -279,6 +274,10 @@ function App() {
           
           {showDIdStreamingTester && (
             <DIdStreamingTester selectedVoice={selectedVoice} />
+          )}
+          
+          {showVoiceToAvatarTester && (
+            <VoiceToAvatarTester selectedVoice={selectedVoice} />
           )}
         </div>
       </div>
