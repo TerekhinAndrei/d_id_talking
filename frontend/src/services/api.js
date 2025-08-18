@@ -23,7 +23,7 @@ export const API_ENDPOINTS = {
   health: '/api/v1/health',
   
   // Voices
-  voices: '/api/v1/voices',
+  voices: '/api/v1/voices/',
   voiceById: (id) => `/api/v1/voices/${id}`,
   
   // TTS
