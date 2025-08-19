@@ -5,7 +5,7 @@ import './App.css';
 import VideoPlayer from './components/VideoPlayer';
 import ElevenLabsTester from './components/ElevenLabsTester';
 import DIdStreamingTester from './components/DIdStreamingTester';
-import VoiceToAvatarTester from './components/VoiceToAvatarTester';
+
 
 // Hooks
 import { useVoices } from './hooks/useVoices';
@@ -28,7 +28,7 @@ function App() {
   const [isCreating, setIsCreating] = useState(false);
   const [showElevenLabsTester, setShowElevenLabsTester] = useState(false);
   const [showDIdStreamingTester, setShowDIdStreamingTester] = useState(false);
-  const [showVoiceToAvatarTester, setShowVoiceToAvatarTester] = useState(false);
+
   
   // Video streaming state
   const [videoStream, setVideoStream] = useState(null);
@@ -256,12 +256,7 @@ function App() {
                 {showDIdStreamingTester ? 'Скрыть' : 'Показать'} D-ID Streaming Тестер
               </button>
               
-              <button 
-                className="toggle-tester-btn"
-                onClick={() => setShowVoiceToAvatarTester(!showVoiceToAvatarTester)}
-              >
-                {showVoiceToAvatarTester ? 'Скрыть' : 'Показать'} Voice to Avatar Тестер
-              </button>
+
             </div>
           </div>
           
@@ -276,9 +271,7 @@ function App() {
             <DIdStreamingTester selectedVoice={selectedVoice} />
           )}
           
-          {showVoiceToAvatarTester && (
-            <VoiceToAvatarTester selectedVoice={selectedVoice} />
-          )}
+          
         </div>
       </div>
     </div>

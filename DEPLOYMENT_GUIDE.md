@@ -24,7 +24,17 @@
 
 #### Для локальной разработки:
 
-**Способ 1: Создайте файл `frontend/.env.local`**
+**Способ 1: Используйте корневой `.env` файл (рекомендуемый)**
+```bash
+# В корне проекта уже есть .env файл
+# Добавьте в него переменные для фронтенда:
+
+# Frontend API Configuration
+VITE_API_BASE_URL=http://localhost:8000
+VITE_API_TIMEOUT=30000
+```
+
+**Способ 2: Создайте файл `frontend/.env.local`**
 ```bash
 # Создайте файл в папке frontend
 touch frontend/.env.local

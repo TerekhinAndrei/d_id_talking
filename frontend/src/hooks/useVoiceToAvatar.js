@@ -204,6 +204,7 @@ export const useVoiceToAvatar = (videoElementId, imageUrl = null) => {
           // Handle video stream
           const videoElement = document.getElementById(videoElementId);
           addLog(`🎬 Video element found: ${!!videoElement}`, 'info');
+          addLog(`🎬 Video element ID: ${videoElementId}`, 'info');
           
           if (videoElement && event.streams[0]) {
             videoElement.srcObject = event.streams[0];
@@ -219,6 +220,11 @@ export const useVoiceToAvatar = (videoElementId, imageUrl = null) => {
             }, 1000);
           } else {
             addLog('❌ Video element not found or no streams', 'error');
+            addLog(`🔍 Available video elements:`, 'error');
+            const allVideos = document.querySelectorAll('video');
+            allVideos.forEach((video, index) => {
+              addLog(`   ${index}: id="${video.id}"`, 'error');
+            });
           }
         } else if (event.track.kind === 'audio') {
           addLog('🎵 Received AUDIO track!', 'success');

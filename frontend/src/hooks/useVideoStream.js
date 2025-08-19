@@ -52,9 +52,27 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
       // Try to play the stream
       try {
         await video.play();
-
+        console.log('✅ Stream video started playing successfully');
       } catch (playError) {
         console.warn('⚠️ Auto-play failed, but stream is ready:', playError);
+        
+        // Try to play with user interaction
+        const playWithUserInteraction = async () => {
+          try {
+            await video.play();
+            console.log('✅ Stream video started playing after user interaction');
+          } catch (e) {
+            console.warn('⚠️ Still cannot play video:', e);
+          }
+        };
+        
+        // Add click listener to enable playback
+        const handleClick = () => {
+          playWithUserInteraction();
+          document.removeEventListener('click', handleClick);
+        };
+        document.addEventListener('click', handleClick);
+        
         handleStreamReady();
       }
 
