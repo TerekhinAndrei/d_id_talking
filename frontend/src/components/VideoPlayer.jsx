@@ -75,14 +75,13 @@ const VideoPlayer = ({
         // Стрим активен - показываем видео, скрываем placeholder
         mainVideo.style.transition = 'opacity 0.5s ease-in-out';
         mainVideo.style.opacity = 1;
-        mainVideo.style.display = 'block';
+        mainVideo.style.zIndex = 3; // Поверх placeholder
         setPlaceholderOpacity(0); // Скрываем placeholder
       } else {
-        // Стрим неактивен - оставляем последний кадр видимым
-        // Убираем transition чтобы избежать анимации исчезновения
-        mainVideo.style.transition = 'none';
-        mainVideo.style.opacity = 1;
-        mainVideo.style.display = 'block';
+        // Стрим неактивен - скрываем main-video, показываем placeholder
+        mainVideo.style.transition = 'opacity 0.5s ease-in-out';
+        mainVideo.style.opacity = 0;
+        mainVideo.style.zIndex = 1; // Под placeholder
         setPlaceholderOpacity(1); // Показываем placeholder
       }
     }
@@ -145,7 +144,7 @@ const VideoPlayer = ({
               height: '100%',
               opacity: placeholderOpacity,
               transition: 'opacity 0.5s ease-in-out',
-              zIndex: 2,
+              zIndex: isVideoStreamPlaying ? 1 : 3, // Меняем z-index в зависимости от состояния
               objectFit: 'contain',
               border: '2px solid green',
               transform: `scale(${zoomLevel})`, // Применяем zoom
