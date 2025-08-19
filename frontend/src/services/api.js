@@ -1,5 +1,7 @@
+import configManager from '../config/ConfigManager.js';
+
 // API configuration
-const API_BASE_URL = 'https://talking-head.onrender.com';
+const API_BASE_URL = configManager.backendUrl;
 const API_VERSION = 'v1.0.1'; // Force cache refresh
 const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT || '30000');
 
@@ -82,9 +84,9 @@ export const API_ENDPOINTS = {
 
 // WebSocket endpoints
 export const WS_ENDPOINTS = {
-  test: `${API_BASE_URL.replace('http', 'ws')}/ws/test`,
-  simpleStream: `${API_BASE_URL.replace('http', 'ws')}/ws/simple-stream`,
-  stream: `${API_BASE_URL.replace('http', 'ws')}/ws/stream`,
+  test: configManager.getWebSocketUrl('/ws/test'),
+  simpleStream: configManager.getWebSocketUrl('/ws/simple-stream'),
+  stream: configManager.getWebSocketUrl('/ws/stream'),
 };
 
 class ApiService {

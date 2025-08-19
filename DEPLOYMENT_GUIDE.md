@@ -1,236 +1,120 @@
-# Руководство по деплою на Render
+# 🚀 Руководство по развертыванию на Render
 
-## Обзор
+## 📋 Обзор
 
 Этот проект состоит из двух частей:
-- **Backend**: FastAPI приложение на Python
-- **Frontend**: React приложение на Vite
+- **Backend**: FastAPI приложение (Python)
+- **Frontend**: React/Vite приложение (JavaScript)
 
-Для деплоя на Render мы используем два сервиса:
-1. **Web Service** для бэкенда (Python)
-2. **Static Site** для фронтенда (React)
+## 🔧 Конфигурация URL
 
-## Предварительные требования
+### Локальная разработка
+Проект автоматически определяет окружение и использует правильные URL:
 
-### 1. Подготовка API ключей
+- **Backend**: `http://localhost:8000`
+- **Frontend**: `http://localhost:5173`
+- **WebSocket**: `ws://localhost:8000/ws/stream`
 
-Убедитесь, что у вас есть следующие API ключи:
-- **D-ID API Key** - для работы с D-ID сервисом
-- **ElevenLabs API Key** - для синтеза речи
-- **Cloudinary URL** (опционально) - для хранения файлов
+### Продакшен (Render)
+- **Backend**: `https://talking-head.onrender.com`
+- **Frontend**: `https://talking-head-frontend.onrender.com`
+- **WebSocket**: `wss://talking-head.onrender.com/ws/stream`
 
-### 2. Подготовка репозитория
-
-Убедитесь, что ваш код находится в Git репозитории (GitHub, GitLab, Bitbucket).
-
-## Пошаговые инструкции
-
-### Шаг 1: Создание аккаунта на Render
-
-1. Перейдите на [render.com](https://render.com)
-2. Зарегистрируйтесь или войдите в аккаунт
-3. Подключите ваш Git репозиторий
-
-### Шаг 2: Деплой бэкенда
-
-1. В панели Render нажмите **"New +"** → **"Web Service"**
-2. Подключите ваш репозиторий
-3. Настройте сервис:
-
-```
-Name: talking-head-backend
-Environment: Python 3
-Build Command: pip install -r requirements.txt
-Start Command: uvicorn app.main:app --host 0.0.0.0 --port $PORT --reload
+### Переменные окружения
+Для переопределения URL используйте переменную окружения:
+```bash
+VITE_API_BASE_URL=https://your-backend-url.com
 ```
 
+## 🛠️ Развертывание
 
+### 1. Подготовка репозитория
 
-4. В разделе **Environment Variables** добавьте:
-
+Убедитесь, что ваш код находится в ветке `develop`:
+```bash
+git checkout develop
+git pull origin develop
 ```
-PYTHON_VERSION=3.11.0
-PORT=8000
+
+### 2. Создание тега для релиза
+
+```bash
+git tag v1.2.1
+git push origin v1.2.1
+```
+
+### 3. Развертывание через Render Blueprint
+
+1. Перейдите на [Render Dashboard](https://dashboard.render.com/)
+2. Нажмите "New" → "Blueprint"
+3. Подключите ваш GitHub репозиторий
+4. Выберите файл `render.yaml`
+5. Нажмите "Apply"
+
+### 4. Настройка переменных окружения
+
+В Render Dashboard для каждого сервиса настройте переменные окружения:
+
+#### Backend переменные:
+```bash
 ENVIRONMENT=production
-DEBUG=false
-HOST=0.0.0.0
-SECRET_KEY=[автогенерация]
-ALLOWED_HOSTS=https://talking-head-frontend.onrender.com,https://talking-head-backend.onrender.com
-CLIENT_URL=https://talking-head-frontend.onrender.com
-FRONTEND_URL=https://talking-head-frontend.onrender.com
-D_ID_API_KEY=[ваш D-ID API ключ]
-ELEVENLABS_API_KEY=[ваш ElevenLabs API ключ]
-CLOUDINARY_URL=[ваш Cloudinary URL]
+ELEVENLABS_API_KEY=your_elevenlabs_key
+D_ID_API_KEY=your_d_id_key
+CLOUDINARY_URL=your_cloudinary_url
 ```
 
-5. Нажмите **"Create Web Service"**
-
-### Шаг 3: Деплой фронтенда
-
-1. В панели Render нажмите **"New +"** → **"Static Site"**
-2. Подключите тот же репозиторий
-3. Настройте сервис:
-
-```
-Name: talking-head-frontend
-Build Command: cd frontend && npm install && npm run build
-Publish Directory: frontend/dist
-```
-
-4. В разделе **Environment Variables** добавьте:
-
-```
-VITE_API_BASE_URL=https://talking-head-backend.onrender.com
+#### Frontend переменные:
+```bash
+VITE_API_BASE_URL=https://talking-head.onrender.com
 VITE_API_TIMEOUT=30000
 ```
 
-5. Нажмите **"Create Static Site"**
+## 📁 Структура файлов
 
-### Шаг 4: Настройка CORS
+### Backend файлы:
+- `requirements.txt` - Python зависимости
+- `app/main.py` - точка входа FastAPI
+- `render.yaml` - конфигурация Render
 
-После создания обоих сервисов, обновите переменную `ALLOWED_HOSTS` в бэкенде, добавив URL фронтенда:
+### Frontend файлы:
+- `package.json` - Node.js зависимости
+- `vite.config.js` - конфигурация Vite
+- `src/config/ConfigManager.js` - централизованная конфигурация URL
 
-```
-ALLOWED_HOSTS=https://talking-head-frontend.onrender.com,https://talking-head-backend.onrender.com
-```
+## 🔍 Проверка развертывания
 
-### Шаг 5: Проверка деплоя
-
-1. **Проверьте бэкенд**: Откройте `https://talking-head-backend.onrender.com/docs`
-2. **Проверьте фронтенд**: Откройте `https://talking-head-frontend.onrender.com`
-
-## Конфигурация файлов
-
-### render.yaml (автоматический деплой)
-
-Если вы хотите использовать автоматический деплой через `render.yaml`:
-
-1. Убедитесь, что файл `render.yaml` находится в корне репозитория
-2. В Render выберите **"New +"** → **"Blueprint"**
-3. Подключите репозиторий
-4. Render автоматически создаст оба сервиса
-
-### Обновление переменных окружения
-
-После создания сервисов вы можете обновить переменные окружения:
-
-1. Перейдите в настройки сервиса
-2. Выберите **"Environment"**
-3. Добавьте или измените переменные
-4. Нажмите **"Save Changes"**
-5. Сервис автоматически перезапустится
-
-## Мониторинг и логи
-
-### Просмотр логов
-
-1. В панели сервиса перейдите в **"Logs"**
-2. Выберите **"Live"** для просмотра в реальном времени
-3. Используйте фильтры для поиска ошибок
-
-### Мониторинг производительности
-
-1. В настройках сервиса включите **"Health Check Path"**
-2. Установите путь: `/api/v1/health`
-3. Render будет автоматически проверять доступность сервиса
-
-## Устранение неполадок
-
-### Частые проблемы
-
-#### 1. Ошибка сборки фронтенда
-```
-Error: Cannot find module 'react'
-```
-**Решение**: Убедитесь, что `package.json` находится в папке `frontend/`
-
-#### 2. Ошибка импорта в бэкенде
-```
-ModuleNotFoundError: No module named 'app'
-```
-**Решение**: Убедитесь, что `requirements.txt` находится в корне проекта
-
-#### 3. CORS ошибки
-```
-Access to fetch at '...' from origin '...' has been blocked by CORS policy
-```
-**Решение**: Проверьте переменную `ALLOWED_HOSTS` в бэкенде
-
-#### 4. WebSocket соединения не работают
-**Решение**: Убедитесь, что URL в `WS_ENDPOINTS` использует правильный протокол (wss://)
-
-#### 5. Ошибка установки системных пакетов
-```
-E: List directory /var/lib/apt/lists/partial is missing. - Acquire (30: Read-only file system)
-```
-**Решение**: В бесплатном плане Render нельзя использовать `apt-get`. Используйте только Python зависимости:
-```
-pip install -r requirements.txt
+### 1. Проверка Backend
+```bash
+curl https://talking-head.onrender.com/api/v1/health
 ```
 
-**Примечание**: FFmpeg конвертация аудио будет недоступна в бесплатном плане. Для полной функциональности перейдите на платный план.
+### 2. Проверка Frontend
+Откройте `https://talking-head-frontend.onrender.com` в браузере
 
-### Проверка конфигурации
+### 3. Проверка WebSocket
+В консоли браузера не должно быть ошибок WebSocket подключения
 
-1. **Бэкенд**: Откройте `/docs` для проверки API
-2. **Фронтенд**: Проверьте консоль браузера на ошибки
-3. **WebSocket**: Проверьте соединения в Network tab
+## 🐛 Устранение неполадок
 
-## Обновление приложения
+### Проблема: "Build failed"
+- Проверьте логи сборки в Render Dashboard
+- Убедитесь, что все зависимости указаны в `requirements.txt` и `package.json`
 
-### Автоматические обновления
+### Проблема: "API calls failing"
+- Проверьте переменные окружения в Render
+- Убедитесь, что `VITE_API_BASE_URL` указывает на правильный backend URL
 
-При пуше в основную ветку репозитория Render автоматически:
-1. Обнаружит изменения
-2. Запустит новую сборку
-3. Развернет обновленную версию
+### Проблема: "WebSocket connection failed"
+- Проверьте, что WebSocket URL использует правильный протокол (wss:// для HTTPS)
+- Убедитесь, что backend поддерживает WebSocket соединения
 
-### Ручные обновления
+### Проблема: "CORS errors"
+- Проверьте настройки CORS в `app/core/config.py`
+- Убедитесь, что frontend URL добавлен в `ALLOWED_HOSTS`
 
-1. В панели сервиса нажмите **"Manual Deploy"**
-2. Выберите ветку и коммит
-3. Нажмите **"Deploy latest commit"**
+## 📝 Примечания
 
-## Безопасность
-
-### Переменные окружения
-
-- Никогда не коммитьте API ключи в репозиторий
-- Используйте переменные окружения Render
-- Регулярно обновляйте API ключи
-
-### HTTPS
-
-Render автоматически предоставляет SSL сертификаты для всех сервисов.
-
-## Масштабирование
-
-### Планы Render
-
-- **Free**: Подходит для разработки и тестирования
-  - ✅ API endpoints
-  - ✅ ElevenLabs TTS
-  - ✅ D-ID streaming
-  - ✅ WebSocket соединения
-  - ❌ FFmpeg конвертация аудио
-- **Starter**: $7/месяц - для небольших проектов
-  - ✅ Все функции включая FFmpeg
-- **Standard**: $25/месяц - для продакшена
-  - ✅ Все функции + автомасштабирование
-
-### Автомасштабирование
-
-В платных планах доступно автомасштабирование на основе нагрузки.
-
-## Поддержка
-
-- [Render Documentation](https://render.com/docs)
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [Vite Documentation](https://vitejs.dev/)
-
-## Заключение
-
-После выполнения всех шагов у вас будет полностью развернутое приложение с:
-- Бэкендом на `https://talking-head-backend.onrender.com`
-- Фронтендом на `https://talking-head-frontend.onrender.com`
-- Автоматическими обновлениями при пуше в репозиторий
+- Проект автоматически определяет окружение (development/production)
+- URL конфигурируются централизованно через `ConfigManager`
+- Для локальной разработки не требуется дополнительная настройка
+- Все API endpoints используют правильные URL автоматически

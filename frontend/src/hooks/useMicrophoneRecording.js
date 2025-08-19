@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import configManager from '../config/ConfigManager.js';
 
 export const useMicrophoneRecording = (options = {}) => {
   // Состояния
@@ -122,13 +123,12 @@ export const useMicrophoneRecording = (options = {}) => {
     if (!isPlayingRef.current) {
       processPlaybackQueue();
     }
-  }, [processPlaybackQueue]);
+      }, [processPlaybackQueue]);
 
   // Подключение к WebSocket
   const connectWebSocket = useCallback(() => {
     try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//talking-head.onrender.com/ws/stream`;
+      const wsUrl = configManager.getWebSocketUrl('/ws/stream');
       
       websocketRef.current = new WebSocket(wsUrl);
       
