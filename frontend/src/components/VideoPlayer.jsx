@@ -33,7 +33,7 @@ const VideoPlayer = ({
   onCloseStream
 }) => {
   const videoRef = useRef(null);
-  const [placeholderOpacity, _setPlaceholderOpacity] = useState(1); // Делаем placeholder видимым по умолчанию
+  const [placeholderOpacity, setPlaceholderOpacity] = useState(1); // Делаем placeholder видимым по умолчанию
   const [zoomLevel, setZoomLevel] = useState(1.2); // Добавляем состояние для zoom
   
   // Используем кастомные хуки для разделения ответственности
@@ -71,10 +71,20 @@ const VideoPlayer = ({
   useEffect(() => {
     const mainVideo = document.getElementById('main-video-player');
     if (mainVideo) {
-      const targetOpacity = isVideoStreamPlaying ? 1 : 0;
-      mainVideo.style.transition = 'opacity 0.5s ease-in-out';
-      mainVideo.style.opacity = targetOpacity;
-      mainVideo.style.display = 'block';
+      if (isVideoStreamPlaying) {
+        // Стрим активен - показываем видео, скрываем placeholder
+        mainVideo.style.transition = 'opacity 0.5s ease-in-out';
+        mainVideo.style.opacity = 1;
+        mainVideo.style.display = 'block';
+        setPlaceholderOpacity(0); // Скрываем placeholder
+      } else {
+        // Стрим неактивен - оставляем последний кадр видимым
+        // Убираем transition чтобы избежать анимации исчезновения
+        mainVideo.style.transition = 'none';
+        mainVideo.style.opacity = 1;
+        mainVideo.style.display = 'block';
+        setPlaceholderOpacity(1); // Показываем placeholder
+      }
     }
   }, [isVideoStreamPlaying]);
 
@@ -134,6 +144,7 @@ const VideoPlayer = ({
               width: '100%',
               height: '100%',
               opacity: placeholderOpacity,
+              transition: 'opacity 0.5s ease-in-out',
               zIndex: 2,
               objectFit: 'contain',
               border: '2px solid green',
