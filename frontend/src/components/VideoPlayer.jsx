@@ -35,7 +35,6 @@ const VideoPlayer = ({
   const videoRef = useRef(null);
   const [placeholderOpacity, _setPlaceholderOpacity] = useState(1); // Делаем placeholder видимым по умолчанию
   const [zoomLevel, setZoomLevel] = useState(1.2); // Добавляем состояние для zoom
-  const [mainVideoOpacity, setMainVideoOpacity] = useState(0); // Тестовый слайдер для прозрачности main-video-player
   
   // Используем кастомные хуки для разделения ответственности
   const { 
@@ -68,14 +67,16 @@ const VideoPlayer = ({
     }
     }, [stream, isConnected, handleStreamTransition]);
 
-  // Ручное управление прозрачностью main-video-player
+  // Автоматическое управление прозрачностью main-video-player на основе состояния стрима
   useEffect(() => {
     const mainVideo = document.getElementById('main-video-player');
     if (mainVideo) {
-      mainVideo.style.opacity = mainVideoOpacity;
+      const targetOpacity = isVideoStreamPlaying ? 1 : 0;
+      mainVideo.style.transition = 'opacity 0.5s ease-in-out';
+      mainVideo.style.opacity = targetOpacity;
       mainVideo.style.display = 'block';
     }
-  }, [mainVideoOpacity]);
+  }, [isVideoStreamPlaying]);
 
   // Принудительно запускаем placeholder видео
   useEffect(() => {
@@ -110,7 +111,7 @@ const VideoPlayer = ({
               left: 0,
               width: '100%',
               height: '100%',
-              opacity: mainVideoOpacity, // Применяем тестовую прозрачность
+              opacity: 0, // Начальная прозрачность, управляется автоматически
               zIndex: 3, // Увеличиваем z-index чтобы main-video-player был поверх placeholder
               objectFit: 'contain',
               border: '2px solid blue',
@@ -200,22 +201,7 @@ const VideoPlayer = ({
           </span>
         </div>
 
-        {/* Тестовый слайдер прозрачности main-video-player */}
-        <div className="opacity-slider-overlay">
-          <div className="opacity-slider-container">
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              value={mainVideoOpacity}
-              onChange={(e) => setMainVideoOpacity(parseFloat(e.target.value))}
-              className="opacity-slider"
-              title={`Opacity: ${mainVideoOpacity.toFixed(1)}`}
-            />
-            <span className="opacity-value">{mainVideoOpacity.toFixed(1)}</span>
-          </div>
-        </div>
+
       </div>
 
       {/* Панель управления */}
