@@ -548,6 +548,15 @@
   display: none;
 }
 
+/* Скрываем информацию об аватаре в компактном режиме */
+.image-selector .current-avatar-info {
+  display: none;
+}
+
+.image-selector .avatar-loading {
+  display: none;
+}
+
 /* Voice Selector */
 .voice-selector {
   height: 56px;

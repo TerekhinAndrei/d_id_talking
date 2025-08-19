@@ -1,10 +1,34 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { fileService } from '../services/FileService.js';
 
-const ImageUpload = ({ selectedImage, previewUrl, onImageSelect, onImageRemove, onUploadSuccess, onUploadError }) => {
+const ImageUpload = ({ selectedImage, previewUrl, onImageSelect, onImageRemove, onUploadSuccess, onUploadError, compact = false }) => {
   const fileInputRef = useRef(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [currentAvatar, setCurrentAvatar] = useState(null);
+  const [isLoadingAvatar, setIsLoadingAvatar] = useState(false);
+
+  // Загружаем текущий аватар при монтировании компонента (только в полном режиме)
+  useEffect(() => {
+    if (compact) return; // Пропускаем загрузку аватара в компактном режиме
+    
+    const loadCurrentAvatar = async () => {
+      setIsLoadingAvatar(true);
+      try {
+        const avatarInfo = await fileService.getCurrentAvatar();
+        if (avatarInfo && avatarInfo.success) {
+          setCurrentAvatar(avatarInfo.data);
+          console.log('✅ Current avatar loaded:', avatarInfo.data);
+        }
+      } catch (error) {
+        console.log('ℹ️ No current avatar found or error loading:', error.message);
+      } finally {
+        setIsLoadingAvatar(false);
+      }
+    };
+
+    loadCurrentAvatar();
+  }, [compact]);
 
   const handleImageUpload = async (event) => {
     const file = event.target.files[0];
@@ -42,6 +66,19 @@ const ImageUpload = ({ selectedImage, previewUrl, onImageSelect, onImageRemove, 
 
         console.log('Image uploaded successfully:', result);
         onUploadSuccess?.(result);
+
+        // Обновляем информацию о текущем аватаре (только в полном режиме)
+        if (!compact) {
+          try {
+            const avatarInfo = await fileService.getCurrentAvatar();
+            if (avatarInfo && avatarInfo.success) {
+              setCurrentAvatar(avatarInfo.data);
+              console.log('✅ Current avatar updated:', avatarInfo.data);
+            }
+          } catch (error) {
+            console.log('ℹ️ Could not update current avatar info:', error.message);
+          }
+        }
 
         // Небольшая задержка перед сбросом прогресса
         setTimeout(() => {
@@ -130,9 +167,24 @@ const ImageUpload = ({ selectedImage, previewUrl, onImageSelect, onImageRemove, 
           <p>Выбран файл: {selectedImage.name}</p>
           {isUploading && (
             <p className="upload-status">
-              Загружается в {fileService.getProvidersInfo().default === 'd_id' ? 'D-ID' : 'Cloudinary'}...
+              Загружается в {fileService.getProvidersInfo().default === 'd_id' ? 'D-ID' : 'файловое хранилище'}...
             </p>
           )}
+        </div>
+      )}
+      
+      {/* Информация о текущем аватаре (только в полном режиме) */}
+      {!compact && currentAvatar && !isUploading && (
+        <div className="current-avatar-info">
+          <p>Текущий аватар: {currentAvatar.filename}</p>
+          <p>Размер: {(currentAvatar.size / 1024).toFixed(1)} KB</p>
+          <p>Тип: {currentAvatar.content_type}</p>
+        </div>
+      )}
+      
+      {!compact && isLoadingAvatar && (
+        <div className="avatar-loading">
+          <p>Загрузка информации об аватаре...</p>
         </div>
       )}
     </div>

@@ -88,6 +88,13 @@ class Settings(BaseSettings):
     ALLOWED_IMAGE_TYPES: str = "image/jpeg,image/png,image/webp"
     ALLOWED_AUDIO_TYPES: str = "audio/mpeg,audio/wav,audio/webm,audio/ogg"
     
+    # File storage settings
+    UPLOAD_DIR: str = "uploads"
+    AVATAR_DIR: str = "uploads/avatar"
+    AUDIO_DIR: str = "uploads/audio"
+    AUDIO_CLEANUP_DELAY: int = 10  # seconds
+    BASE_URL: str = "http://localhost:8000"
+    
     # Logging settings
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

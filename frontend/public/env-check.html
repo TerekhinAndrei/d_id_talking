@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Environment Variables Check</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .env-var {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 4px solid #ddd;
+        }
+        .env-var.present {
+            background-color: #d4edda;
+            border-left-color: #28a745;
+        }
+        .env-var.missing {
+            background-color: #f8d7da;
+            border-left-color: #dc3545;
+        }
+        .env-var.partial {
+            background-color: #fff3cd;
+            border-left-color: #ffc107;
+        }
+        .env-name {
+            font-weight: bold;
+            color: #333;
+        }
+        .env-value {
+            font-family: monospace;
+            background-color: #f8f9fa;
+            padding: 2px 4px;
+            border-radius: 2px;
+            margin-left: 10px;
+        }
+        .summary {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .summary.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .summary.warning {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .summary.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Environment Variables Check</h1>
+        <p>This page checks if the required environment variables are available in the browser.</p>
+        
+        <div id="env-check-results"></div>
+        <div id="summary"></div>
+    </div>
+
+    <script type="module">
+        // Список необходимых переменных окружения
+        const requiredEnvVars = [
+            'VITE_API_BASE_URL',
+            'VITE_API_TIMEOUT',
+            'VITE_D_ID_API_KEY',
+            'VITE_CLOUDINARY_API_KEY',
+            'VITE_CLOUDINARY_API_SECRET',
+            'VITE_CLOUDINARY_CLOUD_NAME',
+            'VITE_CLOUDINARY_UPLOAD_PRESET'
+        ];
+
+        // Опциональные переменные
+        const optionalEnvVars = [
+            'VITE_ELEVENLABS_API_KEY' // ElevenLabs использует бэкенд API
+        ];
+
+        function checkEnvironmentVariables() {
+            const resultsContainer = document.getElementById('env-check-results');
+            const summaryContainer = document.getElementById('summary');
+            
+            let presentCount = 0;
+            let missingCount = 0;
+            let partialCount = 0;
+
+            // Проверяем обязательные переменные
+            requiredEnvVars.forEach(envVar => {
+                const value = import.meta.env[envVar];
+                const isPresent = value && value.trim() !== '';
+                
+                const envDiv = document.createElement('div');
+                envDiv.className = `env-var ${isPresent ? 'present' : 'missing'}`;
+                
+                const envName = document.createElement('div');
+                envName.className = 'env-name';
+                envName.textContent = envVar;
+                
+                const envValue = document.createElement('div');
+                envValue.className = 'env-value';
+                envValue.textContent = isPresent ? 
+                    (value.length > 20 ? value.substring(0, 20) + '...' : value) : 
+                    'NOT SET';
+                
+                envDiv.appendChild(envName);
+                envDiv.appendChild(envValue);
+                resultsContainer.appendChild(envDiv);
+                
+                if (isPresent) {
+                    presentCount++;
+                } else {
+                    missingCount++;
+                }
+            });
+
+            // Проверяем опциональные переменные
+            optionalEnvVars.forEach(envVar => {
+                const value = import.meta.env[envVar];
+                const isPresent = value && value.trim() !== '';
+                
+                const envDiv = document.createElement('div');
+                envDiv.className = `env-var ${isPresent ? 'present' : 'partial'}`;
+                
+                const envName = document.createElement('div');
+                envName.className = 'env-name';
+                envName.textContent = envVar + ' (optional)';
+                
+                const envValue = document.createElement('div');
+                envValue.className = 'env-value';
+                envValue.textContent = isPresent ? 
+                    (value.length > 20 ? value.substring(0, 20) + '...' : value) : 
+                    'NOT SET';
+                
+                envDiv.appendChild(envName);
+                envDiv.appendChild(envValue);
+                resultsContainer.appendChild(envDiv);
+                
+                if (isPresent) {
+                    presentCount++;
+                } else {
+                    partialCount++;
+                }
+            });
+
+            // Создаем сводку
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = 'summary';
+            
+            if (missingCount === 0) {
+                summaryDiv.className += ' success';
+                summaryDiv.textContent = `✅ All required environment variables are set! (${presentCount} present, ${partialCount} optional missing)`;
+            } else if (missingCount <= 2) {
+                summaryDiv.className += ' warning';
+                summaryDiv.textContent = `⚠️ Some environment variables are missing. (${presentCount} present, ${missingCount} missing, ${partialCount} optional missing)`;
+            } else {
+                summaryDiv.className += ' error';
+                summaryDiv.textContent = `❌ Many environment variables are missing! (${presentCount} present, ${missingCount} missing, ${partialCount} optional missing)`;
+            }
+            
+            summaryContainer.appendChild(summaryDiv);
+
+            // Добавляем рекомендации
+            if (missingCount > 0) {
+                const recommendationsDiv = document.createElement('div');
+                recommendationsDiv.style.marginTop = '20px';
+                recommendationsDiv.style.padding = '15px';
+                recommendationsDiv.style.backgroundColor = '#e2e3e5';
+                recommendationsDiv.style.borderRadius = '4px';
+                
+                recommendationsDiv.innerHTML = `
+                    <h3>Recommendations:</h3>
+                    <ul>
+                        <li>Set the missing environment variables in your Render dashboard</li>
+                        <li>For D-ID: Get API key from <a href="https://studio.d-id.com/" target="_blank">D-ID Studio</a></li>
+                        <li>For Cloudinary: Get credentials from <a href="https://cloudinary.com/" target="_blank">Cloudinary Dashboard</a></li>
+                        <li>After setting variables, redeploy your application</li>
+                    </ul>
+                `;
+                
+                summaryContainer.appendChild(recommendationsDiv);
+            }
+        }
+
+        // Запускаем проверку при загрузке страницы
+        document.addEventListener('DOMContentLoaded', checkEnvironmentVariables);
+    </script>
+</body>
+</html>

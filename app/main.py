@@ -421,6 +421,9 @@ class ApplicationManager:
             self.service_container = get_service_container(self.config_provider)
             await self.service_container.initialize()
             logger.info("✅ Services initialized successfully")
+            
+
+            
         except Exception as e:
             logger.error(f"❌ Service initialization failed: {e}")
         
@@ -435,6 +438,8 @@ class ApplicationManager:
             logger.info("✅ Services cleaned up successfully")
         except Exception as e:
             logger.error(f"❌ Service cleanup failed: {e}")
+    
+
     
     def _get_current_timestamp(self) -> str:
         """Get current timestamp in ISO format"""

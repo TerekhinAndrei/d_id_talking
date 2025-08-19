@@ -1,10 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 
 // Components
 import VideoPlayer from './components/VideoPlayer';
 import ElevenLabsTester from './components/ElevenLabsTester';
 import DIdStreamingTester from './components/DIdStreamingTester';
+import FileStorageTester from './components/FileStorageTester';
 
 
 // Hooks
@@ -29,6 +30,7 @@ function App() {
   const [isCreating, setIsCreating] = useState(false);
   const [showElevenLabsTester, setShowElevenLabsTester] = useState(false);
   const [showDIdStreamingTester, setShowDIdStreamingTester] = useState(false);
+  const [showFileStorageTester, setShowFileStorageTester] = useState(false);
 
   
   // Video streaming state
@@ -74,6 +76,48 @@ function App() {
   // Image dimensions hook
   const { dimensions: imageDimensions, isLoading: imageDimensionsLoading } = useImageDimensions(previewUrl);
 
+  // Upload default avatar to D-ID on component mount
+  const [defaultAvatarLoaded, setDefaultAvatarLoaded] = useState(false);
+  
+  useEffect(() => {
+    const uploadDefaultAvatar = async () => {
+      try {
+        console.log('🚀 Uploading default avatar to D-ID...');
+        
+        // Fetch the default avatar file
+        const response = await fetch('/default_avatar.jpg');
+        const blob = await response.blob();
+        const file = new File([blob], 'default_avatar.jpg', { type: 'image/jpeg' });
+        
+        // Upload to D-ID using existing file service
+        const result = await fileService.uploadImage(file);
+        
+        if (result && result.data?.url) {
+          const dIdAvatarUrl = result.data.url;
+          console.log('✅ Default avatar uploaded to D-ID:', dIdAvatarUrl);
+          
+          // For D-ID streaming, we should use the URL returned by D-ID
+          console.log('🔗 Using D-ID URL for streaming:', dIdAvatarUrl);
+          
+          // Keep preview URL as local for display, but use D-ID URL for streaming
+          setPreviewUrl(DEFAULT_AVATAR_URL); // Local URL for display
+          setUploadedImageUrl(dIdAvatarUrl); // D-ID URL for streaming
+          // Mark as loaded so streaming can proceed
+          setDefaultAvatarLoaded(true);
+          
+        } else {
+          console.warn('⚠️ Failed to upload default avatar to D-ID, using local fallback');
+          setDefaultAvatarLoaded(true);
+        }
+      } catch (error) {
+        console.error('❌ Error uploading default avatar:', error);
+        setDefaultAvatarLoaded(true);
+      }
+    };
+    
+    uploadDefaultAvatar();
+  }, []);
+
   const handleImageSelect = (file) => {
     setSelectedImage(file);
     const url = URL.createObjectURL(file);
@@ -90,7 +134,9 @@ function App() {
 
   const handleImageUploadSuccess = (result) => {
     console.log('✅ Image uploaded successfully:', result);
-    setUploadedImageUrl(result.data?.url || result.data?.secure_url);
+    const imageUrl = result.data?.url || result.data?.secure_url;
+    setUploadedImageUrl(imageUrl);
+    setPreviewUrl(imageUrl); // Обновляем превью с загруженным изображением
     setUploadError(null);
   };
 
@@ -148,7 +194,7 @@ function App() {
         streamImageUrl = uploadedImageUrl || DEFAULT_AVATAR_URL;
       }
       
-      const success = await setupVoiceStream(selectedVoice, streamImageUrl);
+      const success = await setupVoiceStream(selectedVoice, uploadedImageUrl || streamImageUrl);
       
       if (success) {
         console.log('✅ Voice to Avatar стрим успешно настроен!');
@@ -263,6 +309,12 @@ function App() {
                 {showDIdStreamingTester ? 'Скрыть' : 'Показать'} D-ID Streaming Тестер
               </button>
               
+              <button 
+                className="toggle-tester-btn"
+                onClick={() => setShowFileStorageTester(!showFileStorageTester)}
+              >
+                {showFileStorageTester ? 'Скрыть' : 'Показать'} File Storage Тестер
+              </button>
 
             </div>
           </div>
@@ -278,6 +330,9 @@ function App() {
             <DIdStreamingTester selectedVoice={selectedVoice} />
           )}
           
+          {showFileStorageTester && (
+            <FileStorageTester />
+          )}
           
         </div>
       </div>

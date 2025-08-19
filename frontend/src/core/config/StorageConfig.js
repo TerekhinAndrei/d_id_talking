@@ -158,7 +158,7 @@ export class StorageConfig extends IStorageConfig {
       
       [StorageProvider.HYBRID]: new ProviderConfig(
         StorageProvider.HYBRID,
-        this.configManager.get('storage.hybrid.enabled', true),
+        this.configManager.get('storage.hybrid.enabled', false), // Отключаем как провайдер
         this.configManager.get('storage.hybrid.priority', 3),
         {
           primaryProvider: this.configManager.get('storage.hybrid.primaryProvider', StorageProvider.D_ID),

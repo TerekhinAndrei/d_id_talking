@@ -48,3 +48,13 @@ services:
         value: https://talking-head.onrender.com
       - key: VITE_API_TIMEOUT
         value: 30000
+      - key: VITE_D_ID_API_KEY
+        sync: false
+      - key: VITE_CLOUDINARY_API_KEY
+        sync: false
+      - key: VITE_CLOUDINARY_API_SECRET
+        sync: false
+      - key: VITE_CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: VITE_CLOUDINARY_UPLOAD_PRESET
+        sync: false

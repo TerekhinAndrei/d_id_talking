@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import health, users, tasks, voices, tts, video, streaming, storage, d_id_files
+from app.api.v1.endpoints import health, users, tasks, voices, tts, video, streaming, storage, d_id_files, files
 
 api_router = APIRouter()
 
@@ -13,5 +13,6 @@ api_router.include_router(tts.router, prefix="/tts", tags=["tts"])
 api_router.include_router(video.router, prefix="/video", tags=["video"])
 api_router.include_router(streaming.router, prefix="/streaming", tags=["streaming"])
 api_router.include_router(storage.router, prefix="/storage", tags=["storage"])
+api_router.include_router(files.router, prefix="/files", tags=["files"])
 api_router.include_router(d_id_files.router, prefix="/d-id-files", tags=["d-id-files"])
 # api_router.include_router(websocket_streaming.router, prefix="/websocket", tags=["websocket"]) 

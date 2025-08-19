@@ -139,7 +139,6 @@ const VideoPlayer = ({
                       <div 
                         className="video-container" 
                         style={{ 
-                          border: '2px solid red', 
                           minHeight: '400px',
                           width: videoPlayerSize.width,
                           height: videoPlayerSize.height,
@@ -160,7 +159,6 @@ const VideoPlayer = ({
             playsInline
             autoPlay
             muted
-            controls={true}
             style={{ 
               position: 'absolute',
               top: 0,
@@ -170,7 +168,6 @@ const VideoPlayer = ({
               opacity: 0, // Начальная прозрачность, управляется автоматически
               zIndex: 3, // Увеличиваем z-index чтобы main-video-player был поверх placeholder
               objectFit: 'contain',
-              border: '2px solid blue',
               display: 'block' // Принудительно показываем для тестирования
             }}
 
@@ -192,7 +189,6 @@ const VideoPlayer = ({
               opacity: 1, // Всегда видимый
               zIndex: isVideoStreamPlaying ? 1 : 3, // Меняем z-index в зависимости от состояния
               objectFit: 'contain',
-              border: '2px solid green',
               transform: `scale(${zoomLevel})`, // Применяем zoom
               transformOrigin: 'center top' // Прижимаем верхнюю границу
             }}

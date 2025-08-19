@@ -54,6 +54,7 @@ const VideoControls = ({
               onImageRemove={onImageRemove}
               onUploadSuccess={onUploadSuccess}
               onUploadError={onUploadError}
+              compact={true}
             />
           </div>
 

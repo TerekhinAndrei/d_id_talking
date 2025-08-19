@@ -68,30 +68,35 @@ export const useVoiceToAvatar = (videoElementId, imageUrl = null) => {
       
       addLog(`🖼️ Используем изображение: ${finalImageUrl}`, 'info');
       
-      // Проверяем, существует ли изображение
-      addLog('🔍 Проверяем доступность изображения...', 'info');
-      try {
-        const imageCheck = await fetch(finalImageUrl, { method: 'HEAD' });
-        if (!imageCheck.ok) {
-          addLog(`❌ Изображение не найдено: ${finalImageUrl}`, 'error');
+      // Пропускаем проверку изображения для D-ID URL (s3://)
+      if (finalImageUrl.startsWith('s3://')) {
+        addLog('🔍 Пропускаем проверку D-ID URL (s3://)', 'info');
+      } else {
+        // Проверяем, существует ли изображение только для обычных URL
+        addLog('🔍 Проверяем доступность изображения...', 'info');
+        try {
+          const imageCheck = await fetch(finalImageUrl, { method: 'HEAD' });
+          if (!imageCheck.ok) {
+            addLog(`❌ Изображение не найдено: ${finalImageUrl}`, 'error');
+            setStreamState(prev => ({ 
+              ...prev, 
+              error: 'Изображение не найдено. Проверьте URL.',
+              status: 'error',
+              isCreating: false
+            }));
+            return false;
+          }
+          addLog('✅ Изображение доступно', 'success');
+        } catch (imageError) {
+          addLog(`❌ Ошибка проверки изображения: ${imageError.message}`, 'error');
           setStreamState(prev => ({ 
             ...prev, 
-            error: 'Изображение не найдено. Проверьте URL.',
+            error: 'Не удалось проверить изображение.',
             status: 'error',
             isCreating: false
           }));
           return false;
         }
-        addLog('✅ Изображение доступно', 'success');
-      } catch (imageError) {
-        addLog(`❌ Ошибка проверки изображения: ${imageError.message}`, 'error');
-        setStreamState(prev => ({ 
-          ...prev, 
-          error: 'Не удалось проверить изображение.',
-          status: 'error',
-          isCreating: false
-        }));
-        return false;
       }
       
       const response = await apiService.createDIdStream(finalImageUrl, 'Voice to Avatar stream');

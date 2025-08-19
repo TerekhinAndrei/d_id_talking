@@ -195,6 +195,9 @@ class ConfigurationProvider(IConfigurationProvider):
         elif service_name == "storage":
             # Storage service is always available for local storage
             return True
+        elif service_name == "file_storage":
+            # File storage service is always available for local storage
+            return True
         return False
     
     def get_service_headers(self, service_name: str) -> Dict[str, str]:

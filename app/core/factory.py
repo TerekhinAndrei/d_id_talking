@@ -81,6 +81,21 @@ class ServiceFactory:
         
         return self._services[service_key]
     
+    def get_file_storage_service(self) -> IStorageService:
+        """Get enhanced file storage service instance"""
+        service_key = "file_storage_service"
+        
+        if service_key not in self._services:
+            self.logger.info("Creating enhanced file storage service")
+            # Import here to avoid circular imports
+            from app.services.file_storage_service import FileStorageService
+            self._services[service_key] = FileStorageService(
+                config_provider=self.config_provider,
+                http_client=self.http_client
+            )
+        
+        return self._services[service_key]
+    
     def get_d_id_file_service(self) -> IDIdFileService:
         """Get D-ID file service instance"""
         service_key = "d_id_file_service"
@@ -227,6 +242,10 @@ class ServiceContainer:
     def get_storage_service(self) -> IStorageService:
         """Get storage service"""
         return self.factory.get_storage_service()
+    
+    def get_file_storage_service(self) -> IStorageService:
+        """Get enhanced file storage service"""
+        return self.factory.get_file_storage_service()
     
     def get_d_id_file_service(self) -> IDIdFileService:
         """Get D-ID file service"""

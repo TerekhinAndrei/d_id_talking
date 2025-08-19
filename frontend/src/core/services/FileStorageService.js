@@ -295,6 +295,10 @@ export class FileStorageService extends IFileService {
           case StorageProvider.D_ID:
             provider = new DIdProvider(providerInfo.options);
             break;
+          case StorageProvider.HYBRID:
+            // HYBRID - это стратегия, а не провайдер, пропускаем
+            console.log(`ℹ️ Skipping HYBRID provider (it's a strategy, not a provider)`);
+            continue;
           default:
             console.warn(`Unknown provider: ${providerInfo.name}`);
             continue;

@@ -119,16 +119,44 @@ class ApiService {
       console.log(`📤 Request config:`, config);
       const response = await fetch(url, config);
       
-      console.log(`📡 API Response status: ${response.status}`);
+              // Не логируем статус 500 только для загрузки файлов в D-ID, чтобы не показывать ошибку в UI
+        if (!(response.status === 500 && endpoint.includes('/d-id-files/upload/'))) {
+          console.log(`📡 API Response status: ${response.status}`);
+        }
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        
+        // Проверяем, является ли это ошибкой имени файла или модерации для D-ID загрузки файлов
+        const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`;
+        const isDIdFileUpload = endpoint.includes('/d-id-files/upload/');
+        const isFilenameError = errorMessage.includes('Filename contains invalid characters') ||
+                               errorMessage.includes('invalid characters') ||
+                               errorMessage.includes('Only a-z, A-Z, 0-9, ., _, - are allowed') ||
+                               errorMessage.includes('Filename must be 50 characters or less');
+        const isModerationError = errorMessage.includes('ImageModerationError') ||
+                                 errorMessage.includes('AudioModerationError') ||
+                                 errorMessage.includes('451') ||
+                                 errorMessage.includes('content moderation');
+        
+        if (isDIdFileUpload && (isFilenameError || isModerationError)) {
+          // Для D-ID ошибок загрузки файлов возвращаем объект ошибки без выбрасывания исключения
+          // Это предотвратит показ ошибки 500 в консоли браузера
+          return {
+            error: true,
+            type: isFilenameError ? 'filename' : 'moderation',
+            message: errorMessage,
+            originalError: new Error(errorMessage)
+          };
+        }
+        
+        // Для других ошибок логируем и выбрасываем
         console.error(`❌ API Error (${endpoint}):`, errorData);
         console.error(`❌ Error details:`, JSON.stringify(errorData, null, 2));
         if (errorData.detail && Array.isArray(errorData.detail)) {
           console.error(`❌ Validation errors:`, errorData.detail);
         }
-        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        throw new Error(errorMessage);
       }
       
       const responseText = await response.text();
