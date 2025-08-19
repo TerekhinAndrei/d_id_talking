@@ -97,12 +97,11 @@ export const useVideoStreamStatus = (videoElementId = 'main-video-player') => {
         stuckFrameCountRef.current++;
       }
       
-      // Считаем видео зависшим, если время не менялось более 2 секунд (4 проверки по 500мс)
-      // В начальном состоянии даем небольшую отсрочку
-      const isNotStuck = stuckFrameCountRef.current < 4 || lastTimeRef.current === 0;
+      // Считаем видео зависшим, если время не менялось более 1 секунды (5 проверок по 200мс)
+      const isNotStuck = stuckFrameCountRef.current < 5;
 
       // Дополнительная проверка: если видео зависло, проверяем наличие активного аудио
-      const hasAudioWhenStuck = stuckFrameCountRef.current >= 4 ? hasActiveAudioTrack : true;
+      const hasAudioWhenStuck = stuckFrameCountRef.current >= 5 ? hasActiveAudioTrack : true;
 
       // Проверка WebRTC состояния
       const isWebRTCActive = videoElement.srcObject && 
@@ -112,10 +111,10 @@ export const useVideoStreamStatus = (videoElementId = 'main-video-player') => {
                            );
 
       // Агрессивная проверка: если видео зависло, требуем активный WebRTC
-      const isWebRTCValid = stuckFrameCountRef.current >= 4 ? isWebRTCActive : true;
+      const isWebRTCValid = stuckFrameCountRef.current >= 5 ? isWebRTCActive : true;
 
       // Логирование для отладки
-      if (stuckFrameCountRef.current >= 4) {
+      if (stuckFrameCountRef.current >= 5) {
         console.log('🔍 Video stream analysis:', {
           timeChanged,
           stuckFrameCount: stuckFrameCountRef.current,
@@ -152,7 +151,7 @@ export const useVideoStreamStatus = (videoElementId = 'main-video-player') => {
     checkVideoStatus();
 
     // Устанавливаем интервал для периодической проверки
-    checkIntervalRef.current = setInterval(checkVideoStatus, 500);
+    checkIntervalRef.current = setInterval(checkVideoStatus, 200);
 
     return () => {
       if (checkIntervalRef.current) {
