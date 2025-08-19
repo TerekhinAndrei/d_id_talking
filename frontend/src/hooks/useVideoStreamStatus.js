@@ -11,6 +11,9 @@ export const useVideoStreamStatus = (videoElementId = 'main-video-player') => {
   const checkIntervalRef = useRef(null);
   const lastTimeRef = useRef(0);
   const stuckFrameCountRef = useRef(0);
+  const lastNetworkStateRef = useRef(null);
+  const lastReadyStateRef = useRef(null);
+  const consecutiveChecksRef = useRef(0);
 
   useEffect(() => {
     const checkVideoStatus = () => {
@@ -39,6 +42,9 @@ export const useVideoStreamStatus = (videoElementId = 'main-video-player') => {
       if (!isDidStream) {
         lastTimeRef.current = 0;
         stuckFrameCountRef.current = 0;
+        consecutiveChecksRef.current = 0;
+        lastNetworkStateRef.current = null;
+        lastReadyStateRef.current = null;
       }
 
       // Проверяем, что видео воспроизводится
@@ -46,6 +52,31 @@ export const useVideoStreamStatus = (videoElementId = 'main-video-player') => {
                        !videoElement.ended && 
                        videoElement.readyState >= 2 && // HAVE_CURRENT_DATA
                        videoElement.currentTime > 0;
+
+      // Дополнительные проверки состояния сети и готовности
+      const networkState = videoElement.networkState;
+      const readyState = videoElement.readyState;
+      
+      // Проверяем, что сеть активна и данные загружаются
+      const isNetworkActive = networkState === 1 || networkState === 2; // NETWORK_LOADING или NETWORK_IDLE
+      
+      // Проверяем, что видео готово к воспроизведению
+      const isReady = readyState >= 2; // HAVE_CURRENT_DATA или выше
+      
+      // Проверяем изменения в состоянии сети/готовности
+      const networkStateChanged = networkState !== lastNetworkStateRef.current;
+      const readyStateChanged = readyState !== lastReadyStateRef.current;
+      
+      if (networkStateChanged || readyStateChanged) {
+        consecutiveChecksRef.current = 0;
+        lastNetworkStateRef.current = networkState;
+        lastReadyStateRef.current = readyState;
+      } else {
+        consecutiveChecksRef.current++;
+      }
+      
+      // Считаем видео неактивным, если состояние не меняется слишком долго
+      const isStateDynamic = consecutiveChecksRef.current < 10; // 5 секунд без изменений
 
       // Проверяем, что видео не заглушка (не Waiting.mp4)
       const isNotPlaceholder = !videoElement.src || 
@@ -73,20 +104,46 @@ export const useVideoStreamStatus = (videoElementId = 'main-video-player') => {
       // Дополнительная проверка: если видео зависло, проверяем наличие активного аудио
       const hasAudioWhenStuck = stuckFrameCountRef.current >= 4 ? hasActiveAudioTrack : true;
 
-      // Логирование для отладки (только при проблемах с аудио)
-      if (stuckFrameCountRef.current >= 4 && !hasActiveAudioTrack) {
-        console.log('🔇 Video stream stuck - no active audio track detected');
+      // Проверка WebRTC состояния
+      const isWebRTCActive = videoElement.srcObject && 
+                           videoElement.srcObject.active && 
+                           videoElement.srcObject.getTracks().some(track => 
+                             track.readyState === 'live' && track.enabled
+                           );
+
+      // Агрессивная проверка: если видео зависло, требуем активный WebRTC
+      const isWebRTCValid = stuckFrameCountRef.current >= 4 ? isWebRTCActive : true;
+
+      // Логирование для отладки
+      if (stuckFrameCountRef.current >= 4) {
+        console.log('🔍 Video stream analysis:', {
+          timeChanged,
+          stuckFrameCount: stuckFrameCountRef.current,
+          hasActiveAudioTrack,
+          isWebRTCActive,
+          networkState,
+          readyState,
+          consecutiveChecks: consecutiveChecksRef.current,
+          isStateDynamic
+        });
+        
         if (videoElement.srcObject) {
-          console.log('Audio tracks:', videoElement.srcObject.getAudioTracks().map(track => ({
+          console.log('WebRTC tracks:', videoElement.srcObject.getTracks().map(track => ({
+            kind: track.kind,
             enabled: track.enabled,
             muted: track.muted,
-            readyState: track.readyState,
-            kind: track.kind
+            readyState: track.readyState
           })));
         }
       }
 
-      const streamStatus = isDidStream && isPlaying && isNotPlaceholder && isNotStuck && hasAudioWhenStuck;
+      const streamStatus = isDidStream && 
+                          isPlaying && 
+                          isNotPlaceholder && 
+                          isNotStuck && 
+                          hasAudioWhenStuck && 
+                          isWebRTCValid && 
+                          isStateDynamic;
       
       setIsStreamPlaying(streamStatus);
     };
