@@ -194,7 +194,7 @@ export const useVoiceToAvatar = (videoElementId, imageUrl = null) => {
         }
       });
       
-      peerConnection.addEventListener('track', (event) => {
+      peerConnection.addEventListener('track', async (event) => {
         addLog('🎬 Received track!', 'success');
         addLog(`🎬 Track kind: ${event.track.kind}`, 'info');
         addLog(`🎬 Streams count: ${event.streams.length}`, 'info');
@@ -202,9 +202,17 @@ export const useVoiceToAvatar = (videoElementId, imageUrl = null) => {
         if (event.track.kind === 'video') {
           addLog('🎬 Received VIDEO track!', 'success');
           // Handle video stream
-          const videoElement = document.getElementById(videoElementId);
+          let videoElement = document.getElementById(videoElementId);
           addLog(`🎬 Video element found: ${!!videoElement}`, 'info');
           addLog(`🎬 Video element ID: ${videoElementId}`, 'info');
+          
+          // Если видео элемент не найден, попробуем найти его через небольшую задержку
+          if (!videoElement) {
+            addLog('⏳ Video element not found, waiting for DOM...', 'warning');
+            await new Promise(resolve => setTimeout(resolve, 100));
+            videoElement = document.getElementById(videoElementId);
+            addLog(`🎬 Video element found after delay: ${!!videoElement}`, 'info');
+          }
           
           if (videoElement && event.streams[0]) {
             videoElement.srcObject = event.streams[0];
