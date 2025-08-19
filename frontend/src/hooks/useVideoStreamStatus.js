@@ -22,10 +22,18 @@ export const useVideoStreamStatus = (videoElementId = 'main-video-player') => {
       }
 
       // Проверяем, что это именно D-ID стрим, а не placeholder видео
-      const isDidStream = videoElement.srcObject && 
-                         videoElement.srcObject.active && 
-                         videoElement.srcObject.getVideoTracks().length > 0 &&
-                         !videoElement.srcObject.getVideoTracks()[0].muted;
+      const hasVideoTrack = videoElement.srcObject && 
+                           videoElement.srcObject.active && 
+                           videoElement.srcObject.getVideoTracks().length > 0 &&
+                           !videoElement.srcObject.getVideoTracks()[0].muted;
+
+      // Проверяем наличие и активность аудиотрека
+      const hasActiveAudioTrack = videoElement.srcObject && 
+                                 videoElement.srcObject.getAudioTracks().length > 0 &&
+                                 videoElement.srcObject.getAudioTracks()[0].enabled &&
+                                 !videoElement.srcObject.getAudioTracks()[0].muted;
+
+      const isDidStream = hasVideoTrack;
 
       // Сбрасываем счетчики при изменении стрима
       if (!isDidStream) {
@@ -62,7 +70,23 @@ export const useVideoStreamStatus = (videoElementId = 'main-video-player') => {
       // В начальном состоянии даем небольшую отсрочку
       const isNotStuck = stuckFrameCountRef.current < 4 || lastTimeRef.current === 0;
 
-      const streamStatus = isDidStream && isPlaying && isNotPlaceholder && isNotStuck;
+      // Дополнительная проверка: если видео зависло, проверяем наличие активного аудио
+      const hasAudioWhenStuck = stuckFrameCountRef.current >= 4 ? hasActiveAudioTrack : true;
+
+      // Логирование для отладки (только при проблемах с аудио)
+      if (stuckFrameCountRef.current >= 4 && !hasActiveAudioTrack) {
+        console.log('🔇 Video stream stuck - no active audio track detected');
+        if (videoElement.srcObject) {
+          console.log('Audio tracks:', videoElement.srcObject.getAudioTracks().map(track => ({
+            enabled: track.enabled,
+            muted: track.muted,
+            readyState: track.readyState,
+            kind: track.kind
+          })));
+        }
+      }
+
+      const streamStatus = isDidStream && isPlaying && isNotPlaceholder && isNotStuck && hasAudioWhenStuck;
       
       setIsStreamPlaying(streamStatus);
     };
