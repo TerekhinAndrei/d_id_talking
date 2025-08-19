@@ -75,7 +75,7 @@ async def upload_audio_to_d_id(
         logger.info(f"Uploading audio to D-ID: {file.filename}, size: {file.size} bytes")
         
         # Validate file type
-        if not (file.content_type.startswith('audio/') or file.content_type.startswith('video/')):
+        if not (file.content_type.startswith('audio/') or file.content_type.startswith('video/') or file.content_type == 'audio/x-wav'):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="File must be an audio or video file"

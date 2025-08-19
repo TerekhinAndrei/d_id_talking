@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Config Test</title>
+</head>
+<body>
+    <h1>Config Manager Test</h1>
+    <div id="results"></div>
+
+    <script type="module">
+        import configManager from './src/config/ConfigManager.js';
+        
+        const resultsDiv = document.getElementById('results');
+        
+        function log(message) {
+            console.log(message);
+            resultsDiv.innerHTML += `<p>${message}</p>`;
+        }
+        
+        try {
+            log('🧪 Testing ConfigManager...');
+            
+            // Test basic methods
+            const cloudinaryEnabled = configManager.get('storage.cloudinary.enabled', true);
+            log(`✅ storage.cloudinary.enabled: ${cloudinaryEnabled}`);
+            
+            const didEnabled = configManager.get('storage.d_id.enabled', true);
+            log(`✅ storage.d_id.enabled: ${didEnabled}`);
+            
+            const defaultProvider = configManager.get('storage.defaultProvider', 'd_id');
+            log(`✅ storage.defaultProvider: ${defaultProvider}`);
+            
+            // Test set method
+            configManager.set('storage.test.key', 'test_value');
+            const testValue = configManager.get('storage.test.key', 'default');
+            log(`✅ storage.test.key: ${testValue}`);
+            
+            // Test URLs
+            const backendUrl = configManager.getBackendUrl();
+            log(`✅ Backend URL: ${backendUrl}`);
+            
+            const wsUrl = configManager.getWebSocketUrl('/ws/stream');
+            log(`✅ WebSocket URL: ${wsUrl}`);
+            
+            log('✅ All tests passed!');
+            
+        } catch (error) {
+            log(`❌ Error: ${error.message}`);
+            console.error(error);
+        }
+    </script>
+</body>
+</html>

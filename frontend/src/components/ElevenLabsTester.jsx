@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useElevenLabs } from '../hooks/useElevenLabs';
 import { useMicrophoneRecording } from '../hooks/useMicrophoneRecording';
-import { useMicrophoneToCloudinary } from '../hooks/useMicrophoneToCloudinary';
+import { useMicrophoneToDid } from '../hooks/useMicrophoneToDid';
 import ErrorMessage from './ErrorMessage';
 import AudioVisualizer from './AudioVisualizer';
 
@@ -33,25 +33,25 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
     stopRecording
   } = useMicrophoneRecording();
 
-  // Хук для микрофона с загрузкой в Cloudinary
+  // Хук для микрофона с загрузкой в D-ID
   const {
-    isRecording: isRecordingCloudinary,
-    isProcessing: isProcessingCloudinary,
+    isRecording: isRecordingDid,
+    isProcessing: isProcessingDid,
     isUploading,
-    streamStats: cloudinaryStats,
-    audioChunks: cloudinaryChunks,
-    processedChunks: cloudinaryProcessedChunks,
+    streamStats: didStats,
+    audioChunks: didChunks,
+    processedChunks: didProcessedChunks,
     uploadedFiles,
-    error: cloudinaryError,
-    startRecording: startRecordingCloudinary,
-    stopRecording: stopRecordingCloudinary
-  } = useMicrophoneToCloudinary({
-    onAudioUploaded: (cloudinaryUrl) => {
-      console.log('🎵 Аудио загружено в Cloudinary:', cloudinaryUrl);
-      addTestResult('Cloudinary загрузка', 'success', `Файл загружен: ${cloudinaryUrl}`, { url: cloudinaryUrl });
+    error: didError,
+    startRecording: startRecordingDid,
+    stopRecording: stopRecordingDid
+  } = useMicrophoneToDid({
+    onAudioUploaded: (didUrl, provider) => {
+      console.log('🎵 Аудио загружено в D-ID:', didUrl, 'Provider:', provider);
+      addTestResult('D-ID загрузка', 'success', `Файл загружен в ${provider}: ${didUrl}`, { url: didUrl, provider });
       
       // Автоматически воспроизводим загруженный файл
-      playCloudinaryAudio(cloudinaryUrl);
+      playDidAudio(didUrl);
     }
   });
 
@@ -197,24 +197,24 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
   };
 
   // Cloudinary streaming functions
-  const handleStartCloudinaryStreaming = async () => {
+  const handleStartDidStreaming = async () => {
     if (!selectedVoiceForTest) {
-      alert('Выберите голос для Cloudinary стриминга');
+      alert('Выберите голос для D-ID стриминга');
       return;
     }
 
     try {
-      addTestResult('Cloudinary стриминг', 'pending', 'Запуск стриминга с загрузкой в Cloudinary...');
-      await startRecordingCloudinary(selectedVoiceForTest);
-      addTestResult('Cloudinary стриминг', 'success', 'Стриминг запущен - говорите в микрофон, результат будет загружен в Cloudinary');
+      addTestResult('D-ID стриминг', 'pending', 'Запуск стриминга с загрузкой в D-ID...');
+      await startRecordingDid(selectedVoiceForTest);
+      addTestResult('D-ID стриминг', 'success', 'Стриминг запущен - говорите в микрофон, результат будет загружен в D-ID');
     } catch (error) {
-      addTestResult('Cloudinary стриминг', 'error', error.message);
+      addTestResult('D-ID стриминг', 'error', error.message);
     }
   };
 
-  const handleStopCloudinaryStreaming = () => {
-    stopRecordingCloudinary();
-    addTestResult('Cloudinary стриминг', 'success', 'Стриминг остановлен');
+  const handleStopDidStreaming = () => {
+    stopRecordingDid();
+    addTestResult('D-ID стриминг', 'success', 'Стриминг остановлен');
   };
 
   const handleStopPlayback = () => {
@@ -222,31 +222,31 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
     addTestResult('Воспроизведение', 'info', 'Воспроизведение обрабатывается автоматически');
   };
 
-  // Воспроизведение аудио из Cloudinary
-  const playCloudinaryAudio = async (cloudinaryUrl) => {
+  // Воспроизведение аудио из D-ID
+  const playDidAudio = async (didUrl) => {
     try {
-      addTestResult('Воспроизведение Cloudinary', 'pending', 'Воспроизведение загруженного аудио...');
+      addTestResult('Воспроизведение D-ID', 'pending', 'Воспроизведение загруженного аудио...');
       
-      const response = await fetch(cloudinaryUrl);
+      const response = await fetch(didUrl);
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
       
       const audio = new Audio(audioUrl);
       audio.onended = () => {
         URL.revokeObjectURL(audioUrl);
-        addTestResult('Воспроизведение Cloudinary', 'success', 'Аудио воспроизведено успешно');
+        addTestResult('Воспроизведение D-ID', 'success', 'Аудио воспроизведено успешно');
       };
       
       audio.onerror = (error) => {
         URL.revokeObjectURL(audioUrl);
-        addTestResult('Воспроизведение Cloudinary', 'error', `Ошибка воспроизведения: ${error.message}`);
+        addTestResult('Воспроизведение D-ID', 'error', `Ошибка воспроизведения: ${error.message}`);
       };
       
       await audio.play();
-      addTestResult('Воспроизведение Cloudinary', 'success', 'Воспроизведение начато');
+      addTestResult('Воспроизведение D-ID', 'success', 'Воспроизведение начато');
       
     } catch (error) {
-      addTestResult('Воспроизведение Cloudinary', 'error', `Ошибка: ${error.message}`);
+      addTestResult('Воспроизведение D-ID', 'error', `Ошибка: ${error.message}`);
     }
   };
 
@@ -501,125 +501,128 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
             </p>
           </div>
 
-          {/* АУДИО ВИЗУАЛИЗАТОР для Cloudinary */}
+          {/* АУДИО ВИЗУАЛИЗАТОР для D-ID */}
           <AudioVisualizer 
-            isRecording={isRecordingCloudinary}
-            audioData={cloudinaryChunks}
+            isRecording={isRecordingDid}
+            audioData={didChunks}
           />
 
-          <div className="cloudinary-controls">
+          <div className="did-controls">
             <button 
-              onClick={handleStartCloudinaryStreaming}
-              disabled={isRecordingCloudinary || isProcessingCloudinary || isUploading || !selectedVoiceForTest}
-              className="test-btn microphone-btn cloudinary-btn"
+              onClick={handleStartDidStreaming}
+              disabled={isRecordingDid || isProcessingDid || isUploading || !selectedVoiceForTest}
+              className="test-btn microphone-btn did-btn"
             >
-              {isRecordingCloudinary ? '⏳' : isUploading ? '☁️' : '🎤'} 
-              {isRecordingCloudinary ? 'Стриминг...' : isUploading ? 'Загрузка...' : 'Начать Cloudinary стриминг'}
+              {isRecordingDid ? '⏳' : isUploading ? '🎯' : '🎤'} 
+              {isRecordingDid ? 'Стриминг...' : isUploading ? 'Загрузка...' : 'Начать D-ID стриминг'}
             </button>
 
             <button 
-              onClick={handleStopCloudinaryStreaming}
-              disabled={!isRecordingCloudinary}
+              onClick={handleStopDidStreaming}
+              disabled={!isRecordingDid}
               className="test-btn microphone-btn stop-btn"
             >
-              ⏹️ Остановить Cloudinary стриминг
+              ⏹️ Остановить D-ID стриминг
             </button>
           </div>
 
-          {/* СТАТИСТИКА CLOUDINARY СТРИМИНГА */}
-          {(isRecordingCloudinary || cloudinaryStats.totalChunks > 0) && (
-            <div className="cloudinary-stats">
-              <h5>📊 Статистика Cloudinary стриминга:</h5>
+          {/* СТАТИСТИКА D-ID СТРИМИНГА */}
+          {(isRecordingDid || didStats.totalChunks > 0) && (
+            <div className="did-stats">
+              <h5>📊 Статистика D-ID стриминга:</h5>
               
               <div className="stats-grid">
                 <div className="stat-item">
                   <span className="stat-label">Статус записи:</span>
-                  <span className={`stat-value ${isRecordingCloudinary ? 'recording' : 'stopped'}`}>
-                    {isRecordingCloudinary ? '🔴 Запись' : '⏹️ Остановлено'}
+                  <span className={`stat-value ${isRecordingDid ? 'recording' : 'stopped'}`}>
+                    {isRecordingDid ? '🔴 Запись' : '⏹️ Остановлено'}
                   </span>
                 </div>
 
                 <div className="stat-item">
                   <span className="stat-label">Статус обработки:</span>
-                  <span className={`stat-value ${isProcessingCloudinary ? 'processing' : 'idle'}`}>
-                    {isProcessingCloudinary ? '🔄 Обработка' : '⏸️ Ожидание'}
+                  <span className={`stat-value ${isProcessingDid ? 'processing' : 'idle'}`}>
+                    {isProcessingDid ? '🔄 Обработка' : '⏸️ Ожидание'}
                   </span>
                 </div>
 
                 <div className="stat-item">
                   <span className="stat-label">Статус загрузки:</span>
                   <span className={`stat-value ${isUploading ? 'uploading' : 'idle'}`}>
-                    {isUploading ? '☁️ Загрузка в Cloudinary' : '⏸️ Ожидание'}
+                    {isUploading ? '🎯 Загрузка в D-ID' : '⏸️ Ожидание'}
                   </span>
                 </div>
 
                 <div className="stat-item">
                   <span className="stat-label">Отправлено чанков:</span>
-                  <span className="stat-value">{cloudinaryStats.sentChunks}</span>
+                  <span className="stat-value">{didStats.sentChunks}</span>
                 </div>
 
                 <div className="stat-item">
                   <span className="stat-label">Обработано чанков:</span>
-                  <span className="stat-value success">{cloudinaryStats.processedChunks}</span>
+                  <span className="stat-value success">{didStats.processedChunks}</span>
                 </div>
 
                 <div className="stat-item">
                   <span className="stat-label">Загружено файлов:</span>
-                  <span className="stat-value success">{cloudinaryStats.uploadedFiles}</span>
+                  <span className="stat-value success">{didStats.uploadedFiles}</span>
                 </div>
 
                 <div className="stat-item">
                   <span className="stat-label">Общий объем данных:</span>
                   <span className="stat-value">
-                    {Math.round(cloudinaryStats.totalSentData / 1024)} KB
+                    {Math.round(didStats.totalSentData / 1024)} KB
                   </span>
                 </div>
               </div>
 
               {/* Прогресс-бар загрузки */}
-              {cloudinaryStats.totalChunks > 0 && (
+              {didStats.totalChunks > 0 && (
                 <div className="upload-progress">
                   <div className="progress-bar">
                     <div 
-                      className="progress-fill cloudinary-fill"
+                      className="progress-fill did-fill"
                       style={{ 
-                        width: `${(cloudinaryStats.uploadedFiles / cloudinaryStats.processedChunks) * 100}%` 
+                        width: `${(didStats.uploadedFiles / didStats.processedChunks) * 100}%` 
                       }}
                     ></div>
                   </div>
                   <span className="progress-text">
-                    {cloudinaryStats.uploadedFiles} / {cloudinaryStats.processedChunks} файлов загружено в Cloudinary
+                    {didStats.uploadedFiles} / {didStats.processedChunks} файлов загружено в D-ID
                   </span>
                 </div>
               )}
             </div>
           )}
 
-          {/* ЗАГРУЖЕННЫЕ ФАЙЛЫ CLOUDINARY */}
+          {/* ЗАГРУЖЕННЫЕ ФАЙЛЫ D-ID */}
           {uploadedFiles.length > 0 && (
-            <div className="cloudinary-files">
-              <h5>☁️ Загруженные файлы в Cloudinary:</h5>
+            <div className="did-files">
+              <h5>🎯 Загруженные файлы в D-ID:</h5>
               <div className="files-list">
                 {uploadedFiles.slice(-5).reverse().map((file, index) => (
-                  <div key={`cloudinary-file-${file.id}-${file.timestamp}`} className="file-item cloudinary-file">
+                  <div key={`did-file-${file.id}-${file.timestamp}`} className="file-item did-file">
                     <div className="file-header">
                       <span className="file-number">#{uploadedFiles.length - index}</span>
                       <span className="file-time">{file.timestamp.toLocaleTimeString()}</span>
                       <span className="file-size">{Math.round(file.size / 1024)} KB</span>
+                      {file.provider && (
+                        <span className="file-provider">({file.provider})</span>
+                      )}
                     </div>
                     <div className="file-url">
                       <a 
                         href={file.url} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="cloudinary-link"
+                        className="did-link"
                       >
                         🔗 {file.url}
                       </a>
                     </div>
                     <div className="file-actions">
                       <button 
-                        onClick={() => playCloudinaryAudio(file.url)}
+                        onClick={() => playDidAudio(file.url)}
                         className="play-btn"
                         title="Воспроизвести"
                       >
@@ -632,13 +635,13 @@ const ElevenLabsTester = ({ voices = [], loadingVoices = false }) => {
             </div>
           )}
 
-          {/* История чанков Cloudinary */}
-          {cloudinaryChunks.length > 0 && (
-            <div className="cloudinary-chunks">
-              <h5>📦 История чанков Cloudinary:</h5>
+          {/* История чанков D-ID */}
+          {didChunks.length > 0 && (
+            <div className="did-chunks">
+              <h5>📦 История чанков D-ID:</h5>
               <div className="chunks-list">
-                {cloudinaryChunks.slice(-5).reverse().map((chunk) => (
-                  <div key={`cloudinary-chunk-${chunk.id}-${chunk.timestamp}`} className="chunk-item cloudinary-chunk">
+                {didChunks.slice(-5).reverse().map((chunk) => (
+                  <div key={`did-chunk-${chunk.id}-${chunk.timestamp}`} className="chunk-item did-chunk">
                     <span className="chunk-number">#{chunk.counter}</span>
                     <span className="chunk-size">{chunk.size} байт</span>
                     <span className="chunk-time">{chunk.timestamp.toLocaleTimeString()}</span>

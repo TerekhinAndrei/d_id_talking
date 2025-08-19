@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useMicrophoneToDid } from './useMicrophoneToDid';
+import { useMicrophoneToDid } from './useMicrophoneToDid.js';
 import { apiService } from '../services/api';
 
-export const useDIdMicrophoneTalk = () => {
+export const useDIdMicrophoneTalkUpdated = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -16,7 +16,7 @@ export const useDIdMicrophoneTalk = () => {
   // Состояние для хранения текущего голоса
   const [currentVoiceId, setCurrentVoiceId] = useState(null);
 
-  // Очередь файлов для отправки в D-ID
+  // Очередь файлов для отправки в D-ID (теперь уже загруженных в D-ID)
   const [didUploadQueue, setDidUploadQueue] = useState([]);
   const [isSendingToDid, setIsSendingToDid] = useState(false);
 
@@ -27,29 +27,31 @@ export const useDIdMicrophoneTalk = () => {
     voiceId: null
   });
 
-  // Добавление файла в очередь D-ID
-  const addToDidQueue = useCallback((cloudinaryUrl) => {
-    console.log('🔄 addToDidQueue вызван с URL:', cloudinaryUrl);
-    addLog(`🔄 Вызывается addToDidQueue с URL: ${cloudinaryUrl}`, 'info');
+  // Добавление файла в очередь D-ID (теперь файлы уже загружены в D-ID)
+  const addToDidQueue = useCallback((didUrl, provider) => {
+    console.log('🔄 addToDidQueue вызван с D-ID URL:', didUrl, 'Provider:', provider);
+    addLog(`🔄 Вызывается addToDidQueue с D-ID URL: ${didUrl}`, 'info');
+    addLog(`🎯 Провайдер: ${provider}`, 'info');
     
     setDidUploadQueue(prev => {
       const newQueue = [...prev, {
         id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        url: cloudinaryUrl,
+        url: didUrl,
+        provider: provider,
         timestamp: new Date()
       }];
       
       console.log('📥 Файл добавлен в очередь D-ID, новый размер:', newQueue.length);
-      addLog(`📥 Добавлен в очередь D-ID: ${cloudinaryUrl}`, 'info');
+      addLog(`📥 Добавлен в очередь D-ID: ${didUrl}`, 'info');
       addLog(`📊 Размер очереди D-ID: ${newQueue.length}`, 'info');
       
       return newQueue;
     });
   }, [addLog]);
 
-  // Callback для onAudioUploaded с использованием ref
+  // Callback для onAudioUploaded с использованием ref - теперь получаем D-ID URL
   const onAudioUploaded = useCallback((didUrl, provider) => {
-    console.log('🎤 onAudioUploaded callback вызван с URL:', didUrl, 'Provider:', provider);
+    console.log('🎤 onAudioUploaded callback вызван с D-ID URL:', didUrl, 'Provider:', provider);
     addLog(`✅ Аудио загружено в ${provider}: ${didUrl}`, 'success');
     
     // Получаем актуальные значения из ref
@@ -72,7 +74,7 @@ export const useDIdMicrophoneTalk = () => {
     if (streamId && sessionId && voiceId) {
       console.log('✅ Условие выполнено, добавляем в очередь');
       addLog(`📥 Добавляем файл в очередь D-ID...`, 'info');
-      addToDidQueue(cloudinaryUrl);
+      addToDidQueue(didUrl, provider);
     } else {
       console.log('❌ Условие не выполнено');
       addLog(`❌ Недостаточно параметров для добавления в очередь D-ID`, 'error');
@@ -80,7 +82,7 @@ export const useDIdMicrophoneTalk = () => {
     }
   }, [addToDidQueue, addLog]);
 
-  // Используем хук микрофона
+  // Используем обновленный хук микрофона для D-ID
   const {
     isRecording,
     isProcessing: isMicProcessing,
@@ -135,11 +137,13 @@ export const useDIdMicrophoneTalk = () => {
             streamId,
             sessionId,
             fileUrl: file.url,
-            voiceId
+            voiceId,
+            provider: file.provider
           });
           
           addLog(`🎬 Отправляем файл в D-ID: ${file.url}`, 'info');
           addLog(`🎵 Используем голос: ${voiceId}`, 'info');
+          addLog(`🎯 Провайдер файла: ${file.provider}`, 'info');
           
           const response = await apiService.createDIdTalkAudio(
             streamId,
@@ -206,7 +210,8 @@ export const useDIdMicrophoneTalk = () => {
     try {
       setIsProcessing(true);
       setError(null);
-      addLog('🎤 Начинаем создание talk с микрофоном...', 'info');
+      addLog('🎤 Начинаем создание talk с микрофоном (обновленная версия)...', 'info');
+      addLog('🎯 Аудио будет загружаться напрямую в D-ID', 'info');
       
       // Проверяем параметры
       if (!streamId) {
@@ -246,11 +251,11 @@ export const useDIdMicrophoneTalk = () => {
       
       addLog('🎤 Запускаем запись с микрофона...', 'info');
       
-      // Запускаем запись микрофона
+      // Запускаем запись микрофона с новой системой загрузки в D-ID
       await startMicRecording(voiceId);
       
       addLog('✅ Запись микрофона запущена', 'success');
-      addLog('📝 Аудио будет автоматически загружаться в Cloudinary и отправляться в D-ID', 'info');
+      addLog('📝 Аудио будет автоматически загружаться в D-ID и отправляться в поток', 'info');
       
     } catch (error) {
       addLog(`❌ Ошибка создания talk с микрофоном: ${error.message}`, 'error');

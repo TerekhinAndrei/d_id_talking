@@ -69,55 +69,41 @@ class FileService {
 
   /**
    * Загружает аудио файл с автоматическим выбором провайдера
+   * Теперь использует новую систему хранения файлов
    */
   async uploadAudio(file, options = {}) {
-    const {
-      provider = this.configManager.getDefaultStorageProvider(),
-      fallback = true
-    } = options;
-
     try {
-      // Проверяем размер файла
-      if (provider === 'd_id') {
-        const maxSize = this.configManager.getDIdMaxFileSize();
-        if (file.size > maxSize) {
-          throw new Error(`File size exceeds maximum allowed size: ${maxSize} bytes`);
-        }
-
-        // Проверяем тип файла
-        const supportedTypes = this.configManager.getDIdSupportedAudioTypes();
-        if (!supportedTypes.includes(file.type)) {
-          throw new Error(`Unsupported file type: ${file.type}. Supported: ${supportedTypes.join(', ')}`);
-        }
-      }
-
-      // Пытаемся загрузить через выбранный провайдер
-      if (provider === 'd_id' && this.configManager.isDIdEnabled()) {
-        try {
-          const result = await apiService.uploadAudioToDId(file);
-          return {
-            ...result,
-            provider: 'd_id',
-            fileId: result.data?.file_id || result.data?.public_id
-          };
-        } catch (error) {
-          console.warn('D-ID upload failed, trying fallback:', error);
-          if (!fallback) throw error;
-        }
-      }
-
-      // Fallback к Cloudinary или гибридному эндпоинту
-      if (this.configManager.isCloudinaryEnabled()) {
-        const useDId = provider === 'd_id';
-        const result = await apiService.uploadAudioHybrid(file, useDId);
-        return {
-          ...result,
-          provider: useDId ? 'd_id' : 'cloudinary',
-          fileId: result.data?.file_id || result.data?.public_id
-        };
-      }
-
-      throw new Error('No storage provider available');
+      // Импортируем новую систему хранения файлов
+      const { fileStorageService, StorageProvider, UploadStrategy, UploadOptions } = await import('../core/index.js');
+      
+      // Инициализируем сервис если еще не инициализирован
+      await fileStorageService.initialize();
+      
+      // Создаем опции для новой системы
+      const uploadOptions = new UploadOptions({
+        provider: options.provider === 'd_id' ? StorageProvider.D_ID : StorageProvider.AUTO,
+        strategy: options.fallback !== false ? UploadStrategy.FALLBACK : UploadStrategy.DIRECT,
+        onProgress: options.onProgress,
+        onSuccess: options.onSuccess,
+        onError: options.onError
+      });
+      
+      // Загружаем через новую систему
+      const result = await fileStorageService.uploadAudio(file, uploadOptions);
+      
+      // Возвращаем результат в совместимом формате
+      return {
+        success: result.success,
+        data: {
+          file_id: result.fileMetadata?.id,
+          public_id: result.fileMetadata?.id,
+          url: result.fileMetadata?.url,
+          secure_url: result.fileMetadata?.secureUrl
+        },
+        provider: result.provider,
+        fileId: result.fileMetadata?.id
+      };
+      
     } catch (error) {
       console.error('Audio upload failed:', error);
       throw error;

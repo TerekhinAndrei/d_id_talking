@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { apiService } from '../services/api';
-import { useDIdMicrophoneTalk } from './useDIdMicrophoneTalk';
+import { useDIdMicrophoneTalkUpdated } from './useDIdMicrophoneTalkUpdated';
 import { useVideoStreamStatus } from './useVideoStreamStatus';
 import { DEFAULT_AVATAR_URL } from '../constants';
 
@@ -38,7 +38,7 @@ export const useVoiceToAvatar = (videoElementId, imageUrl = null) => {
     createTalkMic,
     stopTalkMic,
     clearState: clearMicState
-  } = useDIdMicrophoneTalk();
+  } = useDIdMicrophoneTalkUpdated();
 
   // Используем хук для определения статуса воспроизведения видеострима
   const isVideoStreamPlaying = useVideoStreamStatus(videoElementId);

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { apiService } from '../services/api';
-import { useDIdMicrophoneTalk } from '../hooks/useDIdMicrophoneTalk';
+import { useDIdMicrophoneTalkUpdated } from '../hooks/useDIdMicrophoneTalkUpdated';
 
 const DIdStreamingTester = ({ selectedVoice }) => {
   const [testState, setTestState] = useState({
@@ -37,7 +37,7 @@ const DIdStreamingTester = ({ selectedVoice }) => {
     createTalkMic,
     stopTalkMic,
     clearState: clearMicState
-  } = useDIdMicrophoneTalk();
+  } = useDIdMicrophoneTalkUpdated();
 
   const addLog = useCallback((message, type = 'info') => {
     setTestState(prev => ({
