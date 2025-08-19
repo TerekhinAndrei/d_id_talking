@@ -21,9 +21,43 @@
 - **WebSocket**: `wss://talking-head.onrender.com/ws/stream`
 
 ### Переменные окружения
-Для переопределения URL используйте переменную окружения:
+
+#### Для локальной разработки:
+
+**Способ 1: Создайте файл `frontend/.env.local`**
 ```bash
-VITE_API_BASE_URL=https://your-backend-url.com
+# Создайте файл в папке frontend
+touch frontend/.env.local
+
+# Добавьте в файл:
+VITE_API_BASE_URL=http://localhost:8000
+VITE_API_TIMEOUT=30000
+```
+
+**Способ 2: Используйте готовые npm скрипты**
+```bash
+# Обычный запуск (автоматически определит URL)
+npm run dev
+
+# Принудительно использовать localhost
+npm run dev:custom
+
+# Принудительно использовать Render backend
+npm run dev:render
+```
+
+**Способ 3: Переопределение через командную строку**
+```bash
+# Linux/Mac
+VITE_API_BASE_URL=http://localhost:8000 npm run dev
+
+# Windows
+set VITE_API_BASE_URL=http://localhost:8000 && npm run dev
+```
+
+#### Для продакшена:
+```bash
+VITE_API_BASE_URL=https://talking-head.onrender.com
 ```
 
 ## 🛠️ Развертывание
