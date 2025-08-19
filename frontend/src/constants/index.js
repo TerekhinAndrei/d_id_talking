@@ -1,4 +1,4 @@
-export const DEFAULT_AVATAR_URL = 'https://res.cloudinary.com/daeoqig4w/image/upload/v1754601773/ced034aa-4c77-4d02-a762-fb16bcb25d75.jpg';
+export const DEFAULT_AVATAR_URL = 'https://res.cloudinary.com/daeoqig4w/image/upload/v1755617531/Untitled_design_qwj7h4.jpg';
 export const DEFAULT_VOICE_ID = '9BWtsMINqrJLrRacOk9x'; // Aria - первый голос из API
 export const SILENCE_AUDIO_URL = 'https://res.cloudinary.com/daeoqig4w/video/upload/v1754770303/1-second-of-silence_l1un5v.mp3';
 

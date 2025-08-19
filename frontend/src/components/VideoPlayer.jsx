@@ -30,10 +30,14 @@ const VideoPlayer = ({
   isCreating,
   hasAudioTrack,
   onCreateStream,
-  onCloseStream
+  onCloseStream,
+  // Image dimensions
+  imageDimensions,
+  imageDimensionsLoading
 }) => {
   const videoRef = useRef(null);
   const [zoomLevel, setZoomLevel] = useState(1.2); // Добавляем состояние для zoom
+  const [videoPlayerSize, setVideoPlayerSize] = useState({ width: 'auto', height: '400px' }); // Размеры видеоплеера
   
   // Используем кастомные хуки для разделения ответственности
   const { 
@@ -86,19 +90,67 @@ const VideoPlayer = ({
   useEffect(() => {
     const placeholderVideo = document.querySelector('.placeholder-video');
     if (placeholderVideo) {
-      console.log('🎬 Attempting to play placeholder video...');
-      placeholderVideo.play().then(() => {
-        console.log('✅ Placeholder video started playing');
-      }).catch((error) => {
+      placeholderVideo.play().catch((error) => {
         console.error('❌ Failed to play placeholder video:', error);
       });
     }
   }, []);
+
+  // Обновляем размеры видеоплеера на основе размеров изображения
+  useEffect(() => {
+    if (imageDimensions && imageDimensions.width > 0 && imageDimensions.height > 0) {
+      // Вычисляем оптимальные размеры с сохранением пропорций
+      const maxWidth = 800; // Максимальная ширина
+      const maxHeight = 400; // Максимальная высота
+      
+      let { width, height } = imageDimensions;
+      
+      // Если изображение больше максимальных размеров, масштабируем его
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      
+      const newSize = {
+        width: `${width}px`,
+        height: `${height}px`
+      };
+      setVideoPlayerSize(newSize);
+      
+      // Принудительно устанавливаем размеры через JavaScript для надежности
+      setTimeout(() => {
+        const videoContainer = document.querySelector('.video-container');
+        if (videoContainer) {
+          videoContainer.style.width = newSize.width;
+          videoContainer.style.height = newSize.height;
+          videoContainer.style.aspectRatio = 'auto';
+        }
+      }, 100);
+    } else {
+      // Возвращаемся к дефолтным размерам
+      setVideoPlayerSize({ width: 'auto', height: '400px' });
+    }
+  }, [imageDimensions]);
   
   return (
     <div className={`video-player ${className}`}>
       {/* Видео контейнер */}
-                      <div className="video-container" style={{ border: '2px solid red', minHeight: '400px' }}>
+                      <div 
+                        className="video-container" 
+                        style={{ 
+                          border: '2px solid red', 
+                          minHeight: '400px',
+                          width: videoPlayerSize.width,
+                          height: videoPlayerSize.height,
+                          maxWidth: '100%',
+                          margin: '0 auto',
+                          aspectRatio: 'auto !important',
+                          '--video-width': videoPlayerSize.width,
+                          '--video-height': videoPlayerSize.height,
+                          '--video-aspect-ratio': imageDimensions ? `${imageDimensions.width} / ${imageDimensions.height}` : '16 / 9'
+                        }}
+                      >
           {/* Основной видеоэлемент для стрима */}
           <video
             ref={videoRef}
@@ -145,21 +197,8 @@ const VideoPlayer = ({
               transformOrigin: 'center top' // Прижимаем верхнюю границу
             }}
             src="/Waiting.mp4"
-            onLoadStart={() => console.log('🎬 Загрузка видео: Waiting.mp4')}
-            onLoadedData={() => {
-              console.log('✅ Видео загружено: Waiting.mp4');
-              const video = document.querySelector('.placeholder-video');
-              if (video) {
-                console.log('📏 Размеры видео:', {
-                  videoWidth: video.videoWidth,
-                  videoHeight: video.videoHeight,
-                  offsetWidth: video.offsetWidth,
-                  offsetHeight: video.offsetHeight,
-                  clientWidth: video.clientWidth,
-                  clientHeight: video.clientHeight
-                });
-              }
-            }}
+            onLoadStart={() => {}}
+            onLoadedData={() => {}}
             onError={(e) => {
               console.error('❌ Ошибка загрузки видео:', e.target.error);
               console.error('❌ Видео элемент:', e.target);
@@ -167,10 +206,10 @@ const VideoPlayer = ({
               console.error('❌ Network state:', e.target.networkState);
               console.error('❌ Ready state:', e.target.readyState);
             }}
-            onCanPlay={() => console.log('🎯 Видео готово к воспроизведению: Waiting.mp4')}
-            onPlay={() => console.log('▶️ Видео начало воспроизведение')}
-            onPause={() => console.log('⏸️ Видео приостановлено')}
-            onEnded={() => console.log('🏁 Видео завершилось')}
+            onCanPlay={() => {}}
+            onPlay={() => {}}
+            onPause={() => {}}
+            onEnded={() => {}}
           />
         
         {/* Оверлей статуса */}
@@ -197,13 +236,16 @@ const VideoPlayer = ({
           </div>
         </div>
 
-        {/* Индикатор статуса видеострима */}
-        <div className="stream-status-indicator">
-          <div className={`stream-status-dot ${isVideoStreamPlaying ? 'playing' : 'stopped'}`}></div>
-          <span className="stream-status-text">
-            {isVideoStreamPlaying ? 'Стрим активен' : 'Стрим неактивен'}
-          </span>
-        </div>
+
+
+        {/* Индикатор загрузки размеров изображения */}
+        {imageDimensionsLoading && (
+          <div className="image-dimensions-loading-indicator">
+            <span>Загрузка размеров изображения...</span>
+          </div>
+        )}
+
+
 
 
       </div>

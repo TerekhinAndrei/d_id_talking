@@ -12,6 +12,7 @@ import { useVoices } from './hooks/useVoices';
 import { useDIdStreaming } from './hooks/useDIdStreaming';
 import { useElevenLabsDidBridge } from './hooks/useElevenLabsDidBridge';
 import { useVoiceToAvatar } from './hooks/useVoiceToAvatar';
+import { useImageDimensions } from './hooks/useImageDimensions';
 
 // Constants
 import { DEFAULT_AVATAR_URL, DEFAULT_VOICE_ID } from './constants';
@@ -69,6 +70,9 @@ function App() {
     reset: resetVoiceStream,
     logs: voiceLogs
   } = useVoiceToAvatar('main-video-player', uploadedImageUrl || DEFAULT_AVATAR_URL);
+
+  // Image dimensions hook
+  const { dimensions: imageDimensions, isLoading: imageDimensionsLoading } = useImageDimensions(previewUrl);
 
   const handleImageSelect = (file) => {
     setSelectedImage(file);
@@ -234,6 +238,9 @@ function App() {
             hasAudioTrack={voiceStreamState.peerConnection ? !!voiceStreamState.peerConnection.getReceivers().find(r => r.track?.kind === 'audio')?.track : false}
             onCreateStream={handleCreateStream}
             onCloseStream={handleCloseStream}
+            // Image dimensions
+            imageDimensions={imageDimensions}
+            imageDimensionsLoading={imageDimensionsLoading}
           />
         </div>
 

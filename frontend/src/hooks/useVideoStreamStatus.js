@@ -113,28 +113,28 @@ export const useVideoStreamStatus = (videoElementId = 'main-video-player') => {
       // Агрессивная проверка: если видео зависло, требуем активный WebRTC
       const isWebRTCValid = stuckFrameCountRef.current >= 5 ? isWebRTCActive : true;
 
-      // Логирование для отладки
-      if (stuckFrameCountRef.current >= 5) {
-        console.log('🔍 Video stream analysis:', {
-          timeChanged,
-          stuckFrameCount: stuckFrameCountRef.current,
-          hasActiveAudioTrack,
-          isWebRTCActive,
-          networkState,
-          readyState,
-          consecutiveChecks: consecutiveChecksRef.current,
-          isStateDynamic
-        });
-        
-        if (videoElement.srcObject) {
-          console.log('WebRTC tracks:', videoElement.srcObject.getTracks().map(track => ({
-            kind: track.kind,
-            enabled: track.enabled,
-            muted: track.muted,
-            readyState: track.readyState
-          })));
-        }
-      }
+      // Логирование отключено для чистоты консоли
+      // if (stuckFrameCountRef.current >= 5) {
+      //   console.log('🔍 Video stream analysis:', {
+      //     timeChanged,
+      //     stuckFrameCount: stuckFrameCountRef.current,
+      //     hasActiveAudioTrack,
+      //     isWebRTCActive,
+      //     networkState,
+      //     readyState,
+      //     consecutiveChecks: consecutiveChecksRef.current,
+      //     isStateDynamic
+      //   });
+      //   
+      //   if (videoElement.srcObject) {
+      //     console.log('WebRTC tracks:', videoElement.srcObject.getTracks().map(track => ({
+      //       kind: track.kind,
+      //       enabled: track.enabled,
+      //       muted: track.muted,
+      //       readyState: track.readyState
+      //     })));
+      //   }
+      // }
 
       const streamStatus = isDidStream && 
                           isPlaying && 

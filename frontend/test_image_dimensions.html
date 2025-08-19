@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест размеров изображения</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .image-preview {
+            max-width: 100%;
+            height: auto;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .dimensions-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .video-player {
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            margin: 20px 0;
+            background: #000;
+            position: relative;
+        }
+        .video-container {
+            position: relative;
+            background: #000;
+            overflow: hidden;
+        }
+        .placeholder-video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Тест автоматического изменения размеров видеоплеера</h1>
+        
+        <h2>Загрузите изображение для тестирования:</h2>
+        <input type="file" id="imageInput" accept="image/*">
+        
+        <div id="imagePreview"></div>
+        <div id="dimensionsInfo"></div>
+        <div id="videoPlayer"></div>
+    </div>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const dimensionsInfo = document.getElementById('dimensionsInfo');
+        const videoPlayer = document.getElementById('videoPlayer');
+
+        function getImageDimensions(imageUrl) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    resolve({
+                        width: img.naturalWidth,
+                        height: img.naturalHeight
+                    });
+                };
+                img.onerror = reject;
+                img.src = imageUrl;
+            });
+        }
+
+        function updateVideoPlayerSize(dimensions) {
+            const maxWidth = 800;
+            const maxHeight = 400;
+            
+            let { width, height } = dimensions;
+            
+            if (width > maxWidth || height > maxHeight) {
+                const ratio = Math.min(maxWidth / width, maxHeight / height);
+                width = Math.round(width * ratio);
+                height = Math.round(height * ratio);
+            }
+            
+            videoPlayer.innerHTML = `
+                <div class="video-player" style="width: ${width}px; height: ${height}px; margin: 0 auto;">
+                    <div class="video-container" style="width: 100%; height: 100%;">
+                        <video class="placeholder-video" autoplay loop muted>
+                            <source src="/Waiting.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </div>
+            `;
+        }
+
+        imageInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const imageUrl = URL.createObjectURL(file);
+                
+                // Показываем превью
+                imagePreview.innerHTML = `
+                    <h3>Превью изображения:</h3>
+                    <img src="${imageUrl}" alt="Превью" class="image-preview">
+                `;
+                
+                try {
+                    // Получаем размеры
+                    const dimensions = await getImageDimensions(imageUrl);
+                    
+                    // Показываем информацию о размерах
+                    dimensionsInfo.innerHTML = `
+                        <h3>Размеры изображения:</h3>
+                        <p><strong>Ширина:</strong> ${dimensions.width}px</p>
+                        <p><strong>Высота:</strong> ${dimensions.height}px</p>
+                        <p><strong>Соотношение сторон:</strong> ${(dimensions.width / dimensions.height).toFixed(2)}</p>
+                    `;
+                    
+                    // Обновляем размеры видеоплеера
+                    updateVideoPlayerSize(dimensions);
+                    
+                } catch (error) {
+                    console.error('Ошибка получения размеров:', error);
+                    dimensionsInfo.innerHTML = '<p style="color: red;">Ошибка получения размеров изображения</p>';
+                }
+            }
+        });
+    </script>
+</body>
+</html>

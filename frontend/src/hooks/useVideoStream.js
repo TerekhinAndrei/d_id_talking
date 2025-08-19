@@ -10,7 +10,6 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
 
   // Инициализация видео ожидания (теперь только для заглушки)
   const initializeWaitingVideo = useCallback(() => {
-    console.log('🎬 Waiting video is handled by placeholder layer');
     setIsWaitingVideoLoaded(true);
     setIsInitialized(true);
     onVideoReady();
@@ -52,7 +51,6 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
       // Try to play the stream
       try {
         await video.play();
-        console.log('✅ Stream video started playing successfully');
       } catch (playError) {
         console.warn('⚠️ Auto-play failed, but stream is ready:', playError);
         
@@ -60,7 +58,6 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
         const playWithUserInteraction = async () => {
           try {
             await video.play();
-            console.log('✅ Stream video started playing after user interaction');
           } catch (e) {
             console.warn('⚠️ Still cannot play video:', e);
           }
@@ -89,7 +86,6 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
   // Возврат к видео ожидания при отключении стрима (теперь управляется CSS)
   useEffect(() => {
     if (!stream || !isConnected) {
-      console.log('🔄 Returning to waiting video (CSS controlled)');
       setIsInitialized(false);
     }
   }, [stream, isConnected]);
@@ -108,13 +104,11 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
         setIsMuted(false);
 
       } else {
-        console.log('⚠️ Stream has no audio tracks, keeping muted');
         video.muted = true;
         setIsMuted(true);
       }
     } else {
       video.muted = true;
-      console.log('🔇 Muted video for waiting state');
     }
   }, [stream, isConnected, videoRef]);
 
@@ -126,13 +120,10 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
     const newMutedState = !video.muted;
     video.muted = newMutedState;
     setIsMuted(newMutedState);
-    
-    console.log(`🔊 Manual ${newMutedState ? 'muted' : 'unmuted'} video`);
   }, [videoRef]);
 
   // Тестовые функции для переключения видеослоев
   const testShowWaiting = useCallback(() => {
-    console.log('🧪 TEST: Показываем видео ожидания');
     setTestMode(true);
     setTestStreamActive(false);
     setIsPlaying(false);
@@ -144,10 +135,8 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
       // Пытаемся воспроизвести с задержкой
       setTimeout(() => {
         video.play().then(() => {
-          console.log('✅ Waiting.mp4 успешно запущено');
           setIsPlaying(true);
         }).catch(e => {
-          console.log('❌ Не удалось запустить Waiting.mp4:', e);
           setIsPlaying(false);
         });
       }, 100);
@@ -155,7 +144,6 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
   }, []);
 
   const testShowStream = useCallback(() => {
-    console.log('🧪 TEST: Показываем стрим');
     setTestMode(true);
     setTestStreamActive(true);
     setIsPlaying(false);
@@ -167,10 +155,8 @@ export const useVideoStream = (videoRef, stream, isConnected, onVideoReady) => {
       // Пытаемся воспроизвести с задержкой
       setTimeout(() => {
         video.play().then(() => {
-          console.log('✅ Test.mp4 успешно запущено');
           setIsPlaying(true);
         }).catch(e => {
-          console.log('❌ Не удалось запустить Test.mp4:', e);
           setIsPlaying(false);
         });
       }, 100);
