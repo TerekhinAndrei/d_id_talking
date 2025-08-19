@@ -190,6 +190,11 @@ export const useVoiceToAvatar = (videoElementId, imageUrl = null) => {
         addLog(`🔗 Connection state: ${peerConnection.connectionState}`, 'info');
         if (peerConnection.connectionState === 'connected') {
           addLog('✅ WebRTC connection established!', 'success');
+          addLog(`🎬 PeerConnection state: ${peerConnection.connectionState}`, 'info');
+          addLog(`🎬 ICE connection state: ${peerConnection.iceConnectionState}`, 'info');
+          addLog(`🎬 Signaling state: ${peerConnection.signalingState}`, 'info');
+          addLog(`🎬 Receivers count: ${peerConnection.getReceivers().length}`, 'info');
+          addLog(`🎬 Senders count: ${peerConnection.getSenders().length}`, 'info');
           setStreamState(prev => ({ ...prev, isConnected: true }));
         }
       });
@@ -198,6 +203,8 @@ export const useVoiceToAvatar = (videoElementId, imageUrl = null) => {
         addLog('🎬 Received track!', 'success');
         addLog(`🎬 Track kind: ${event.track.kind}`, 'info');
         addLog(`🎬 Streams count: ${event.streams.length}`, 'info');
+        addLog(`🎬 Track enabled: ${event.track.enabled}`, 'info');
+        addLog(`🎬 Track readyState: ${event.track.readyState}`, 'info');
         
         if (event.track.kind === 'video') {
           addLog('🎬 Received VIDEO track!', 'success');
@@ -217,10 +224,22 @@ export const useVoiceToAvatar = (videoElementId, imageUrl = null) => {
           if (videoElement && event.streams[0]) {
             videoElement.srcObject = event.streams[0];
             addLog('✅ Video stream assigned to element', 'success');
+            addLog(`🎬 Video element srcObject: ${!!videoElement.srcObject}`, 'info');
+            addLog(`🎬 Video element readyState: ${videoElement.readyState}`, 'info');
+            addLog(`🎬 Video element paused: ${videoElement.paused}`, 'info');
+            addLog(`🎬 Video element muted: ${videoElement.muted}`, 'info');
             
             // Размьючиваем видеоплеер
             videoElement.muted = false;
             addLog('🔊 Video player unmuted', 'success');
+            
+            // Пытаемся воспроизвести видео
+            try {
+              await videoElement.play();
+              addLog('✅ Video playback started successfully', 'success');
+            } catch (playError) {
+              addLog(`⚠️ Video play failed: ${playError.message}`, 'warning');
+            }
             
             // Скрываем заглушку после небольшой задержки
             setTimeout(() => {
