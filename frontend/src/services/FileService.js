@@ -1,5 +1,5 @@
 import { apiService } from './api.js';
-import { configManager } from '../config/ConfigManager.js';
+import configManager from '../config/ConfigManager.js';
 
 /**
  * Сервис для работы с файлами
