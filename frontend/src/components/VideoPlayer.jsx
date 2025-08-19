@@ -4,7 +4,7 @@ import VideoControls from './VideoControls';
 import VideoOverlay from './VideoOverlay';
 import { useVideoStream } from '../hooks/useVideoStream';
 import { useVideoState } from '../hooks/useVideoState';
-import { useVideoPlayback } from '../hooks/useVideoPlayback';
+import { useVideoStreamStatus } from '../hooks/useVideoStreamStatus';
 
 const VideoPlayer = ({ 
   stream, 
@@ -33,18 +33,15 @@ const VideoPlayer = ({
   onCloseStream
 }) => {
   const videoRef = useRef(null);
-  const [placeholderOpacity, setPlaceholderOpacity] = useState(0);
-  const [zoomLevel, setZoomLevel] = useState(1); // Добавляем состояние для zoom
+  const [placeholderOpacity, _setPlaceholderOpacity] = useState(1); // Делаем placeholder видимым по умолчанию
+  const [zoomLevel, setZoomLevel] = useState(1.2); // Добавляем состояние для zoom
+  const [mainVideoOpacity, setMainVideoOpacity] = useState(0); // Тестовый слайдер для прозрачности main-video-player
   
   // Используем кастомные хуки для разделения ответственности
   const { 
     videoError, 
     handleVideoError 
   } = useVideoState();
-  
-  // Определяем, проигрывается ли видео из стрима
-  const { isPlaying: isVideoPlaying, playbackInfo } = useVideoPlayback(videoRef, stream);
-  
 
   
   const {
@@ -52,15 +49,10 @@ const VideoPlayer = ({
     toggleMute,
     initializeWaitingVideo,
     handleStreamTransition,
-    // Добавляем функции для тестирования
-    testShowStream,
-    testShowWaiting,
-    shouldShowStream,
-    shouldShowWaiting,
-    testMode,
-    testStreamActive,
-    isPlaying: isTestVideoPlaying
   } = useVideoStream(videoRef, stream, isConnected, onVideoReady);
+
+  // Используем хук для определения статуса воспроизведения видеострима
+  const isVideoStreamPlaying = useVideoStreamStatus('main-video-player');
 
   // Инициализация видео ожидания
   useEffect(() => {
@@ -74,40 +66,30 @@ const VideoPlayer = ({
     if (stream && isConnected) {
       handleStreamTransition();
     }
-  }, [stream, isConnected, handleStreamTransition]);
+    }, [stream, isConnected, handleStreamTransition]);
 
-  // Управление прозрачностью видео элементов
+  // Ручное управление прозрачностью main-video-player
   useEffect(() => {
     const mainVideo = document.getElementById('main-video-player');
-    const placeholderVideo = document.querySelector('.placeholder-video');
-
-
-    
-    if (stream && isConnected) {
-      // Управляем прозрачность main-video-player на основе проигрывания видео
-      if (mainVideo) {
-        const mainVideoOpacity = isVideoPlaying ? 1 : 0;
-        mainVideo.style.opacity = mainVideoOpacity;
-
-      }
-      
-      // Placeholder всегда видимый когда есть стрим
-      if (placeholderVideo) {
-        placeholderVideo.style.opacity = 1;
-        setPlaceholderOpacity(1);
-      }
-    } else {
-      // Нет стрима - скрываем основной видео элемент, показываем placeholder
-      if (mainVideo) {
-        mainVideo.style.opacity = 0;
-      }
-      if (placeholderVideo) {
-        placeholderVideo.style.opacity = 1;
-        setPlaceholderOpacity(1);
-      }
+    if (mainVideo) {
+      mainVideo.style.opacity = mainVideoOpacity;
+      mainVideo.style.display = 'block';
     }
-  }, [isVideoPlaying, stream, isConnected, playbackInfo]);
+  }, [mainVideoOpacity]);
 
+  // Принудительно запускаем placeholder видео
+  useEffect(() => {
+    const placeholderVideo = document.querySelector('.placeholder-video');
+    if (placeholderVideo) {
+      console.log('🎬 Attempting to play placeholder video...');
+      placeholderVideo.play().then(() => {
+        console.log('✅ Placeholder video started playing');
+      }).catch((error) => {
+        console.error('❌ Failed to play placeholder video:', error);
+      });
+    }
+  }, []);
+  
   return (
     <div className={`video-player ${className}`}>
       {/* Видео контейнер */}
@@ -121,18 +103,20 @@ const VideoPlayer = ({
             playsInline
             autoPlay
             muted
-            controls={shouldShowStream}
+            controls={true}
             style={{ 
               position: 'absolute',
               top: 0,
               left: 0,
               width: '100%',
               height: '100%',
-              opacity: stream && isConnected ? 1 : 0,
-              zIndex: 1,
+              opacity: mainVideoOpacity, // Применяем тестовую прозрачность
+              zIndex: 3, // Увеличиваем z-index чтобы main-video-player был поверх placeholder
               objectFit: 'contain',
-              border: '2px solid blue'
+              border: '2px solid blue',
+              display: 'block' // Принудительно показываем для тестирования
             }}
+
           />
           
           {/* Видео ожидания */}
@@ -153,12 +137,12 @@ const VideoPlayer = ({
               objectFit: 'contain',
               border: '2px solid green',
               transform: `scale(${zoomLevel})`, // Применяем zoom
-              transformOrigin: 'center center' // Центрируем масштабирование
+              transformOrigin: 'center top' // Прижимаем верхнюю границу
             }}
-            src={testMode && testStreamActive ? "/Test.mp4" : "/Waiting.mp4"}
-            onLoadStart={() => console.log('🎬 Загрузка видео:', testMode && testStreamActive ? "Test.mp4" : "Waiting.mp4")}
+            src="/Waiting.mp4"
+            onLoadStart={() => console.log('🎬 Загрузка видео: Waiting.mp4')}
             onLoadedData={() => {
-              console.log('✅ Видео загружено:', testMode && testStreamActive ? "Test.mp4" : "Waiting.mp4");
+              console.log('✅ Видео загружено: Waiting.mp4');
               const video = document.querySelector('.placeholder-video');
               if (video) {
                 console.log('📏 Размеры видео:', {
@@ -175,8 +159,10 @@ const VideoPlayer = ({
               console.error('❌ Ошибка загрузки видео:', e.target.error);
               console.error('❌ Видео элемент:', e.target);
               console.error('❌ Src:', e.target.src);
+              console.error('❌ Network state:', e.target.networkState);
+              console.error('❌ Ready state:', e.target.readyState);
             }}
-            onCanPlay={() => console.log('🎯 Видео готово к воспроизведению:', testMode && testStreamActive ? "Test.mp4" : "Waiting.mp4")}
+            onCanPlay={() => console.log('🎯 Видео готово к воспроизведению: Waiting.mp4')}
             onPlay={() => console.log('▶️ Видео начало воспроизведение')}
             onPause={() => console.log('⏸️ Видео приостановлено')}
             onEnded={() => console.log('🏁 Видео завершилось')}
@@ -203,6 +189,31 @@ const VideoPlayer = ({
               title={`Zoom: ${zoomLevel.toFixed(1)}x`}
             />
             <span className="zoom-value">{zoomLevel.toFixed(1)}x</span>
+          </div>
+        </div>
+
+        {/* Индикатор статуса видеострима */}
+        <div className="stream-status-indicator">
+          <div className={`stream-status-dot ${isVideoStreamPlaying ? 'playing' : 'stopped'}`}></div>
+          <span className="stream-status-text">
+            {isVideoStreamPlaying ? 'Стрим активен' : 'Стрим неактивен'}
+          </span>
+        </div>
+
+        {/* Тестовый слайдер прозрачности main-video-player */}
+        <div className="opacity-slider-overlay">
+          <div className="opacity-slider-container">
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={mainVideoOpacity}
+              onChange={(e) => setMainVideoOpacity(parseFloat(e.target.value))}
+              className="opacity-slider"
+              title={`Opacity: ${mainVideoOpacity.toFixed(1)}`}
+            />
+            <span className="opacity-value">{mainVideoOpacity.toFixed(1)}</span>
           </div>
         </div>
       </div>
