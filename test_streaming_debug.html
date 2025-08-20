@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streaming Debug Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .error {
+            color: #721c24;
+            background: #f8d7da;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #f5c6cb;
+            margin: 10px 0;
+        }
+        .warning {
+            color: #856404;
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #ffeaa7;
+            margin: 10px 0;
+        }
+        .info {
+            color: #0c5460;
+            background: #d1ecf1;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #bee5eb;
+            margin: 10px 0;
+        }
+        .success {
+            color: #155724;
+            background: #d4edda;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #c3e6cb;
+            margin: 10px 0;
+        }
+        .code-block {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #dc3545;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .debug-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐛 Streaming Debug Test</h1>
+        
+        <div class="error">
+            <h3>❌ Current Issue:</h3>
+            <p>The app is still trying to use local URLs for streaming, causing 405 errors.</p>
+            <div class="code-block">
+                [Error] Failed to load resource: the server responded with a status of 405 () (avatar.jpg, line 0)
+            </div>
+        </div>
+
+        <div class="warning">
+            <h3>🔍 Debug Steps:</h3>
+            <ol>
+                <li><strong>Check if changes are deployed:</strong> The error might be from an old version</li>
+                <li><strong>Check browser console:</strong> Look for the new debug logs we added</li>
+                <li><strong>Check imageUrl value:</strong> Should be D-ID URL (s3://) not local URL</li>
+                <li><strong>Check default avatar upload:</strong> Should upload to D-ID on app start</li>
+            </ol>
+        </div>
+
+        <div class="debug-section">
+            <h3>🔧 Recent Fixes Applied:</h3>
+            <ul>
+                <li><strong>Removed DEFAULT_AVATAR_URL fallback:</strong> useVoiceToAvatar no longer uses local URLs</li>
+                <li><strong>Added URL validation:</strong> handleCreateStream validates D-ID URLs</li>
+                <li><strong>Improved error handling:</strong> Better error messages for debugging</li>
+                <li><strong>Added debug logging:</strong> Console logs to track URL flow</li>
+            </ul>
+        </div>
+
+        <div class="info">
+            <h3>📋 Expected Console Logs:</h3>
+            <div class="code-block">
+🎯 createStream called with imageUrl: s3://d-id-images-prod/...
+🎯 imageUrl type: string
+🎯 imageUrl starts with s3://: true
+🎯 imageUrl starts with /: false
+🎯 imageUrl starts with http: false
+🖼️ Final image URL for streaming: s3://d-id-images-prod/...
+            </div>
+        </div>
+
+        <div class="error">
+            <h3>❌ If Still Seeing Local URL:</h3>
+            <div class="code-block">
+🎯 createStream called with imageUrl: /default_avatar.jpg
+🎯 imageUrl starts with s3://: false
+🎯 imageUrl starts with /: true
+            </div>
+            <p>This means the default avatar upload is failing or not completing.</p>
+        </div>
+
+        <div class="debug-section">
+            <h3>🔍 Debugging Checklist:</h3>
+            <ul>
+                <li>✅ Check if default avatar upload completes on app start</li>
+                <li>✅ Check if uploadedImageUrl is set correctly</li>
+                <li>✅ Check if handleCreateStream receives D-ID URL</li>
+                <li>✅ Check if useVoiceToAvatar receives D-ID URL</li>
+                <li>✅ Check if changes are deployed to Render</li>
+            </ul>
+        </div>
+
+        <div class="info">
+            <h3>🎯 Next Steps:</h3>
+            <ol>
+                <li><strong>Deploy to Render:</strong> Make sure latest changes are live</li>
+                <li><strong>Check browser console:</strong> Look for debug logs</li>
+                <li><strong>Test default avatar:</strong> Should upload to D-ID automatically</li>
+                <li><strong>Test custom image:</strong> Should upload to D-ID and use returned URL</li>
+            </ol>
+        </div>
+
+        <div class="success">
+            <h3>✅ Expected Success Flow:</h3>
+            <ol>
+                <li>App starts → Default avatar uploads to D-ID</li>
+                <li>User clicks "Create Stream" → Uses D-ID URL</li>
+                <li>Stream creates successfully → No 405 error</li>
+                <li>Video plays with animated avatar</li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>

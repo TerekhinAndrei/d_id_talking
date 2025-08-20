@@ -14,14 +14,11 @@ class NewFileService {
 
   /**
    * Определяет, какой провайдер использовать
-   * Локально: D-ID, Продакшн: новая система файлового хранилища
+   * Для стриминга ВСЕГДА используем D-ID, независимо от окружения
    */
   getStorageProvider() {
-    if (this.isDevelopment) {
-      return 'd_id';
-    } else {
-      return 'file_storage';
-    }
+    // Для стриминга ВСЕГДА используем D-ID
+    return 'd_id';
   }
 
   /**
@@ -109,7 +106,11 @@ class NewFileService {
     const uploadId = Math.random().toString(36).substr(2, 9);
     console.log(`🚀 [${uploadId}] Starting image upload for:`, file.name);
     
-    const provider = options.provider || this.getStorageProvider();
+    // Для стриминга ВСЕГДА используем D-ID, независимо от окружения
+    const forceDId = options.forceDId || false;
+    const provider = forceDId ? 'd_id' : (options.provider || this.getStorageProvider());
+    
+    console.log(`📤 [${uploadId}] Provider: ${provider} (forceDId: ${forceDId})`);
     
     try {
       // Валидация файла
@@ -119,7 +120,7 @@ class NewFileService {
       }
 
       if (provider === 'd_id') {
-        // Локальная разработка - используем D-ID
+        // Используем D-ID (локальная разработка ИЛИ принудительно для стриминга)
         try {
           console.log(`📤 [${uploadId}] Attempting D-ID upload for:`, file.name);
           return await this.uploadImageToDId(file);
