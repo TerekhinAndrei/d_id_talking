@@ -89,8 +89,9 @@ function App() {
         const blob = await response.blob();
         const file = new File([blob], 'default_avatar.jpg', { type: 'image/jpeg' });
         
-        // Upload to D-ID using existing file service with forceDId option
-        const result = await fileService.uploadImage(file, { forceDId: true });
+        // Upload to D-ID using existing file service
+        const result = await fileService.uploadImage(file);
+        console.log('🔧 fileService.uploadImage result:', result);
         
         if (result && result.data?.url) {
           const dIdAvatarUrl = result.data.url;
@@ -107,6 +108,7 @@ function App() {
           
         } else {
           console.error('❌ Failed to upload default avatar to D-ID');
+          console.error('❌ Result:', result);
           // Попробуем еще раз или покажем ошибку
           setDefaultAvatarLoaded(true);
         }
@@ -188,7 +190,7 @@ function App() {
       let streamImageUrl;
       if (selectedImage) {
         // Используем загруженное изображение
-        const uploadResult = await fileService.uploadImage(selectedImage, { forceDId: true });
+        const uploadResult = await fileService.uploadImage(selectedImage);
         streamImageUrl = uploadResult.data?.url || uploadResult.data?.secure_url;
         setUploadedImageUrl(streamImageUrl);
       } else {
@@ -201,7 +203,7 @@ function App() {
           const response = await fetch('/default_avatar.jpg');
           const blob = await response.blob();
           const file = new File([blob], 'default_avatar.jpg', { type: 'image/jpeg' });
-          const uploadResult = await fileService.uploadImage(file, { forceDId: true });
+          const uploadResult = await fileService.uploadImage(file);
           streamImageUrl = uploadResult.data?.url || uploadResult.data?.secure_url;
           setUploadedImageUrl(streamImageUrl);
         }

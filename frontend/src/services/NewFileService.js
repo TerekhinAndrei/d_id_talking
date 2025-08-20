@@ -106,12 +106,6 @@ class NewFileService {
     const uploadId = Math.random().toString(36).substr(2, 9);
     console.log(`🚀 [${uploadId}] Starting image upload for:`, file.name);
     
-    // Для стриминга ВСЕГДА используем D-ID, независимо от окружения
-    const forceDId = options.forceDId || false;
-    const provider = forceDId ? 'd_id' : (options.provider || this.getStorageProvider());
-    
-    console.log(`📤 [${uploadId}] Provider: ${provider} (forceDId: ${forceDId})`);
-    
     try {
       // Валидация файла
       const validation = this.validateFile(file, 'image');
@@ -119,28 +113,10 @@ class NewFileService {
         throw new Error(validation.errors.join(', '));
       }
 
-      if (provider === 'd_id') {
-        // Используем D-ID (локальная разработка ИЛИ принудительно для стриминга)
-        try {
-          console.log(`📤 [${uploadId}] Attempting D-ID upload for:`, file.name);
-          return await this.uploadImageToDId(file);
-        } catch (error) {
-          // Если D-ID отклонил изображение из-за модерации, используем fallback
-          if (this.isModerationError(error)) {
-            console.log(`⚠️ [${uploadId}] D-ID отклонил изображение из-за модерации, используем fallback на файловое хранилище`);
-            return await this.uploadImageToFileStorage(file);
-          }
-          
-
-          
-          console.log(`❌ [${uploadId}] Unhandled D-ID error:`, error.message);
-          throw error;
-        }
-      } else {
-        // Продакшн - используем новую систему файлового хранилища
-        console.log(`📤 [${uploadId}] Using file storage for production`);
-        return await this.uploadImageToFileStorage(file);
-      }
+      // ВСЕГДА используем D-ID для изображений
+      console.log(`📤 [${uploadId}] Using D-ID for image upload`);
+      return await this.uploadImageToDId(file);
+      
     } catch (error) {
       console.error(`❌ [${uploadId}] Image upload failed:`, error);
       throw error;
