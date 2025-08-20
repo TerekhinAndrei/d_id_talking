@@ -54,25 +54,38 @@ export const useVoiceToAvatar = (videoElementId, imageUrl = null) => {
   const createStream = useCallback(async (imageUrl = null) => {
     try {
       console.log('🎯 createStream called with imageUrl:', imageUrl);
+      console.log('🎯 imageUrl type:', typeof imageUrl);
+      console.log('🎯 imageUrl starts with s3://:', imageUrl?.startsWith('s3://'));
+      console.log('🎯 imageUrl starts with /:', imageUrl?.startsWith('/'));
+      console.log('🎯 imageUrl starts with http:', imageUrl?.startsWith('http'));
+      
       setStreamState(prev => ({ ...prev, isCreating: true, status: 'creating', error: null }));
       addLog('🚀 Step 1: Creating new stream...', 'info');
       
-      // Используем переданное изображение или дефолтное
-      let finalImageUrl = imageUrl;
-      
-      // Если не передан URL изображения, используем дефолтный
-      if (!finalImageUrl) {
-        addLog('⚠️ No image URL provided, using default avatar', 'warning');
-        finalImageUrl = DEFAULT_AVATAR_URL;
+      // Проверяем, что передан валидный URL изображения
+      if (!imageUrl) {
+        const errorMsg = 'Не передан URL изображения. Требуется D-ID URL для стриминга.';
+        addLog(`❌ ${errorMsg}`, 'error');
+        setStreamState(prev => ({ 
+          ...prev, 
+          error: errorMsg,
+          status: 'error',
+          isCreating: false
+        }));
+        return false;
       }
+      
+      let finalImageUrl = imageUrl;
       
       // Преобразуем относительный URL в абсолютный (на случай если передается относительный URL)
       if (finalImageUrl.startsWith('/')) {
         finalImageUrl = `${window.location.origin}${finalImageUrl}`;
         addLog(`🔄 Converted relative URL to absolute: ${finalImageUrl}`, 'info');
+        console.log('🔄 Converted relative URL to absolute:', finalImageUrl);
       }
       
       addLog(`🖼️ Используем изображение: ${finalImageUrl}`, 'info');
+      console.log('🖼️ Final image URL for streaming:', finalImageUrl);
       
       // Пропускаем проверку изображения для D-ID URL (s3://)
       if (finalImageUrl.startsWith('s3://')) {

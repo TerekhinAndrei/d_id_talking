@@ -106,11 +106,13 @@ function App() {
           setDefaultAvatarLoaded(true);
           
         } else {
-          console.warn('⚠️ Failed to upload default avatar to D-ID, using local fallback');
+          console.error('❌ Failed to upload default avatar to D-ID');
+          // Попробуем еще раз или покажем ошибку
           setDefaultAvatarLoaded(true);
         }
       } catch (error) {
         console.error('❌ Error uploading default avatar:', error);
+        // Даже при ошибке помечаем как загруженный, чтобы не блокировать UI
         setDefaultAvatarLoaded(true);
       }
     };
@@ -203,6 +205,15 @@ function App() {
           streamImageUrl = uploadResult.data?.url || uploadResult.data?.secure_url;
           setUploadedImageUrl(streamImageUrl);
         }
+      }
+      
+      // Проверяем, что получили валидный D-ID URL
+      if (!streamImageUrl) {
+        throw new Error('Не удалось получить D-ID URL для изображения');
+      }
+      
+      if (!streamImageUrl.startsWith('s3://')) {
+        console.warn('⚠️ Warning: Image URL is not a D-ID URL:', streamImageUrl);
       }
       
       console.log('🎯 Using image URL for streaming:', streamImageUrl);
