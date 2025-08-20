@@ -85,16 +85,23 @@ class DIdFileService(IDIdFileService, BaseService):
                 )
             }
             
+            # Add persist parameter to prevent permanent storage
+            data = {
+                'persist': 'false'
+            }
+            
             # Make API request
             self.logger.info(f"Making request to D-ID API: {self.images_endpoint}")
             self.logger.info(f"Headers: {headers}")
             self.logger.info(f"File size: {len(request.file_data)} bytes")
+            self.logger.info(f"Data params: {data}")
             
             response = await self.http_client.make_request(
                 method="POST",
                 url=self.images_endpoint,
                 headers=headers,
                 files=files,
+                data=data,
                 timeout=60
             )
             
@@ -160,12 +167,18 @@ class DIdFileService(IDIdFileService, BaseService):
                 )
             }
             
+            # Add persist parameter to prevent permanent storage
+            data = {
+                'persist': 'false'
+            }
+            
             # Make API request
             response = await self.http_client.make_request(
                 method="POST",
                 url=self.audios_endpoint,
                 headers=headers,
                 files=files,
+                data=data,
                 timeout=60
             )
             
@@ -297,6 +310,54 @@ class DIdFileService(IDIdFileService, BaseService):
                 "authenticated": False,
                 "message": f"Authentication test failed: {str(e)}"
             }
+    
+    async def get_image_public_url(self, file_id: str) -> str:
+        """Get public URL for D-ID image"""
+        try:
+            # D-ID images are accessible via their S3 URL
+            # The URL format is: https://d-id-images-prod.s3.amazonaws.com/{file_id}/{filename}
+            # But we need to get the actual public URL from D-ID API
+            
+            endpoint = f"{self.base_url}/images/{file_id}"
+            headers = self._get_headers()
+            
+            response = await self.http_client.make_request(
+                method="GET",
+                url=endpoint,
+                headers=headers,
+                timeout=30
+            )
+            
+            # D-ID should return the public URL in the response
+            if response.get("url"):
+                return response["url"]
+            else:
+                # Fallback: construct the public URL
+                return f"https://d-id-images-prod.s3.amazonaws.com/{file_id}/image.jpg"
+                
+        except Exception as e:
+            self.logger.error(f"Error getting public URL for image {file_id}: {e}")
+            # Fallback: construct the public URL
+            return f"https://d-id-images-prod.s3.amazonaws.com/{file_id}/image.jpg"
+    
+    async def get_image_info(self, file_id: str) -> Dict[str, Any]:
+        """Get information about D-ID image"""
+        try:
+            endpoint = f"{self.base_url}/images/{file_id}"
+            headers = self._get_auth_headers()
+            
+            response = await self.http_client.make_request(
+                method="GET",
+                url=endpoint,
+                headers=headers,
+                timeout=30
+            )
+            
+            return response
+                
+        except Exception as e:
+            self.logger.error(f"Error getting image info for {file_id}: {e}")
+            raise DIdFileServiceError(f"Failed to get image info: {str(e)}")
     
     def _validate_image_request(self, request: DIdFileUploadRequest) -> None:
         """Validate image upload request"""

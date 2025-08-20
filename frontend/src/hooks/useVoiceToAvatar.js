@@ -58,12 +58,18 @@ export const useVoiceToAvatar = (videoElementId, imageUrl = null) => {
       addLog('🚀 Step 1: Creating new stream...', 'info');
       
       // Используем переданное изображение или дефолтное
-      const defaultImageUrl = DEFAULT_AVATAR_URL;
+      let finalImageUrl = imageUrl;
+      
+      // Если не передан URL изображения, используем дефолтный
+      if (!finalImageUrl) {
+        addLog('⚠️ No image URL provided, using default avatar', 'warning');
+        finalImageUrl = DEFAULT_AVATAR_URL;
+      }
       
       // Преобразуем относительный URL в абсолютный (на случай если передается относительный URL)
-      let finalImageUrl = imageUrl || defaultImageUrl;
       if (finalImageUrl.startsWith('/')) {
         finalImageUrl = `${window.location.origin}${finalImageUrl}`;
+        addLog(`🔄 Converted relative URL to absolute: ${finalImageUrl}`, 'info');
       }
       
       addLog(`🖼️ Используем изображение: ${finalImageUrl}`, 'info');

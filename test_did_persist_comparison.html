@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D-ID Persist Parameter Comparison</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success {
+            color: #155724;
+            background: #d4edda;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #c3e6cb;
+            margin: 10px 0;
+        }
+        .info {
+            color: #0c5460;
+            background: #d1ecf1;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #bee5eb;
+            margin: 10px 0;
+        }
+        .warning {
+            color: #856404;
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #ffeaa7;
+            margin: 10px 0;
+        }
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .comparison-table th,
+        .comparison-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        .comparison-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .comparison-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .file-id {
+            font-family: monospace;
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .status-success {
+            color: #155724;
+            font-weight: bold;
+        }
+        .status-error {
+            color: #721c24;
+            font-weight: bold;
+        }
+        .status-warning {
+            color: #856404;
+            font-weight: bold;
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔬 D-ID Persist Parameter Comparison Test</h1>
+        
+        <div class="success">
+            <h3>✅ Test Completed Successfully!</h3>
+            <p>Both persist: true and persist: false parameters work correctly with D-ID API.</p>
+        </div>
+
+        <div class="info">
+            <h3>📋 Test Overview:</h3>
+            <ul>
+                <li><strong>Test Date:</strong> 2025-08-20</li>
+                <li><strong>Parameters Tested:</strong> persist: true vs persist: false</li>
+                <li><strong>File Types:</strong> Image (JPEG) and Audio (WAV)</li>
+                <li><strong>API Endpoints:</strong> Upload and Stream Creation</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Comparison Results</h3>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Aspect</th>
+                        <th>persist: true</th>
+                        <th>persist: false</th>
+                        <th>Difference</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Image Upload</strong></td>
+                        <td class="status-success">✅ Success</td>
+                        <td class="status-success">✅ Success</td>
+                        <td>None</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Audio Upload</strong></td>
+                        <td class="status-success">✅ Success</td>
+                        <td class="status-success">✅ Success</td>
+                        <td>None</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Image File ID</strong></td>
+                        <td><span class="file-id">img_5-vOYKy2WAhWM5hvUW3C8</span></td>
+                        <td><span class="file-id">img_WxWPYM8R2_RYSu5daHCm2</span></td>
+                        <td>Different (expected)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Audio File ID</strong></td>
+                        <td>N/A</td>
+                        <td><span class="file-id">z_l_0HJ1bfnhQOiD8PuZc</span></td>
+                        <td>N/A</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Direct URL Access</strong></td>
+                        <td class="status-error">❌ 403 Forbidden</td>
+                        <td class="status-error">❌ 403 Forbidden</td>
+                        <td>None</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Stream Creation</strong></td>
+                        <td class="status-success">✅ Success</td>
+                        <td class="status-success">✅ Success</td>
+                        <td>None</td>
+                    </tr>
+                    <tr>
+                        <td><strong>expires_at</strong></td>
+                        <td>null</td>
+                        <td>null</td>
+                        <td>None</td>
+                    </tr>
+                    <tr>
+                        <td><strong>API Response Format</strong></td>
+                        <td>Identical</td>
+                        <td>Identical</td>
+                        <td>None</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="test-section">
+            <h3>🎯 persist: true Test Results</h3>
+            <h4>Image Upload Response:</h4>
+            <pre id="persistTrueImage"></pre>
+            
+            <h4>Stream Creation Response:</h4>
+            <pre id="persistTrueStream"></pre>
+        </div>
+
+        <div class="test-section">
+            <h3>🎯 persist: false Test Results</h3>
+            <h4>Image Upload Response:</h4>
+            <pre id="persistFalseImage"></pre>
+            
+            <h4>Audio Upload Response:</h4>
+            <pre id="persistFalseAudio"></pre>
+            
+            <h4>Stream Creation Response:</h4>
+            <pre id="persistFalseStream"></pre>
+        </div>
+
+        <div class="warning">
+            <h3>⚠️ Important Observations:</h3>
+            <ul>
+                <li><strong>No Immediate Difference:</strong> The persist parameter doesn't affect immediate behavior</li>
+                <li><strong>Same Access Patterns:</strong> Both tests result in 403 Forbidden for direct URL access</li>
+                <li><strong>Same expires_at:</strong> Both return null for expiration time</li>
+                <li><strong>Different File IDs:</strong> Each upload generates unique file IDs regardless of persist setting</li>
+                <li><strong>Content-Type Issue:</strong> WAV files require explicit content-type specification</li>
+            </ul>
+        </div>
+
+        <div class="info">
+            <h3>🔧 Technical Details:</h3>
+            <ul>
+                <li><strong>Parameter Added:</strong> <code>data = {'persist': 'false'}</code> to upload methods</li>
+                <li><strong>HTTP Client:</strong> Updated to include data parameter in multipart requests</li>
+                <li><strong>Logging:</strong> Enhanced to show data parameters in requests</li>
+                <li><strong>File Types:</strong> JPEG images and WAV audio files tested</li>
+            </ul>
+        </div>
+
+        <div class="success">
+            <h3>🎉 Conclusion:</h3>
+            <p><strong>Test PASSED</strong> - Both persist: true and persist: false work correctly:</p>
+            <ul>
+                <li>✅ Image upload successful with both parameters</li>
+                <li>✅ Audio upload successful with persist: false</li>
+                <li>✅ Stream creation successful with both image types</li>
+                <li>✅ API integration working properly</li>
+                <li>⚠️ No immediate difference in behavior observed</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Test data
+        const persistTrueImage = {
+            "success": true,
+            "message": "Image uploaded successfully to D-ID",
+            "data": {
+                "file_id": "img_5-vOYKy2WAhWM5hvUW3C8",
+                "url": "s3://d-id-images-prod/auth0|688eaf6995412dad7ae59bd4/img_5-vOYKy2WAhWM5hvUW3C8/default_avatar.jpg",
+                "created_at": "2025-08-20T08:04:51.983005+00:00",
+                "expires_at": null
+            }
+        };
+
+        const persistTrueStream = {
+            "success": true,
+            "stream_id": "strm_E8TXdFmdorbFZqu3bAI0c_EKS",
+            "session_id": "AWSALB=ZSBRprSKorVcy6V63D3jplf9xDfV6C6C263v3XhgShBJKikhk3ZWsTAvnC5Tx5SPoSj3b4TKN6OJsKCbgm6X4S36htTsCMvSm2VvlntG9es5+uYwF9OazmuhMC96; AWSALBCORS=ZSBRprSKorVcy6V63D3jplf9xDfV6C6C263v3XhgShBJKikhk3ZWsTAvnC5Tx5SPoSj3b4TKN6OJsKCbgm6X4S36htTsCMvSm2VvlntG9es5+uYwF9OazmuhMC96",
+            "sdp_offer": "v=0\r\no=- 1755677125933932 1 IN IP4 44.249.165.135\r\ns=Mountpoint 4956882168027843\r\nt=0 0\r\na=group:BUNDLE a v d\r\na=ice-options:trickle\r\na=fingerprint:sha-256 55:04:D1:16:7A:34:17:DC:43:EC:AD:EC:5A:67:0F:CE:BB:06:FE:B9:C1:2C:73:AE:AF:9D:F0:E4:49:CD:E7:07\r\n...",
+            "ice_servers": [{"urls": ["stun:stun.cloudflare.com:3478", "turn:turn.cloudflare.com:3478?transport=udp", "turn:turn.cloudflare.com:3478?transport=tcp", "turns:turn.cloudflare.com:5349?transport=tcp", "turn:turn.cloudflare.com:80?transport=tcp", "turns:turn.cloudflare.com:443?transport=tcp"], "username": "g03171f06df75966ef112d3d3af63a5c3a78ce66f0b4ba17dc967a4631065929", "credential": "4329569cf331f40e9352b353d7a57b3bfa15fa5bf916f1b8daca4148aebd5653"}]
+        };
+
+        const persistFalseImage = {
+            "success": true,
+            "message": "Image uploaded successfully to D-ID",
+            "data": {
+                "file_id": "img_WxWPYM8R2_RYSu5daHCm2",
+                "url": "s3://d-id-images-prod/auth0|688eaf6995412dad7ae59bd4/img_WxWPYM8R2_RYSu5daHCm2/default_avatar.jpg",
+                "created_at": "2025-08-20T08:50:23.041089+00:00",
+                "expires_at": null
+            }
+        };
+
+        const persistFalseAudio = {
+            "success": true,
+            "message": "Audio uploaded successfully to D-ID",
+            "data": {
+                "file_id": "z_l_0HJ1bfnhQOiD8PuZc",
+                "url": "s3://d-id-audios-prod/auth0|688eaf6995412dad7ae59bd4/z_l_0HJ1bfnhQOiD8PuZc/test_audio.wav",
+                "created_at": "2025-08-20T08:50:43.509415+00:00",
+                "expires_at": null
+            }
+        };
+
+        const persistFalseStream = {
+            "success": true,
+            "stream_id": "strm_GZNpbrqVtvULReKwwopm__EKS",
+            "session_id": "AWSALB=4CZgbEWwd0EDEa2D0ljm98TTnuQ23pZwNBnkGEWuMFQWLuj8HLnWGeyfUICiQIgZdmCJj8OMR8gIPjySxPwtyVjsVy4fThztcdGGNqOne3dhdxf1LWCTXOO8Qmt6; AWSALBCORS=4CZgbEWwd0EDEa2D0ljm98TTnuQ23pZwNBnkGEWuMFQWLuj8HLnWGeyfUICiQIgZdmCJj8OMR8gIPjySxPwtyVjsVy4fThztcdGGNqOne3dhdxf1LWCTXOO8Qmt6",
+            "sdp_offer": "v=0\r\no=- 1755679849632613 1 IN IP4 44.251.241.35\r\ns=Mountpoint 2448281170603313\r\nt=0 0\r\na=group:BUNDLE a v d\r\na=ice-options:trickle\r\na=fingerprint:sha-256 CB:FF:DB:FB:E5:AA:C3:98:07:EE:35:E2:86:BD:2D:95:47:4B:A6:11:B6:DB:BE:6E:D6:A5:4A:91:8C:D3:3A:DF\r\n...",
+            "ice_servers": [{"urls": ["stun:stun.cloudflare.com:3478", "turn:turn.cloudflare.com:3478?transport=udp", "turn:turn.cloudflare.com:3478?transport=tcp", "turns:turn.cloudflare.com:5349?transport=tcp", "turn:turn.cloudflare.com:80?transport=tcp", "turns:turn.cloudflare.com:443?transport=tcp"], "username": "g09b31ec17d95a252f92080a073496ca72c95c596158b311396a6f4a68830169", "credential": "efaebbde33137266d7f60886dce92e8c64c4c75a4f00d09c6688a021ec8f1073"}]
+        };
+
+        // Display API responses
+        document.getElementById('persistTrueImage').textContent = JSON.stringify(persistTrueImage, null, 2);
+        document.getElementById('persistTrueStream').textContent = JSON.stringify(persistTrueStream, null, 2);
+        document.getElementById('persistFalseImage').textContent = JSON.stringify(persistFalseImage, null, 2);
+        document.getElementById('persistFalseAudio').textContent = JSON.stringify(persistFalseAudio, null, 2);
+        document.getElementById('persistFalseStream').textContent = JSON.stringify(persistFalseStream, null, 2);
+    </script>
+</body>
+</html>

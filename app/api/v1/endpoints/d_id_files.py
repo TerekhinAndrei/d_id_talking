@@ -204,3 +204,56 @@ async def test_d_id_authentication(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Authentication test failed: {str(e)}"
         )
+
+@router.get("/images/{file_id}/public-url", response_model=BaseResponse)
+async def get_image_public_url(
+    file_id: str,
+    services: Dict[str, Any] = Depends(get_services)
+):
+    """Get public URL for D-ID image"""
+    try:
+        logger.info(f"Getting public URL for D-ID image: {file_id}")
+        
+        d_id_file_service = services["d_id_file_service"]
+        public_url = await d_id_file_service.get_image_public_url(file_id)
+        
+        return BaseResponse(
+            success=True,
+            message="Public URL retrieved successfully",
+            data={
+                "file_id": file_id,
+                "public_url": public_url
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting public URL for image {file_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get public URL: {str(e)}"
+        )
+
+@router.get("/images/{file_id}/info", response_model=BaseResponse)
+async def get_image_info(
+    file_id: str,
+    services: Dict[str, Any] = Depends(get_services)
+):
+    """Get information about D-ID image"""
+    try:
+        logger.info(f"Getting info for D-ID image: {file_id}")
+        
+        d_id_file_service = services["d_id_file_service"]
+        image_info = await d_id_file_service.get_image_info(file_id)
+        
+        return BaseResponse(
+            success=True,
+            message="Image info retrieved successfully",
+            data=image_info
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting image info for {file_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get image info: {str(e)}"
+        )

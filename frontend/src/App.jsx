@@ -190,11 +190,24 @@ function App() {
         streamImageUrl = uploadResult.data?.url || uploadResult.data?.secure_url;
         setUploadedImageUrl(streamImageUrl);
       } else {
-        // Используем дефолтное или уже загруженное изображение
-        streamImageUrl = uploadedImageUrl || DEFAULT_AVATAR_URL;
+        // Используем уже загруженное изображение или загружаем дефолтное
+        if (uploadedImageUrl) {
+          streamImageUrl = uploadedImageUrl;
+        } else {
+          // Если нет загруженного изображения, загружаем дефолтное
+          console.log('🔄 No uploaded image found, uploading default avatar...');
+          const response = await fetch('/default_avatar.jpg');
+          const blob = await response.blob();
+          const file = new File([blob], 'default_avatar.jpg', { type: 'image/jpeg' });
+          const uploadResult = await fileService.uploadImage(file);
+          streamImageUrl = uploadResult.data?.url || uploadResult.data?.secure_url;
+          setUploadedImageUrl(streamImageUrl);
+        }
       }
       
-      const success = await setupVoiceStream(selectedVoice, uploadedImageUrl || streamImageUrl);
+      console.log('🎯 Using image URL for streaming:', streamImageUrl);
+      
+      const success = await setupVoiceStream(selectedVoice, streamImageUrl);
       
       if (success) {
         console.log('✅ Voice to Avatar стрим успешно настроен!');

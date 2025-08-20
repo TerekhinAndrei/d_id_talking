@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D-ID Image Test Results</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success {
+            color: #155724;
+            background: #d4edda;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #c3e6cb;
+            margin: 10px 0;
+        }
+        .error {
+            color: #721c24;
+            background: #f8d7da;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #f5c6cb;
+            margin: 10px 0;
+        }
+        .info {
+            color: #0c5460;
+            background: #d1ecf1;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #bee5eb;
+            margin: 10px 0;
+        }
+        .warning {
+            color: #856404;
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #ffeaa7;
+            margin: 10px 0;
+        }
+        .image-container {
+            margin: 20px 0;
+            text-align: center;
+            padding: 20px;
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .status-item {
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 D-ID Image Upload Test Results</h1>
+        
+        <div class="success">
+            <h3>✅ Upload Successful!</h3>
+            <p>The image was successfully uploaded to D-ID's storage system.</p>
+        </div>
+
+        <div class="info">
+            <h3>📋 Test Information:</h3>
+            <ul>
+                <li><strong>File ID:</strong> <code>img_5-vOYKy2WAhWM5hvUW3C8</code></li>
+                <li><strong>Upload Time:</strong> 2025-08-20T08:04:51.983005+00:00</li>
+                <li><strong>Source File:</strong> <code>frontend/public/default_avatar.jpg</code></li>
+                <li><strong>D-ID S3 URL:</strong> <code>s3://d-id-images-prod/auth0|688eaf6995412dad7ae59bd4/img_5-vOYKy2WAhWM5hvUW3C8/default_avatar.jpg</code></li>
+            </ul>
+        </div>
+
+        <div class="status-grid">
+            <div class="status-item status-success">
+                <h4>✅ Upload Status</h4>
+                <p>Success</p>
+            </div>
+            <div class="status-item status-success">
+                <h4>✅ API Response</h4>
+                <p>200 OK</p>
+            </div>
+            <div class="status-item status-error">
+                <h4>❌ Direct Access</h4>
+                <p>403 Forbidden</p>
+            </div>
+            <div class="status-item status-success">
+                <h4>✅ Stream Creation</h4>
+                <p>Success</p>
+            </div>
+        </div>
+
+        <div class="warning">
+            <h3>⚠️ Important Note:</h3>
+            <p>D-ID images are stored in private S3 buckets and are not directly accessible via public URLs. This is by design for security reasons. The images can only be accessed through D-ID's streaming API or other authorized D-ID services.</p>
+        </div>
+
+        <div class="image-container">
+            <h3>🖼️ Image Preview (Expected: 403 Forbidden)</h3>
+            <img id="testImage" src="https://d-id-images-prod.s3.amazonaws.com/img_5-vOYKy2WAhWM5hvUW3C8/image.jpg" 
+                 alt="D-ID Image" 
+                 onload="showSuccess()"
+                 onerror="showExpectedError()">
+            <div id="imageStatus"></div>
+        </div>
+
+        <div class="info">
+            <h3>📊 API Test Results:</h3>
+            
+            <h4>1. Upload Response:</h4>
+            <pre id="uploadResponse"></pre>
+            
+            <h4>2. Public URL Response:</h4>
+            <pre id="publicUrlResponse"></pre>
+            
+            <h4>3. Stream Creation Response:</h4>
+            <pre id="streamResponse"></pre>
+        </div>
+
+        <div class="success">
+            <h3>🎉 Test Summary:</h3>
+            <ul>
+                <li>✅ Image upload to D-ID: <strong>SUCCESS</strong></li>
+                <li>✅ File ID generated: <code>img_5-vOYKy2WAhWM5hvUW3C8</code></li>
+                <li>✅ Stream creation with image: <strong>SUCCESS</strong></li>
+                <li>✅ API integration working: <strong>SUCCESS</strong></li>
+                <li>⚠️ Direct URL access: <strong>403 Forbidden (Expected)</strong></li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Test data
+        const uploadResponse = {
+            "success": true,
+            "message": "Image uploaded successfully to D-ID",
+            "data": {
+                "file_id": "img_5-vOYKy2WAhWM5hvUW3C8",
+                "url": "s3://d-id-images-prod/auth0|688eaf6995412dad7ae59bd4/img_5-vOYKy2WAhWM5hvUW3C8/default_avatar.jpg",
+                "created_at": "2025-08-20T08:04:51.983005+00:00",
+                "expires_at": null
+            }
+        };
+
+        const publicUrlResponse = {
+            "success": true,
+            "message": "Public URL retrieved successfully",
+            "data": {
+                "file_id": "img_5-vOYKy2WAhWM5hvUW3C8",
+                "public_url": "https://d-id-images-prod.s3.amazonaws.com/img_5-vOYKy2WAhWM5hvUW3C8/image.jpg"
+            }
+        };
+
+        const streamResponse = {
+            "success": true,
+            "stream_id": "strm_E8TXdFmdorbFZqu3bAI0c_EKS",
+            "session_id": "AWSALB=ZSBRprSKorVcy6V63D3jplf9xDfV6C6C263v3XhgShBJKikhk3ZWsTAvnC5Tx5SPoSj3b4TKN6OJsKCbgm6X4S36htTsCMvSm2VvlntG9es5+uYwF9OazmuhMC96; AWSALBCORS=ZSBRprSKorVcy6V63D3jplf9xDfV6C6C263v3XhgShBJKikhk3ZWsTAvnC5Tx5SPoSj3b4TKN6OJsKCbgm6X4S36htTsCMvSm2VvlntG9es5+uYwF9OazmuhMC96",
+            "sdp_offer": "v=0\r\no=- 1755677125933932 1 IN IP4 44.249.165.135\r\ns=Mountpoint 4956882168027843\r\nt=0 0\r\na=group:BUNDLE a v d\r\na=ice-options:trickle\r\na=fingerprint:sha-256 55:04:D1:16:7A:34:17:DC:43:EC:AD:EC:5A:67:0F:CE:BB:06:FE:B9:C1:2C:73:AE:AF:9D:F0:E4:49:CD:E7:07\r\na=extmap-allow-mixed\r\na=msid-semantic: WMS *\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\nc=IN IP4 44.249.165.135\r\na=sendonly\r\na=mid:a\r\na=rtcp-mux\r\na=ice-ufrag:TmJo\r\na=ice-pwd:pDNZoYnV+9plFuDJdN2p2i\r\na=ice-options:trickle\r\na=setup:actpass\r\na=rtpmap:111 opus/48000/2\r\na=rtcp-fb:111 transport-cc\r\na=extmap:2 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time\r\na=extmap:4 urn:ietf:params:rtp-hdrext:sdes:mid\r\na=msid:janus janusa\r\na=ssrc:849014001 cname:janus\r\na=candidate:1 1 udp 2015363327 44.249.165.135 55387 typ host\r\na=candidate:2 1 udp 2015363583 44.249.165.135 37608 typ host\r\na=end-of-candidates\r\nm=video 9 UDP/TLS/RTP/SAVPF 102 103\r\nc=IN IP4 44.249.165.135\r\na=sendonly\r\na=mid:v\r\na=rtcp-mux\r\na=ice-ufrag:TmJo\r\na=ice-pwd:pDNZoYnV+9plFuDJdN2p2i\r\na=ice-options:trickle\r\na=setup:actpass\r\na=rtpmap:102 H264/90000\r\na=rtcp-fb:102 ccm fir\r\na=rtcp-fb:102 nack\r\na=rtcp-fb:102 nack pli\r\na=rtcp-fb:102 goog-remb\r\na=rtcp-fb:102 transport-cc\r\na=extmap:2 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time\r\na=extmap:4 urn:ietf:params:rtp-hdrext:sdes:mid\r\na=rtpmap:103 rtx/90000\r\na=fmtp:103 apt=102\r\na=ssrc-group:FID 1764173599 1190009250\r\na=msid:janus janusv\r\na=ssrc:1764173599 cname:janus\r\na=ssrc:1190009250 cname:janus\r\na=candidate:1 1 udp 2015363327 44.249.165.135 55387 typ host\r\na=candidate:2 1 udp 2015363583 44.249.165.135 37608 typ host\r\na=end-of-candidates\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 44.249.165.135\r\na=sendrecv\r\na=mid:d\r\na=sctp-port:5000\r\na=ice-ufrag:TmJo\r\na=ice-pwd:pDNZoYnV+9plFuDJdN2p2i\r\na=ice-options:trickle\r\na=setup:actpass\r\na=candidate:1 1 udp 2015363327 44.249.165.135 55387 typ host\r\na=candidate:2 1 udp 2015363583 44.249.165.135 37608 typ host\r\na=end-of-candidates\r\n",
+            "ice_servers": [{"urls": ["stun:stun.cloudflare.com:3478", "turn:turn.cloudflare.com:3478?transport=udp", "turn:turn.cloudflare.com:3478?transport=tcp", "turns:turn.cloudflare.com:5349?transport=tcp", "turn:turn.cloudflare.com:80?transport=tcp", "turns:turn.cloudflare.com:443?transport=tcp"], "username": "g03171f06df75966ef112d3d3af63a5c3a78ce66f0b4ba17dc967a4631065929", "credential": "4329569cf331f40e9352b353d7a57b3bfa15fa5bf916f1b8daca4148aebd5653"}]
+        };
+
+        function showSuccess() {
+            const statusDiv = document.getElementById('imageStatus');
+            statusDiv.innerHTML = '<div class="success">✅ Image loaded successfully! (Unexpected)</div>';
+        }
+
+        function showExpectedError() {
+            const statusDiv = document.getElementById('imageStatus');
+            statusDiv.innerHTML = '<div class="error">❌ 403 Forbidden - This is expected behavior for D-ID private images</div>';
+        }
+
+        // Display API responses
+        document.getElementById('uploadResponse').textContent = JSON.stringify(uploadResponse, null, 2);
+        document.getElementById('publicUrlResponse').textContent = JSON.stringify(publicUrlResponse, null, 2);
+        document.getElementById('streamResponse').textContent = JSON.stringify(streamResponse, null, 2);
+    </script>
+</body>
+</html>
